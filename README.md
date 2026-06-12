@@ -121,12 +121,14 @@ Driven by `config/module.config.php → dre_seo.structured_data.template_types` 
 | Projects (5) | `ResearchProject` |
 | Research sections (7) | `Collection` |
 | Research items (10) | `CreativeWork` |
-| Publications (11–20) | `ScholarlyArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `Review` / `BlogPosting` … |
+| Publications (11–20) | `ScholarlyArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `BlogPosting` … (book reviews are `ScholarlyArticle`, not `Review`, which Google requires to carry a `reviewRating`) |
 | Podcasts (21) | `PodcastEpisode` (host/guest ← `marcrel:hst` / `:spk`) |
 
 Creative works also carry `author`/`contributor` (from `bibo:authorList`, `dcterms:creator`,
 `marcrel:*`), `datePublished`/`dateCreated`, `inLanguage`, `keywords`, `spatialCoverage`,
-`isPartOf` and `publisher` when present.
+`isPartOf`, `publisher` and `license` (← `dcterms:license`) when present; a `Dataset` exposes
+its authors as `creator` rather than `author`. `description` is always emitted — it falls back
+to a typed boilerplate when the item has no `dcterms:description` / `abstract`.
 
 ---
 
@@ -243,7 +245,7 @@ DRESeo/
   translators that prefer it, and to expose multiple references on list pages.
 * **unAPI** + per-item **BibTeX / RIS** export links ("Cite / Export") for one-click download.
 * Structured-data & citation enrichment: `sameAs` ORCID / GND / VIAF on persons, `geo` from the
-  geoloc data on places, `Dataset` `distribution` / `license` for research data.
+  geoloc data on places, `Dataset` `distribution` for research data (`license` is now emitted).
 * Per-static-page SEO fields **inline in the page editor** (currently a central table).
 * `hreflang` / multilingual metadata once localized page variants exist.
 * Image / news sitemap extensions; optional nginx-level caching of `/sitemap*.xml`.

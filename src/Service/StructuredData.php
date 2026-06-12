@@ -54,10 +54,11 @@ class StructuredData
         if ($image) {
             $data['image'] = $image;
         }
-        $description = $this->firstLiteral($resource, ['dcterms:description', 'dcterms:abstract', 'bibo:abstract']);
-        if ($description !== null) {
-            $data['description'] = $description;
-        }
+        // description is a required field for several rich-result types (notably
+        // Dataset) and is universally useful; fall back to a typed boilerplate —
+        // mirroring the <meta name="description"> fallback — so it is never absent.
+        $data['description'] = $this->firstLiteral($resource, ['dcterms:description', 'dcterms:abstract', 'bibo:abstract'])
+            ?? $this->fallbackDescription($resource);
 
         $sameAs = $this->sameAs($resource);
         if ($sameAs) {
@@ -67,7 +68,7 @@ class StructuredData
         if (in_array($type, self::ENTITY_TYPES, true)) {
             $this->decorateEntity($data, $type, $resource, $site, $view);
         } else {
-            $this->decorateWork($data, $resource, $site, $view);
+            $this->decorateWork($data, $type, $resource, $site, $view);
         }
 
         return $data;
@@ -151,6 +152,7 @@ class StructuredData
     /** @param array<mixed> $data */
     private function decorateWork(
         array &$data,
+        string $type,
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site,
         PhpRenderer $view
@@ -159,7 +161,9 @@ class StructuredData
         // scholarly author roles so they only fill in when those are absent.
         $authors = $this->links($resource, ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:hst', 'marcrel:spk'], $site, 'Person');
         if ($authors) {
-            $data['author'] = $authors;
+            // Google reads a Dataset's authors from `creator`; every other work
+            // type uses `author`.
+            $data[$type === 'Dataset' ? 'creator' : 'author'] = $authors;
         }
         // marcrel:sde is the podcast sound engineer (a production contributor).
         $contributors = $this->links($resource, ['dcterms:contributor', 'bibo:editorList', 'marcrel:edt', 'marcrel:sde'], $site, 'Person');
@@ -208,6 +212,14 @@ class StructuredData
         if ($publisher !== null) {
             $data['publisher'] = ['@type' => 'Organization', 'name' => $publisher];
         }
+
+        // license is a recommended field for Dataset and valid on any creative
+        // work; emit it whenever the item carries one (a linked CC-license
+        // authority item, a URI, or literal text). No default is asserted.
+        $license = $this->licenseValue($resource);
+        if ($license !== null) {
+            $data['license'] = $license;
+        }
     }
 
     // ─── Value readers ──────────────────────────────────────────────────────
@@ -244,6 +256,54 @@ class StructuredData
     private function firstLiteralOrLabel(AbstractResourceEntityRepresentation $resource, string $term): ?string
     {
         return $this->firstValueLabel($resource, $term);
+    }
+
+    /**
+     * A non-empty description when the resource carries no literal one, so the
+     * field is always present (Google requires it for Dataset, and it is good
+     * practice for every type). Mirrors HeadMetadata's <meta> fallback.
+     */
+    private function fallbackDescription(AbstractResourceEntityRepresentation $resource): string
+    {
+        $title = trim((string) $resource->displayTitle());
+        $classLabel = $resource->resourceClass() ? ucfirst((string) $resource->resourceClass()->label()) : null;
+        $atlas = 'in the Africa Multiple Interactive Research Atlas (AMIRA)';
+        if ($classLabel && $title !== '') {
+            return sprintf('%s %s: %s.', $classLabel, $atlas, $title);
+        }
+        return sprintf('%s %s.', $title !== '' ? $title : ($classLabel ?? 'Record'), $atlas);
+    }
+
+    /**
+     * The resource's license as a schema.org-acceptable string — a linked
+     * license authority item's label (e.g. "CC-BY-NC-SA-4.0"), a URI, or literal
+     * text. dcterms:license is preferred over the (unused) dcterms:rights.
+     */
+    private function licenseValue(AbstractResourceEntityRepresentation $resource): ?string
+    {
+        foreach (['dcterms:license', 'dcterms:rights'] as $term) {
+            $value = $resource->value($term);
+            if (!$value instanceof ValueRepresentation) {
+                continue;
+            }
+            $linked = $value->valueResource();
+            if ($linked) {
+                $label = trim((string) $linked->displayTitle());
+                if ($label !== '') {
+                    return $label;
+                }
+                continue;
+            }
+            $uri = $value->uri();
+            if ($uri !== null && $uri !== '') {
+                return $uri;
+            }
+            $text = trim(strip_tags((string) $value));
+            if ($text !== '') {
+                return $text;
+            }
+        }
+        return null;
     }
 
     /** @return string[] */

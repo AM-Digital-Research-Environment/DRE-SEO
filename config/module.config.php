@@ -190,7 +190,7 @@ return [
                 15 => 'Book',             // book
                 16 => 'Thesis',           // doctoral thesis
                 17 => 'PublicationIssue', // journal issue
-                18 => 'Review',           // book review
+                18 => 'ScholarlyArticle', // book review (not schema.org Review: scholarly reviews carry no reviewRating, so Google rejects the Review type)
                 19 => 'BlogPosting',      // online post
                 20 => 'Dataset',          // research data
                 21 => 'PodcastEpisode',   // podcasts (fabio:AudioDocument)
