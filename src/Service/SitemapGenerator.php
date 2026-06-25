@@ -69,16 +69,19 @@ class SitemapGenerator
      * reflects their menu depth (top-level entries outrank submenu items), then
      * any remaining public pages (demoted, so nothing is silently dropped).
      *
+     * @param string $hostUrl the scheme+host root (no path) where the home page
+     *                        canonically lives
      * @param array<mixed> $navTree the site's o:navigation tree
      */
     public function buildPages(
         string $siteUrl,
+        string $hostUrl,
         int $siteId,
         int $ttl,
         array $navTree = [],
         ?int $homepageId = null
     ): string {
-        return $this->cached('pages', $ttl, function () use ($siteUrl, $siteId, $navTree, $homepageId) {
+        return $this->cached('pages', $ttl, function () use ($siteUrl, $hostUrl, $siteId, $navTree, $homepageId) {
             // All public pages, keyed by id.
             $pagesById = [];
             foreach ($this->fetchPages($siteId) as $row) {
@@ -96,15 +99,24 @@ class SitemapGenerator
                 ];
             };
 
-            // Home first, at its canonical /page/{slug}. The bare site root only
-            // redirects there, so listing the page URL avoids both a redirect and
-            // a duplicate entry. Falls back to the root if the homepage is unknown.
+            // Home first, at the bare domain root. The home page declares `/` as
+            // its canonical (host root, site root and /page/{slug} all resolve
+            // there and Google consolidates them onto the domain), so the sitemap
+            // lists `/` to match — not the /page/{slug} URL, which would disagree
+            // with that canonical. The homepage's own page entry is marked
+            // emitted so the nav loop below skips it.
+            $homeLoc = rtrim($hostUrl, '/') . '/';
             if ($homepageId !== null && isset($pagesById[$homepageId])) {
-                $urls[] = $pageUrl($pagesById[$homepageId], $this->priority('home'), $this->changefreq('home'));
+                $urls[] = [
+                    'loc'        => $homeLoc,
+                    'lastmod'    => $this->w3c($pagesById[$homepageId]['modified'] ?? null),
+                    'changefreq' => $this->changefreq('home'),
+                    'priority'   => $this->priority('home'),
+                ];
                 $emitted[$homepageId] = true;
             } else {
                 $urls[] = [
-                    'loc'        => $siteUrl . '/',
+                    'loc'        => $homeLoc,
                     'changefreq' => $this->changefreq('home'),
                     'priority'   => $this->priority('home'),
                 ];

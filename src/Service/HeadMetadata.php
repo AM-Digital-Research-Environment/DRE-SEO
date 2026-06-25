@@ -106,7 +106,15 @@ class HeadMetadata
         array $overrides,
         bool $isHomepage
     ): void {
-        $canonical = $page->siteUrl($site->slug(), true);
+        // The home page is reachable at three URLs — the host root `/`, the site
+        // root `/s/{slug}`, and this `/s/{slug}/page/{slug}` — which Google
+        // consolidates onto the bare domain (it picks `/`, not the page URL, as
+        // canonical). Declare `/` as the homepage canonical so our declaration
+        // matches Google's choice; every other page stays self-canonical. The
+        // sitemap lists the home at `/` to match.
+        $canonical = $isHomepage
+            ? rtrim($view->serverUrl('/'), '/') . '/'
+            : $page->siteUrl($site->slug(), true);
         $this->setCanonical($view, $canonical);
 
         $title = isset($overrides['title']) && $overrides['title'] !== ''
@@ -293,16 +301,20 @@ class HeadMetadata
     /** @param array<mixed> $data A JSON-LD document. */
     public function addJsonLd(PhpRenderer $view, array $data): void
     {
-        // application/ld+json must not be wrapped in the JS CDATA/comment guard
-        // HeadScript adds for inline scripts; disable it (HTML5 needs no guard).
-        $view->headScript()->setAutoEscape(false);
         $json = json_encode(
             $data,
             JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_PRETTY_PRINT
         );
-        if ($json !== false) {
-            $view->headScript()->appendScript($json, 'application/ld+json');
+        if ($json === false) {
+            return;
         }
+        // Emit the document as raw JSON. The `noescape` attribute suppresses the
+        // `//<!-- … //-->` comment guard HeadScript wraps every inline script
+        // body in — that guard is invalid inside application/ld+json. (Laminas'
+        // setAutoEscape() governs only attribute/type escaping, not the guard,
+        // so the previous call left the wrapper in place.) JSON_HEX_TAG already
+        // escapes `<`/`>`, so a `</script>` breakout is impossible without it.
+        $view->headScript()->appendScript($json, 'application/ld+json', ['noescape' => true]);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────

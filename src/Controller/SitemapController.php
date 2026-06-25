@@ -68,6 +68,7 @@ class SitemapController extends AbstractActionController
 
         return $this->xml($this->generator->buildPages(
             $this->siteUrl($site),
+            $this->hostUrl($site),
             $site->id(),
             $this->ttl(),
             $navTree,

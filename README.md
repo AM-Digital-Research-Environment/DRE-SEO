@@ -101,7 +101,11 @@ The head signals are written into Omeka's request-global head placeholder helper
   ~160 chars), canonical from the resource's site URL, `og:image` from the primary media, and
   JSON-LD from the resource template.
 * **Static pages** (`view.show.after` on the Page controller): the editor's per-page
-  overrides, else defaults; `WebSite` JSON-LD on the home page.
+  overrides, else defaults; `WebSite` JSON-LD on the home page. The **home page**
+  declares the **bare domain** (`https://host/`) as its canonical, because the host
+  root, the site root (`/s/{slug}`) and `/page/{slug}` all resolve to it and Google
+  consolidates them onto the domain root — so the declared canonical matches the URL
+  Google actually picks. The sitemap lists the home there too.
 * **Browse/search pages** (`view.browse.after`): self-referential canonical and optional
   `noindex`.
 * **Every page** (`view.layout`): site-wide constants (`og:site_name`, `og:locale`,
@@ -169,7 +173,8 @@ JSON-LD via `isPartOf`.
 ## Sitemap
 
 * `/sitemap.xml` — sitemap **index** listing the children below.
-* `/sitemap-pages.xml` — the home page + all public site pages.
+* `/sitemap-pages.xml` — the home page (listed at the bare domain root `/`, matching
+  its canonical) + all public site pages.
 * `/sitemap-item-sets.xml` — public item-set browse pages.
 * `/sitemap-items-{n}.xml` — public items, chunked at 50,000 URLs per file.
 
@@ -232,7 +237,8 @@ DRESeo/
 3. View-source an item page (`/s/amira/item/100`): confirm `<title>`, `description`, `og:*`,
    `twitter:*`, `<link rel="canonical">` and a `application/ld+json` block. Validate the JSON-LD
    with the [Rich Results Test](https://search.google.com/test/rich-results).
-4. Home page: `og:site_name` and a `WebSite` JSON-LD block; the GSC tag once a token is set.
+4. Home page: `og:site_name`, a `WebSite` JSON-LD block, and a `<link rel="canonical">`
+   pointing at the **bare domain** (`https://host/`); the GSC tag once a token is set.
 5. **Admin → SEO → Static pages**: set a title/description on a page → confirm it appears in
    that page's `<head>`.
 6. In Search Console: add the property, verify via the meta tag, submit `/sitemap.xml`.
