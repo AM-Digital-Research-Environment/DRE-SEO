@@ -52,7 +52,8 @@ No web-server changes are needed: nginx's `try_files … /index.php` already rou
 There are no third-party dependencies, so `composer install` is **not** required — Omeka
 autoloads the `DRESeo\` namespace from `src/`.
 
-**Requirements:** Omeka S `^4.2.0`, PHP `>= 8.2`.
+**Requirements:** Omeka S `^4.2.0`, PHP `>= 8.2`. CI covers both the supported
+floor (PHP 8.2) and the production runtime (PHP 8.5).
 
 ---
 
@@ -127,6 +128,7 @@ Driven by `config/module.config.php → dre_seo.structured_data.template_types` 
 | Research items (10) | `CreativeWork` |
 | Publications (11–20) | `ScholarlyArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `BlogPosting` … (book reviews are `ScholarlyArticle`, not `Review`, which Google requires to carry a `reviewRating`) |
 | Podcasts (21) | `PodcastEpisode` (host/guest ← `marcrel:hst` / `:spk`) |
+| YouTube videos (22) | `VideoObject` (`thumbnailUrl` from the ingested media, `uploadDate` from `dcterms:date`, speaker ← `marcrel:spk`, canonical watch URL ← `fabio:hasURL`) |
 
 Creative works also carry `author`/`contributor` (from `bibo:authorList`, `dcterms:creator`,
 `marcrel:*`), `datePublished`/`dateCreated`, `inLanguage`, `keywords`, `spatialCoverage`,
@@ -168,6 +170,9 @@ Zotero reads (it picks up `seriesTitle` / `episodeNumber` only from a nested RDF
 so they are omitted from the citation tags; the series is still exposed in the resource's
 JSON-LD via `isPartOf`.
 
+**YouTube videos** (template 22) emit `DC.type=videoRecording` so Zotero can select its
+native video item type; manually curated `marcrel:spk` values are exposed as creators.
+
 ---
 
 ## Sitemap
@@ -204,6 +209,7 @@ content via the robots.txt `Sitemap:` line and Search Console.
 
 ```
 DRESeo/
+├── .github/workflows/ci.yml          # PHP 8.2 + production PHP 8.5 checks
 ├── Module.php                       # listeners, ACL, install/uninstall, config form
 ├── composer.json                    # type omeka-module; PSR-4 DRESeo\ -> src/ (no runtime deps)
 ├── config/
@@ -224,8 +230,23 @@ DRESeo/
 │       └── *Factory.php
 ├── view/dre-seo/admin/seo/{dashboard,pages}.phtml
 ├── asset/css/admin.css
+├── tests/                            # dependency-free behavioral tests + PHP lint runner
 └── language/template.pot
 ```
+
+## Development and testing
+
+The test harness is deliberately dependency-free: Omeka supplies Laminas, PSR and Doctrine
+at runtime, so the module must not bundle duplicate framework packages. Run all checks with:
+
+```bash
+composer check
+```
+
+This syntax-checks every PHP/PHTML file and exercises sitemap XML generation and caching,
+static-page override normalization, the current Africa Multiple template mapping, YouTube
+`VideoObject` output, and IndexNow key validation. GitHub Actions runs the same command on
+PHP 8.2 and PHP 8.5 for every push and pull request.
 
 ---
 

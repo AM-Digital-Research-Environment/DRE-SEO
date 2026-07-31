@@ -160,6 +160,14 @@ class CitationMeta
                     $headMeta->appendName('citation_author', $guest);
                 }
                 break;
+            case 'video':
+                // Zotero recognises this exact Dublin Core item type. Speakers
+                // are the closest available creator role in the video schema.
+                $this->single($headMeta, 'DC.type', 'videoRecording');
+                foreach ($this->people($resource, ['marcrel:spk']) as $speaker) {
+                    $headMeta->appendName('citation_author', $speaker);
+                }
+                break;
             // 'dataset', 'post', 'item': title/author/date/abstract already cover them.
         }
     }

@@ -24,6 +24,7 @@ namespace DRESeo;
 
 use DRESeo\Job\PingSearchEngines;
 use DRESeo\Service\HeadMetadata;
+use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
@@ -228,7 +229,8 @@ class Module extends AbstractModule
         if ((string) $settings->get('dre_seo_ping_enabled', '0') !== '1') {
             return;
         }
-        if (trim((string) $settings->get('dre_seo_indexnow_key', '')) === '') {
+        $indexNowKey = trim((string) $settings->get('dre_seo_indexnow_key', ''));
+        if (!IndexNowKey::isValid($indexNowKey)) {
             return;
         }
 

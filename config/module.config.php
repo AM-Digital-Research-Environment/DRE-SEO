@@ -194,6 +194,7 @@ return [
                 19 => 'BlogPosting',      // online post
                 20 => 'Dataset',          // research data
                 21 => 'PodcastEpisode',   // podcasts (fabio:AudioDocument)
+                22 => 'VideoObject',      // YouTube video (bibo:AudioVisualDocument)
             ],
         ],
         'citation' => [
@@ -219,6 +220,7 @@ return [
                 19 => 'post',         // online post
                 20 => 'dataset',      // research data
                 21 => 'podcast',      // podcast episode
+                22 => 'video',        // YouTube video
             ],
         ],
     ],

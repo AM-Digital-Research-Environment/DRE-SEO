@@ -20,5 +20,13 @@
     "psr-4": {
       "DRESeo\\": "src/"
     }
+  },
+  "scripts": {
+    "lint": "@php tests/lint.php",
+    "test": "@php tests/run.php",
+    "check": [
+      "@lint",
+      "@test"
+    ]
   }
 }

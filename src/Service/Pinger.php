@@ -29,7 +29,7 @@ class Pinger
     public function submitIndexNow(string $host, string $key, string $keyLocation, array $urls): bool
     {
         $urls = array_values(array_unique(array_filter($urls)));
-        if ($key === '' || $urls === []) {
+        if (!IndexNowKey::isValid($key) || $urls === []) {
             return false;
         }
         $urls = array_slice($urls, 0, self::MAX_URLS);

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Job;
 
+use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\Pinger;
 use Omeka\Job\AbstractJob;
 
@@ -29,8 +30,8 @@ class PingSearchEngines extends AbstractJob
             return;
         }
         $key = trim((string) $settings->get('dre_seo_indexnow_key', ''));
-        if ($key === '') {
-            $logger->warn('DRESeo: IndexNow ping enabled but no key is configured.');
+        if (!IndexNowKey::isValid($key)) {
+            $logger->warn('DRESeo: IndexNow ping enabled but the configured key is invalid.');
             return;
         }
 

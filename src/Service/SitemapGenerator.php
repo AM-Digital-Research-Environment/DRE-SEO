@@ -42,7 +42,8 @@ class SitemapGenerator
 
     public function buildIndex(string $hostUrl, int $siteId, int $ttl): string
     {
-        return $this->cached('index', $ttl, function () use ($hostUrl, $siteId) {
+        $cacheKey = $this->cacheKey($siteId, 'index', $hostUrl, (string) $this->chunkSize());
+        return $this->cached($cacheKey, $ttl, function () use ($hostUrl, $siteId) {
             $children = ['sitemap-pages.xml', 'sitemap-item-sets.xml'];
             $chunks = max(1, (int) ceil($this->countItems($siteId) / $this->chunkSize()));
             for ($i = 1; $i <= $chunks; $i++) {
@@ -81,7 +82,8 @@ class SitemapGenerator
         array $navTree = [],
         ?int $homepageId = null
     ): string {
-        return $this->cached('pages', $ttl, function () use ($siteUrl, $hostUrl, $siteId, $navTree, $homepageId) {
+        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, $hostUrl);
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $hostUrl, $siteId, $navTree, $homepageId) {
             // All public pages, keyed by id.
             $pagesById = [];
             foreach ($this->fetchPages($siteId) as $row) {
@@ -173,7 +175,8 @@ class SitemapGenerator
 
     public function buildItemSets(string $siteUrl, int $siteId, int $ttl): string
     {
-        return $this->cached('item-sets', $ttl, function () use ($siteUrl, $siteId) {
+        $cacheKey = $this->cacheKey($siteId, 'item-sets', $siteUrl);
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId) {
             $urls = [];
             foreach ($this->fetchItemSets($siteId) as $row) {
                 $urls[] = [
@@ -190,7 +193,13 @@ class SitemapGenerator
     public function buildItems(string $siteUrl, int $siteId, int $chunk, int $ttl): string
     {
         $chunk = max(1, $chunk);
-        return $this->cached('items-' . $chunk, $ttl, function () use ($siteUrl, $siteId, $chunk) {
+        $cacheKey = $this->cacheKey(
+            $siteId,
+            'items-' . $chunk,
+            $siteUrl,
+            (string) $this->chunkSize()
+        );
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId, $chunk) {
             $size = $this->chunkSize();
             $offset = ($chunk - 1) * $size;
             $urls = [];
@@ -349,6 +358,15 @@ class SitemapGenerator
     }
 
     // ─── Cache ────────────────────────────────────────────────────────────
+
+    private function cacheKey(int $siteId, string $section, string ...$scope): string
+    {
+        $key = sprintf('site-%d-%s', $siteId, $section);
+        if ($scope !== []) {
+            $key .= '-' . substr(hash('sha256', implode("\0", $scope)), 0, 12);
+        }
+        return $key;
+    }
 
     /** @param callable():string $build */
     private function cached(string $key, int $ttl, callable $build): string

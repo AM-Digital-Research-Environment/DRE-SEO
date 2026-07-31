@@ -22,24 +22,20 @@ class StructuredData
 {
     private const ENTITY_TYPES = ['Person', 'Place', 'Organization'];
 
-    /**
-     * @param array<int,string> $templateTypes resource template id => schema @type
-     * @param array<int,bool> $datasetTemplates template ids that are datasets
-     */
+    /** @param array<int,string> $templateTypes resource template id => schema @type */
     public function __construct(
         private readonly array $templateTypes,
         private readonly string $defaultType = 'CreativeWork',
     ) {
     }
 
-    /** @return array<mixed>|null */
+    /** @return array<mixed> */
     public function forResource(
-        PhpRenderer $view,
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site,
         ?string $canonical,
         ?string $image
-    ): ?array {
+    ): array {
         $templateId = $resource->resourceTemplate() ? $resource->resourceTemplate()->id() : null;
         $type = $this->templateTypes[$templateId] ?? $this->defaultType;
 
@@ -53,6 +49,11 @@ class StructuredData
         }
         if ($image) {
             $data['image'] = $image;
+            if ($type === 'VideoObject') {
+                // Google requires thumbnailUrl for video rich results. Omeka's
+                // YouTube ingester exposes the video thumbnail as primary media.
+                $data['thumbnailUrl'] = $image;
+            }
         }
         // description is a required field for several rich-result types (notably
         // Dataset) and is universally useful; fall back to a typed boilerplate —
@@ -61,14 +62,21 @@ class StructuredData
             ?? $this->fallbackDescription($resource);
 
         $sameAs = $this->sameAs($resource);
+        if ($type === 'VideoObject') {
+            $watchUrl = $this->firstUriOrLiteral($resource, 'fabio:hasURL');
+            if ($watchUrl !== null) {
+                $sameAs[] = $watchUrl;
+                $sameAs = array_values(array_unique($sameAs));
+            }
+        }
         if ($sameAs) {
             $data['sameAs'] = $sameAs;
         }
 
         if (in_array($type, self::ENTITY_TYPES, true)) {
-            $this->decorateEntity($data, $type, $resource, $site, $view);
+            $this->decorateEntity($data, $type, $resource, $site);
         } else {
-            $this->decorateWork($data, $type, $resource, $site, $view);
+            $this->decorateWork($data, $type, $resource, $site);
         }
 
         return $data;
@@ -131,8 +139,7 @@ class StructuredData
         array &$data,
         string $type,
         AbstractResourceEntityRepresentation $resource,
-        SiteRepresentation $site,
-        PhpRenderer $view
+        SiteRepresentation $site
     ): void {
         if ($type === 'Person') {
             $affiliation = $this->firstLink($resource, 'dcterms:isPartOf', $site);
@@ -154,8 +161,7 @@ class StructuredData
         array &$data,
         string $type,
         AbstractResourceEntityRepresentation $resource,
-        SiteRepresentation $site,
-        PhpRenderer $view
+        SiteRepresentation $site
     ): void {
         // marcrel:hst / :spk are the podcast host / guest(s); they trail the
         // scholarly author roles so they only fill in when those are absent.
@@ -173,7 +179,7 @@ class StructuredData
 
         $date = $this->firstLiteral($resource, ['dcterms:issued', 'dcterms:date']);
         if ($date !== null) {
-            $data['datePublished'] = $date;
+            $data[$type === 'VideoObject' ? 'uploadDate' : 'datePublished'] = $date;
         } else {
             $created = $this->firstLiteral($resource, ['dcterms:created']);
             if ($created !== null) {
@@ -256,6 +262,22 @@ class StructuredData
     private function firstLiteralOrLabel(AbstractResourceEntityRepresentation $resource, string $term): ?string
     {
         return $this->firstValueLabel($resource, $term);
+    }
+
+    private function firstUriOrLiteral(
+        AbstractResourceEntityRepresentation $resource,
+        string $term
+    ): ?string {
+        $value = $resource->value($term);
+        if (!$value instanceof ValueRepresentation) {
+            return null;
+        }
+        $uri = trim((string) ($value->uri() ?? ''));
+        if ($uri !== '') {
+            return $uri;
+        }
+        $text = trim(strip_tags((string) $value));
+        return $text !== '' ? $text : null;
     }
 
     /**

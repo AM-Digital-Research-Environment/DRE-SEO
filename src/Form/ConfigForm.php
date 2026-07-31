@@ -5,6 +5,9 @@ namespace DRESeo\Form;
 
 use Laminas\Form\Element;
 use Laminas\Form\Form;
+use Laminas\Filter\StringTrim;
+use Laminas\Validator\Regex;
+use Laminas\Validator\StringLength;
 use Omeka\Form\Element\Asset;
 
 /**
@@ -177,9 +180,18 @@ class ConfigForm extends Form
             'dre_seo_sitemap_enabled',
             'dre_seo_sitemap_ttl',
             'dre_seo_ping_enabled',
-            'dre_seo_indexnow_key',
         ] as $name) {
             $inputFilter->add(['name' => $name, 'required' => false]);
         }
+
+        $inputFilter->add([
+            'name'       => 'dre_seo_indexnow_key',
+            'required'   => false,
+            'filters'    => [['name' => StringTrim::class]],
+            'validators' => [
+                ['name' => StringLength::class, 'options' => ['min' => 8, 'max' => 128]],
+                ['name' => Regex::class, 'options' => ['pattern' => '/\A[A-Fa-f0-9]+\z/D']],
+            ],
+        ]);
     }
 }

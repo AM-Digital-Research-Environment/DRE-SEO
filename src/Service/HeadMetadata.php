@@ -76,10 +76,10 @@ class HeadMetadata
         $this->markApplied('og:title');
 
         if ($this->jsonLdEnabled()) {
-            $data = $this->structuredData->forResource($view, $resource, $site, $canonical, $image);
-            if ($data !== null) {
-                $this->addJsonLd($view, $data);
-            }
+            $this->addJsonLd(
+                $view,
+                $this->structuredData->forResource($resource, $site, $canonical, $image)
+            );
             $breadcrumb = $this->structuredData->breadcrumb($view, $resource, $site, $canonical);
             if ($breadcrumb !== null) {
                 $this->addJsonLd($view, $breadcrumb);

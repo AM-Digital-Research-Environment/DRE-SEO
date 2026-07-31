@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Controller;
 
+use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -129,7 +130,7 @@ class SitemapController extends AbstractActionController
     {
         $configured = trim((string) $this->settings->get('dre_seo_indexnow_key', ''));
         $requested = (string) $this->params()->fromRoute('key', '');
-        if ($configured === '' || !hash_equals($configured, $requested)) {
+        if (!IndexNowKey::isValid($configured) || !hash_equals($configured, $requested)) {
             return $this->notFound();
         }
         return $this->text($configured . "\n");

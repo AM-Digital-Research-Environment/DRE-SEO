@@ -18,6 +18,7 @@ use Omeka\Settings\SiteSettings;
 class PageSeoStore
 {
     private const KEY = 'dre_seo_pages';
+    private const ROBOTS_VALUES = ['index, follow', 'noindex, follow'];
 
     public function __construct(private readonly SiteSettings $siteSettings)
     {
@@ -46,10 +47,7 @@ class PageSeoStore
     public function set(int $pageId, array $overrides): void
     {
         $all = $this->all();
-        $clean = array_filter(
-            $overrides,
-            static fn ($v) => $v !== null && $v !== '' && $v !== '0'
-        );
+        $clean = $this->normalize($overrides);
         if ($clean === []) {
             unset($all[$pageId]);
         } else {
@@ -61,6 +59,48 @@ class PageSeoStore
     /** @param array<int,array<string,mixed>> $map */
     public function replaceAll(array $map): void
     {
-        $this->siteSettings->set(self::KEY, $map);
+        $clean = [];
+        foreach ($map as $pageId => $overrides) {
+            $pageId = is_int($pageId) || ctype_digit((string) $pageId) ? (int) $pageId : 0;
+            if ($pageId < 1 || !is_array($overrides)) {
+                continue;
+            }
+            $normalized = $this->normalize($overrides);
+            if ($normalized !== []) {
+                $clean[$pageId] = $normalized;
+            }
+        }
+        $this->siteSettings->set(self::KEY, $clean);
+    }
+
+    /** @return array{title?:string,description?:string,image?:int,robots?:string} */
+    private function normalize(array $overrides): array
+    {
+        $clean = [];
+        foreach (['title', 'description'] as $field) {
+            $value = $overrides[$field] ?? null;
+            if (is_scalar($value)) {
+                $value = trim((string) $value);
+                if ($value !== '') {
+                    $clean[$field] = $value;
+                }
+            }
+        }
+
+        $image = filter_var(
+            $overrides['image'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        if ($image !== false) {
+            $clean['image'] = $image;
+        }
+
+        $robots = $overrides['robots'] ?? null;
+        if (is_string($robots) && in_array($robots, self::ROBOTS_VALUES, true)) {
+            $clean['robots'] = $robots;
+        }
+
+        return $clean;
     }
 }

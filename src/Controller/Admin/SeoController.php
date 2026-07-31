@@ -78,19 +78,7 @@ class SeoController extends AbstractActionController
             $post = $this->params()->fromPost();
             $form->setData($post);
             if ($form->isValid()) {
-                $map = [];
-                foreach ((array) ($post['pages'] ?? []) as $pageId => $fields) {
-                    $overrides = array_filter([
-                        'title'       => trim((string) ($fields['title'] ?? '')),
-                        'description' => trim((string) ($fields['description'] ?? '')),
-                        'image'       => (int) ($fields['image'] ?? 0) ?: null,
-                        'robots'      => ($fields['robots'] ?? '') !== '' ? (string) $fields['robots'] : null,
-                    ], static fn ($v) => $v !== null && $v !== '');
-                    if ($overrides !== []) {
-                        $map[(int) $pageId] = $overrides;
-                    }
-                }
-                $this->pageSeoStore->replaceAll($map);
+                $this->pageSeoStore->replaceAll((array) ($post['pages'] ?? []));
                 $this->messenger()->addSuccess('Static-page SEO saved.'); // @translate
                 return $this->redirect()->toRoute('admin/dre-seo/pages');
             }
