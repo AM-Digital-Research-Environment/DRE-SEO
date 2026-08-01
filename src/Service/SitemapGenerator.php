@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace DRESeo\Service;
 
 use Doctrine\DBAL\Connection;
+use Laminas\Log\LoggerInterface;
 
 /**
  * Builds the sitemap index and the per-type child sitemaps for one site.
@@ -11,7 +12,7 @@ use Doctrine\DBAL\Connection;
  * Resource ids + modified timestamps are read with a single lean DBAL query per
  * type (public resources only, scoped to the site), so even ~9k items render in
  * well under a second. Output is cached to a writable directory with a TTL;
- * any cache failure silently falls back to live generation.
+ * cache failures fall back to live generation and are logged for diagnosis.
  *
  * URL construction is intentionally string-based (the caller passes the
  * already-canonical host and site roots) rather than invoking the URL helper
@@ -29,6 +30,7 @@ class SitemapGenerator
         private readonly Connection $connection,
         private readonly array $config,
         private readonly ?string $cacheDir,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -225,8 +227,19 @@ class SitemapGenerator
         if ($this->cacheDir === null || !is_dir($this->cacheDir)) {
             return;
         }
-        foreach (glob($this->cacheDir . '/*.xml') ?: [] as $file) {
-            @unlink($file);
+        $files = glob($this->cacheDir . '/*.xml');
+        if ($files === false) {
+            $this->logger->warn('DRESeo: failed to list sitemap cache files.', [
+                'cache_dir' => $this->cacheDir,
+            ]);
+            return;
+        }
+        foreach ($files as $file) {
+            if (!@unlink($file)) {
+                $this->logger->warn('DRESeo: failed to remove a sitemap cache file.', [
+                    'file' => $file,
+                ]);
+            }
         }
     }
 
@@ -252,6 +265,7 @@ class SitemapGenerator
                 ['t' => 'Omeka\\Entity\\Item', 's' => $siteId]
             );
         } catch (\Throwable $e) {
+            $this->logDatabaseFailure('count public items', $siteId, $e);
             return 0;
         }
     }
@@ -272,6 +286,7 @@ class SitemapGenerator
                 ['t' => 'Omeka\\Entity\\Item', 's' => $siteId]
             );
         } catch (\Throwable $e) {
+            $this->logDatabaseFailure('fetch public items', $siteId, $e);
             return [];
         }
     }
@@ -288,6 +303,7 @@ class SitemapGenerator
                 ['t' => 'Omeka\\Entity\\ItemSet', 's' => $siteId]
             );
         } catch (\Throwable $e) {
+            $this->logDatabaseFailure('fetch public item sets', $siteId, $e);
             return [];
         }
     }
@@ -302,8 +318,17 @@ class SitemapGenerator
                 ['s' => $siteId]
             );
         } catch (\Throwable $e) {
+            $this->logDatabaseFailure('fetch public site pages', $siteId, $e);
             return [];
         }
+    }
+
+    private function logDatabaseFailure(string $operation, int $siteId, \Throwable $exception): void
+    {
+        $this->logger->err(sprintf('DRESeo: failed to %s for sitemap generation.', $operation), [
+            'site_id' => $siteId,
+            'exception' => $exception,
+        ]);
     }
 
     // ─── XML rendering ──────────────────────────────────────────────────────
@@ -376,27 +401,55 @@ class SitemapGenerator
         }
         $file = $this->cacheDir . '/' . $key . '.xml';
         try {
-            if (is_file($file) && (time() - filemtime($file)) < $ttl) {
-                $cached = file_get_contents($file);
-                if ($cached !== false) {
-                    return $cached;
+            if (is_file($file)) {
+                $modified = @filemtime($file);
+                if ($modified === false) {
+                    $this->logger->warn('DRESeo: failed to read a sitemap cache timestamp.', [
+                        'file' => $file,
+                    ]);
+                } elseif ((time() - $modified) < $ttl) {
+                    $cached = @file_get_contents($file);
+                    if ($cached !== false) {
+                        return $cached;
+                    }
+                    $this->logger->warn('DRESeo: failed to read a sitemap cache file; generating live output.', [
+                        'file' => $file,
+                    ]);
                 }
             }
         } catch (\Throwable $e) {
-            // fall through to live build
+            $this->logger->warn('DRESeo: failed to read a sitemap cache file; generating live output.', [
+                'file' => $file,
+                'exception' => $e,
+            ]);
         }
 
         $xml = $build();
 
         try {
             if (!is_dir($this->cacheDir)) {
-                @mkdir($this->cacheDir, 0775, true);
+                if (!@mkdir($this->cacheDir, 0775, true) && !is_dir($this->cacheDir)) {
+                    $this->logger->warn('DRESeo: failed to create the sitemap cache directory.', [
+                        'cache_dir' => $this->cacheDir,
+                    ]);
+                }
             }
             if (is_dir($this->cacheDir) && is_writable($this->cacheDir)) {
-                file_put_contents($file, $xml, LOCK_EX);
+                if (@file_put_contents($file, $xml, LOCK_EX) === false) {
+                    $this->logger->warn('DRESeo: failed to write a sitemap cache file.', [
+                        'file' => $file,
+                    ]);
+                }
+            } elseif (is_dir($this->cacheDir)) {
+                $this->logger->warn('DRESeo: sitemap cache directory is not writable.', [
+                    'cache_dir' => $this->cacheDir,
+                ]);
             }
         } catch (\Throwable $e) {
-            // caching is best-effort
+            $this->logger->warn('DRESeo: failed to write sitemap cache; returning live output.', [
+                'file' => $file,
+                'exception' => $e,
+            ]);
         }
         return $xml;
     }

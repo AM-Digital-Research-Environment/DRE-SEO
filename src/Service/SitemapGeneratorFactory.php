@@ -21,6 +21,7 @@ final class SitemapGeneratorFactory implements FactoryInterface
             $container->get('Omeka\Connection'),
             $sitemapConfig,
             $cacheDir,
+            $container->get('Omeka\Logger'),
         );
     }
 }

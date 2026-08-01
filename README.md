@@ -27,7 +27,7 @@ tables, no theme edits.
 | **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, with `<lastmod>`, `<changefreq>`, `<priority>`. Cached. |
 | **robots.txt** | `/robots.txt` disallowing `/admin` and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site. |
 | **Google Search Console** | Paste the verification snippet in the module config; the `<meta name="google-site-verification">` tag is injected site-wide. |
-| **IndexNow ping** | Optionally notifies Bing/Yandex when public content changes (throttled; skips bulk syncs). |
+| **IndexNow ping** | Optionally notifies Bing/Yandex when public content changes. Concurrent edits coalesce into one background batch; failed submissions are retained for a later retry. |
 
 Static-page SEO is **set by hand** (a central admin table); resource-page SEO is **derived
 automatically** from each item's metadata, with the configurable defaults filling any gaps.
@@ -185,14 +185,18 @@ native video item type; manually curated `marcrel:spk` values are exposed as cre
 
 Resource ids + modified timestamps are read with one lean DBAL query per type (public
 resources scoped to the site), so even ~9k items render in well under a second. Output is
-cached under `files/dre-seo-cache/`; any cache failure falls back to live generation.
+cached under `files/dre-seo-cache/`; cache failures fall back to live generation, and cache
+or database failures are recorded in Omeka's log for diagnosis.
 
 ---
 
 ## IndexNow ping — and the bulk-sync caveat
 
 When **Ping IndexNow** is on, public item/page **create** and **update** events queue the
-changed URL; a background job submits the queue to IndexNow at most once every 15 minutes.
+changed URL. The first edit dispatches one background job; concurrent edits coalesce into
+that batch, and edits arriving while it runs schedule at most one follow-up job. A stale
+15-minute queue lock recovers automatically if a worker exits unexpectedly. Failed
+submissions are retained and retried when a later content edit schedules the queue again.
 
 > **This site's content arrives mainly through the `MongoDB2OmekaS` bulk sync, which writes
 > thousands of items.** The queue is therefore capped (200) and the job *skips* pinging when
@@ -230,13 +234,13 @@ DRESeo/
 │       └── *Factory.php
 ├── view/dre-seo/admin/seo/{dashboard,pages}.phtml
 ├── asset/css/admin.css
-├── tests/                            # dependency-free behavioral tests + PHP lint runner
+├── tests/                            # unit harness, PHP lint runner, Omeka integration smoke
 └── language/template.pot
 ```
 
 ## Development and testing
 
-The test harness is deliberately dependency-free: Omeka supplies Laminas, PSR and Doctrine
+The unit harness is deliberately dependency-free: Omeka supplies Laminas, PSR and Doctrine
 at runtime, so the module must not bundle duplicate framework packages. Run all checks with:
 
 ```bash
@@ -245,8 +249,15 @@ composer check
 
 This syntax-checks every PHP/PHTML file and exercises sitemap XML generation and caching,
 static-page override normalization, the current Africa Multiple template mapping, YouTube
-`VideoObject` output, and IndexNow key validation. GitHub Actions runs the same command on
-PHP 8.2 and PHP 8.5 for every push and pull request.
+`VideoObject` output, IndexNow key validation, and single-flight batching. GitHub Actions
+runs the same command on PHP 8.2 and the production PHP 8.5 runtime. A separate job downloads
+the checksum-pinned official Omeka S 4.2.1 release and exercises the module's real service
+factories, shared event listeners, configuration form, Laminas head helpers, and DBAL-backed
+sitemap generation. You can run it locally against an unpacked release with:
+
+```bash
+OMEKA_PATH=/path/to/omeka-s composer integration
+```
 
 ---
 

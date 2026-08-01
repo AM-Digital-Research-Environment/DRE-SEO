@@ -19,7 +19,66 @@ namespace Doctrine\DBAL {
     }
 }
 
+namespace Laminas\Log {
+    if (!interface_exists(LoggerInterface::class)) {
+        interface LoggerInterface
+        {
+            public function emerg($message, $extra = []);
+            public function alert($message, $extra = []);
+            public function crit($message, $extra = []);
+            public function err($message, $extra = []);
+            public function warn($message, $extra = []);
+            public function notice($message, $extra = []);
+            public function info($message, $extra = []);
+            public function debug($message, $extra = []);
+        }
+    }
+}
+
+namespace Omeka\Job {
+    if (!class_exists(Dispatcher::class)) {
+        class Dispatcher
+        {
+            /** @var array<int,array{class:string,args:mixed}> */
+            public array $dispatched = [];
+            public bool $fail = false;
+
+            public function dispatch($class, $args = null, $strategy = null): object
+            {
+                if ($this->fail) {
+                    throw new \RuntimeException('Simulated dispatch failure.');
+                }
+                $this->dispatched[] = ['class' => (string) $class, 'args' => $args];
+                return new \stdClass();
+            }
+        }
+    }
+}
+
 namespace Omeka\Settings {
+    if (!class_exists(Settings::class)) {
+        class Settings
+        {
+            /** @var array<string,mixed> */
+            private array $values = [];
+
+            public function get($id, $default = null): mixed
+            {
+                return $this->values[$id] ?? $default;
+            }
+
+            public function set($id, $value): void
+            {
+                $this->values[$id] = $value;
+            }
+
+            public function delete($id): void
+            {
+                unset($this->values[$id]);
+            }
+        }
+    }
+
     if (!class_exists(SiteSettings::class)) {
         class SiteSettings
         {
@@ -162,6 +221,27 @@ namespace Omeka\Api\Representation {
 }
 
 namespace {
+    final class MemoryLogger implements \Laminas\Log\LoggerInterface
+    {
+        /** @var array<string,array<int,array{message:string,extra:mixed}>> */
+        public array $records = [];
+
+        private function record(string $level, $message, $extra): self
+        {
+            $this->records[$level][] = ['message' => (string) $message, 'extra' => $extra];
+            return $this;
+        }
+
+        public function emerg($message, $extra = []): self { return $this->record('emerg', $message, $extra); }
+        public function alert($message, $extra = []): self { return $this->record('alert', $message, $extra); }
+        public function crit($message, $extra = []): self { return $this->record('crit', $message, $extra); }
+        public function err($message, $extra = []): self { return $this->record('err', $message, $extra); }
+        public function warn($message, $extra = []): self { return $this->record('warn', $message, $extra); }
+        public function notice($message, $extra = []): self { return $this->record('notice', $message, $extra); }
+        public function info($message, $extra = []): self { return $this->record('info', $message, $extra); }
+        public function debug($message, $extra = []): self { return $this->record('debug', $message, $extra); }
+    }
+
     /** @var array<string,Closure():void> $tests */
     $tests = [];
 

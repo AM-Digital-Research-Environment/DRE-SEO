@@ -22,10 +22,10 @@ declare(strict_types=1);
 
 namespace DRESeo;
 
-use DRESeo\Job\PingSearchEngines;
 use DRESeo\Service\HeadMetadata;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\PingQueue;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Mvc\Controller\AbstractController;
@@ -56,6 +56,7 @@ class Module extends AbstractModule
         'dre_seo_ping_enabled',
         'dre_seo_indexnow_key',
         'dre_seo_ping_pending',
+        'dre_seo_ping_job_queued',
         'dre_seo_ping_last',
     ];
 
@@ -67,10 +68,6 @@ class Module extends AbstractModule
         'dre_seo_noindex_browse'  => '1',
         'dre_seo_sitemap_ttl'     => '86400',
     ];
-
-    /** How often (seconds) a ping job may be dispatched, and the queue cap. */
-    private const PING_INTERVAL = 900;
-    private const PING_QUEUE_CAP = 200;
 
     private ?string $cachedSiteSlug = null;
     private bool $siteSlugResolved = false;
@@ -245,25 +242,17 @@ class Module extends AbstractModule
             return;
         }
 
-        // Enqueue (deduped, capped so a bulk sync cannot grow it without bound).
-        $pending = $settings->get('dre_seo_ping_pending', []);
-        if (!is_array($pending)) {
-            $pending = [];
-        }
-        if (count($pending) < self::PING_QUEUE_CAP && !in_array($url, $pending, true)) {
-            $pending[] = $url;
-            $settings->set('dre_seo_ping_pending', $pending);
-        }
-
-        // Dispatch at most once per interval; the job batches the whole queue.
-        $last = (int) $settings->get('dre_seo_ping_last', 0);
-        $now = time();
-        if ($now - $last >= self::PING_INTERVAL) {
-            $settings->set('dre_seo_ping_last', $now);
+        try {
+            $services->get(PingQueue::class)->enqueue($url);
+        } catch (\Throwable $e) {
+            // SEO bookkeeping must never make the underlying resource save fail.
             try {
-                $services->get('Omeka\Job\Dispatcher')->dispatch(PingSearchEngines::class);
-            } catch (\Throwable $e) {
-                // never let SEO bookkeeping break a save
+                $services->get('Omeka\Logger')->err('DRESeo: failed to queue an IndexNow URL.', [
+                    'url' => $url,
+                    'exception' => $e,
+                ]);
+            } catch (\Throwable) {
+                // The logger itself is best-effort at this boundary.
             }
         }
     }
@@ -278,7 +267,7 @@ class Module extends AbstractModule
 
         $data = [];
         foreach (self::SETTINGS as $key) {
-            if (in_array($key, ['dre_seo_ping_pending', 'dre_seo_ping_last'], true)) {
+            if (in_array($key, ['dre_seo_ping_pending', 'dre_seo_ping_job_queued', 'dre_seo_ping_last'], true)) {
                 continue; // internal bookkeeping, not user-facing
             }
             $data[$key] = $settings->get($key, self::DEFAULTS[$key] ?? '');
@@ -302,7 +291,7 @@ class Module extends AbstractModule
 
         $data = $form->getData();
         foreach (self::SETTINGS as $key) {
-            if (in_array($key, ['dre_seo_ping_pending', 'dre_seo_ping_last'], true)) {
+            if (in_array($key, ['dre_seo_ping_pending', 'dre_seo_ping_job_queued', 'dre_seo_ping_last'], true)) {
                 continue;
             }
             if (array_key_exists($key, $data)) {

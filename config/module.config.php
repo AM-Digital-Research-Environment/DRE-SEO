@@ -24,6 +24,7 @@ return [
             Service\SitemapGenerator::class => Service\SitemapGeneratorFactory::class,
             Service\PageSeoStore::class     => Service\PageSeoStoreFactory::class,
             Service\Pinger::class           => Service\PingerFactory::class,
+            Service\PingQueue::class        => Service\PingQueueFactory::class,
         ],
     ],
 

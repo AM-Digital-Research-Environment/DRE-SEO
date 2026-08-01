@@ -76,7 +76,7 @@ test('sitemap index chunks items and isolates cached sites and hosts', function 
     $connection = new FakeConnection();
     $connection->itemCounts = [1 => 1, 2 => 5];
     $cacheDir = sys_get_temp_dir() . '/dre-seo-test-' . bin2hex(random_bytes(6));
-    $generator = new SitemapGenerator($connection, sitemapConfig(), $cacheDir);
+    $generator = new SitemapGenerator($connection, sitemapConfig(), $cacheDir, new MemoryLogger());
 
     try {
         $siteOne = $generator->buildIndex('https://one.example', 1, 3600);
@@ -106,7 +106,7 @@ test('pages sitemap follows navigation order and emits the bare-domain homepage'
         ['id' => 3, 'slug' => 'team', 'modified' => null],
         ['id' => 4, 'slug' => 'hidden', 'modified' => null],
     ];
-    $generator = new SitemapGenerator($connection, sitemapConfig(), null);
+    $generator = new SitemapGenerator($connection, sitemapConfig(), null, new MemoryLogger());
     $navigation = [[
         'type' => 'page',
         'data' => ['id' => 2],
@@ -145,7 +145,7 @@ test('item sitemap uses the requested chunk offset and valid XML escaping', func
         ['id' => 3, 'modified' => '2026-06-07 08:09:10'],
         ['id' => 4, 'modified' => null],
     ];
-    $generator = new SitemapGenerator($connection, sitemapConfig(), null);
+    $generator = new SitemapGenerator($connection, sitemapConfig(), null, new MemoryLogger());
 
     $xml = $generator->buildItems('https://example.test/s/amira', 1, 2, 0);
 
@@ -157,4 +157,25 @@ test('item sitemap uses the requested chunk offset and valid XML escaping', func
         $connection->queries,
         static fn (string $query): bool => str_contains($query, 'LIMIT 2 OFFSET 2')
     ));
+});
+
+test('sitemap database failures return safe empty data and are logged', function (): void {
+    $connection = new class extends Connection {
+        public function fetchOne(string $query, array $params = []): mixed
+        {
+            throw new RuntimeException('Database unavailable.');
+        }
+
+        public function fetchAllAssociative(string $query, array $params = []): array
+        {
+            throw new RuntimeException('Database unavailable.');
+        }
+    };
+    $logger = new MemoryLogger();
+    $generator = new SitemapGenerator($connection, sitemapConfig(), null, $logger);
+
+    assertSameValue(['items' => 0, 'itemSets' => 0, 'pages' => 0], $generator->counts(42));
+    assertSameValue(3, count($logger->records['err'] ?? []));
+    assertTrue(str_contains($logger->records['err'][0]['message'], 'sitemap generation'));
+    assertSameValue(42, $logger->records['err'][0]['extra']['site_id']);
 });

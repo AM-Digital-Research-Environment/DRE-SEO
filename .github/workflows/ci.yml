@@ -34,3 +34,34 @@ jobs:
 
       - name: Lint and test
         run: composer check
+
+  omeka-smoke:
+    name: Omeka S 4.2.1 / PHP 8.5
+    runs-on: ubuntu-latest
+    env:
+      OMEKA_VERSION: '4.2.1'
+      OMEKA_SHA256: cc27d1c7aca0209523d19aa285f4a08e29e34950dcc446951a7c1311de348e82
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: dom, json, mbstring, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - name: Download official Omeka S release
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/omeka-s.zip"
+          curl -fsSL "https://github.com/omeka/omeka-s/releases/download/v${OMEKA_VERSION}/omeka-s-${OMEKA_VERSION}.zip" -o "$archive"
+          echo "${OMEKA_SHA256}  ${archive}" | sha256sum -c -
+          unzip -q "$archive" -d "$RUNNER_TEMP"
+          echo "OMEKA_PATH=$RUNNER_TEMP/omeka-s" >> "$GITHUB_ENV"
+
+      - name: Run Omeka integration smoke test
+        run: composer integration

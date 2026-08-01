@@ -24,6 +24,7 @@
   "scripts": {
     "lint": "@php tests/lint.php",
     "test": "@php tests/run.php",
+    "integration": "@php tests/integration/omeka-smoke.php",
     "check": [
       "@lint",
       "@test"

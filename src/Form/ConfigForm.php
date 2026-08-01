@@ -150,7 +150,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Ping IndexNow when content changes', // @translate
-                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item or page is added or edited, so it is crawled sooner. Throttled, and skipped during bulk syncs. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
+                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item or page is added or edited, so it is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_ping_enabled'],
         ]);
