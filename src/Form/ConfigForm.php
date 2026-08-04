@@ -117,8 +117,8 @@ class ConfigForm extends Form
             'name'    => 'dre_seo_citation_meta',
             'type'    => Element\Checkbox::class,
             'options' => [
-                'label' => 'Emit citation meta tags (Zotero / Google Scholar)', // @translate
-                'info'  => 'Adds Highwire Press (citation_*) and Dublin Core (DC.*) <meta> tags to resource pages so the Zotero Connector, Google Scholar and reference managers capture each item as a proper reference. Recommended.', // @translate
+                'label' => 'Emit citations (Zotero / Google Scholar / record page)', // @translate
+                'info'  => 'Adds Highwire Press (citation_*) and Dublin Core (DC.*) <meta> tags to resource pages so the Zotero Connector, Google Scholar and reference managers capture each item as a proper reference. Also powers the formatted Chicago/APA/MLA citations shown on record pages and the BibTeX/RIS/CSL-JSON downloads at /cite. Recommended.', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_citation_meta'],
         ]);

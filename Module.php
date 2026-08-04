@@ -107,9 +107,10 @@ class Module extends AbstractModule
     }
 
     /**
-     * ACL: open the public sitemap/robots/IndexNow endpoints to everyone
-     * (including anonymous visitors); restrict the admin SEO screens to editors
-     * and above (the /admin route already enforces authentication).
+     * ACL: open the public sitemap/robots/IndexNow and citation-download
+     * endpoints to everyone (including anonymous visitors); restrict the admin
+     * SEO screens to editors and above (the /admin route already enforces
+     * authentication).
      */
     public function onBootstrap(MvcEvent $event): void
     {
@@ -117,7 +118,10 @@ class Module extends AbstractModule
 
         /** @var Acl $acl */
         $acl = $event->getApplication()->getServiceManager()->get('Omeka\Acl');
-        $acl->allow(null, [Controller\SitemapController::class]);
+        $acl->allow(null, [
+            Controller\SitemapController::class,
+            Controller\CitationController::class,
+        ]);
         $acl->allow(
             [Acl::ROLE_EDITOR, Acl::ROLE_SITE_ADMIN, Acl::ROLE_GLOBAL_ADMIN],
             [Controller\Admin\SeoController::class]

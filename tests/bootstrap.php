@@ -109,10 +109,18 @@ namespace Omeka\Api\Representation {
     if (!class_exists(ValueRepresentation::class)) {
         class ValueRepresentation
         {
+            /**
+             * @param string|null $rawValue what value() returns — the stored form,
+             *   which for a date keeps the month/day the rendered string may drop.
+             * @param string|null $dataType overrides the type inferred from the
+             *   other arguments.
+             */
             public function __construct(
                 private readonly string $value = '',
                 private readonly ?AbstractResourceEntityRepresentation $resource = null,
                 private readonly ?string $uriValue = null,
+                private readonly ?string $rawValue = null,
+                private readonly ?string $dataType = null,
             ) {
             }
 
@@ -130,6 +138,24 @@ namespace Omeka\Api\Representation {
             {
                 return $this->uriValue;
             }
+
+            /** The stored value, as Omeka's ValueRepresentation::value() returns it. */
+            public function value(): ?string
+            {
+                return $this->rawValue ?? $this->value;
+            }
+
+            public function type(): string
+            {
+                if ($this->dataType !== null) {
+                    return $this->dataType;
+                }
+                if ($this->resource !== null) {
+                    return 'resource:item';
+                }
+
+                return $this->uriValue !== null ? 'uri' : 'literal';
+            }
         }
     }
 
@@ -145,12 +171,29 @@ namespace Omeka\Api\Representation {
                 private readonly ?string $classLabel = null,
                 private readonly array $values = [],
                 private readonly ?string $publicUrl = null,
+                private readonly int $idValue = 1,
             ) {
             }
 
-            public function displayTitle(): string
+            public function id(): int
             {
-                return $this->title;
+                return $this->idValue;
+            }
+
+            public function displayTitle(?string $default = null): string
+            {
+                return $this->title !== '' ? $this->title : (string) $default;
+            }
+
+            public function isPublic(): bool
+            {
+                return true;
+            }
+
+            /** @return array<int,object> no media in the stub. */
+            public function media(): array
+            {
+                return [];
             }
 
             public function resourceTemplate(): ?object
@@ -195,6 +238,12 @@ namespace Omeka\Api\Representation {
             {
                 return $this->publicUrl ?? 'https://example.test/s/' . $siteSlug . '/item/1';
             }
+        }
+    }
+
+    if (!class_exists(ItemRepresentation::class)) {
+        class ItemRepresentation extends AbstractResourceEntityRepresentation
+        {
         }
     }
 

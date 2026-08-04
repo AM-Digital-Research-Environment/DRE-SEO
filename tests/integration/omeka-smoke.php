@@ -204,6 +204,10 @@ try {
     $serviceTypes = [
         DRESeo\Service\StructuredData::class,
         DRESeo\Service\CitationMeta::class,
+        DRESeo\Service\CitationKindMap::class,
+        DRESeo\Service\CitationData::class,
+        DRESeo\Service\CitationFormatter::class,
+        DRESeo\Service\CitationExport::class,
         DRESeo\Service\HeadMetadata::class,
         DRESeo\Service\SitemapGenerator::class,
         DRESeo\Service\PageSeoStore::class,
@@ -222,8 +226,42 @@ try {
         $services,
         DRESeo\Controller\Admin\SeoController::class
     );
+    $citationController = (new DRESeo\Service\Controller\CitationControllerFactory())(
+        $services,
+        DRESeo\Controller\CitationController::class
+    );
     smokeAssert($sitemapController instanceof DRESeo\Controller\SitemapController, 'Sitemap controller factory failed.');
     smokeAssert($seoController instanceof DRESeo\Controller\Admin\SeoController, 'Admin controller factory failed.');
+    smokeAssert($citationController instanceof DRESeo\Controller\CitationController, 'Citation controller factory failed.');
+
+    // The citation stack, end to end against Omeka's real value/record classes:
+    // a formatted citation and every offered download serialisation.
+    $citationRecord = new DRESeo\Service\Citation\CitationRecord(
+        id: 42,
+        kind: DRESeo\Service\CitationKind::Article,
+        title: 'Islamic Reform in Colonial Burkina Faso',
+        authors: [DRESeo\Service\Citation\Creator::parse('Frédérick Madore', false)],
+        issued: DRESeo\Service\Citation\IssuedDate::parse('2021-05-16'),
+        container: 'Journal of African History',
+        doi: '10.1017/S0021853721000372',
+        url: 'https://example.test/s/amira/item/42',
+    );
+    $formatter = $services->get(DRESeo\Service\CitationFormatter::class);
+    $citationHtml = $formatter->format($citationRecord, 'chicago');
+    smokeAssert(
+        str_contains($citationHtml, 'Madore, Frédérick.')
+            && str_contains($citationHtml, '<em>Journal of African History</em>')
+            && str_contains($citationHtml, 'https://doi.org/10.1017/S0021853721000372'),
+        'Chicago citation did not render the expected segments: ' . $citationHtml
+    );
+    $export = $services->get(DRESeo\Service\CitationExport::class);
+    foreach (array_keys(DRESeo\Service\CitationExport::FORMATS) as $format) {
+        $serialised = $export->serialize($citationRecord, $format);
+        smokeAssert(
+            is_string($serialised) && $serialised !== '',
+            sprintf('Citation export produced nothing for %s.', $format)
+        );
+    }
 
     $formConfig = $config['form_elements'];
     $formConfig['invokables'][Omeka\Form\Element\Asset::class] = Omeka\Form\Element\Asset::class;
@@ -319,10 +357,19 @@ try {
     smokeAssert(str_contains($itemsXml, '/item/1') && str_contains($itemsXml, '/item/2'), 'Public items are missing.');
     smokeAssert(!str_contains($itemsXml, '/item/4'), 'A private item leaked into the sitemap.');
 
+    // The view helper the theme calls: it must resolve through the module's own
+    // view_helpers config, or the rail silently falls back to its baseline.
+    $viewHelpers = new Laminas\View\HelperPluginManager($services, $config['view_helpers']);
+    $citationHelper = $viewHelpers->get('dreCitation');
+    smokeAssert(
+        $citationHelper instanceof DRESeo\View\Helper\Citation,
+        'The dreCitation view helper did not resolve through the module config.'
+    );
+
     printf(
-        "PASS  Omeka S %s integration smoke (%d factories, listeners, forms, head helpers, DBAL sitemap)\n",
+        "PASS  Omeka S %s integration smoke (%d factories, listeners, forms, head helpers, citations, DBAL sitemap)\n",
         Omeka\Module::VERSION,
-        count($serviceTypes) + 2
+        count($serviceTypes) + 3
     );
 } catch (Throwable $e) {
     fwrite(STDERR, sprintf("FAIL  %s\n%s\n", $e->getMessage(), $e->getTraceAsString()));

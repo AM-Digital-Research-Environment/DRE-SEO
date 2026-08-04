@@ -21,17 +21,34 @@ return [
             Service\HeadMetadata::class     => Service\HeadMetadataFactory::class,
             Service\StructuredData::class   => Service\StructuredDataFactory::class,
             Service\CitationMeta::class     => Service\CitationMetaFactory::class,
+            Service\CitationKindMap::class  => Service\CitationKindMapFactory::class,
+            Service\CitationData::class     => Service\CitationDataFactory::class,
             Service\SitemapGenerator::class => Service\SitemapGeneratorFactory::class,
             Service\PageSeoStore::class     => Service\PageSeoStoreFactory::class,
             Service\Pinger::class           => Service\PingerFactory::class,
             Service\PingQueue::class        => Service\PingQueueFactory::class,
+        ],
+        'invokables' => [
+            // Stateless serialisers: no config, no dependencies.
+            Service\CitationFormatter::class => Service\CitationFormatter::class,
+            Service\CitationExport::class    => Service\CitationExport::class,
         ],
     ],
 
     'controllers' => [
         'factories' => [
             Controller\SitemapController::class    => Service\Controller\SitemapControllerFactory::class,
+            Controller\CitationController::class   => Service\Controller\CitationControllerFactory::class,
             Controller\Admin\SeoController::class  => Service\Controller\SeoControllerFactory::class,
+        ],
+    ],
+
+    // dreCitation($item) — the citation view-model the theme's record rail
+    // renders. The theme guards on the helper's existence, so the module stays
+    // optional.
+    'view_helpers' => [
+        'factories' => [
+            'dreCitation' => Service\ViewHelper\CitationFactory::class,
         ],
     ],
 
@@ -84,6 +101,21 @@ return [
                     'defaults' => ['controller' => Controller\SitemapController::class, 'action' => 'robots'],
                 ],
             ],
+            // Citation downloads at /cite/{id}/{format}. A new first segment,
+            // so it cannot collide with the sitemap/robots literals above nor
+            // with the IndexNow catch-all below (which only matches *.txt).
+            'dre-seo-cite' => [
+                'type'    => Segment::class,
+                'options' => [
+                    'route'       => '/cite/:id/:format',
+                    'constraints' => ['id' => '\d+', 'format' => '[a-z]+'],
+                    'defaults'    => [
+                        'controller' => Controller\CitationController::class,
+                        'action'     => 'index',
+                    ],
+                ],
+            ],
+
             // IndexNow ownership key at /{key}.txt. Constrained to a hex key so
             // it cannot shadow robots.txt; low priority so literals match first.
             'dre-seo-indexnow' => [
@@ -223,6 +255,21 @@ return [
                 21 => 'podcast',      // podcast episode
                 22 => 'video',        // YouTube video
             ],
+
+            // The formatted citations offered in the record rail, in the order
+            // the theme shows them. A hand-entered dcterms:bibliographicCitation
+            // is prepended by the view helper as the 'curated' style and takes
+            // precedence over `default_style`.
+            'default_style' => 'chicago',
+            'styles'        => [
+                'chicago' => 'Chicago',
+                'apa'     => 'APA',
+                'mla'     => 'MLA',
+            ],
+            'curated_label' => 'As catalogued',
+
+            // Download serialisations offered at /cite/{id}/{format}.
+            'formats' => ['bibtex', 'ris', 'csljson'],
         ],
     ],
 ];
