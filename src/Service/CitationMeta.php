@@ -26,9 +26,6 @@ class CitationMeta
 {
     private const ABSTRACT_MAX = 5000;
 
-    /** Kinds that are descriptive entities, not citable works → Dublin Core only. */
-    private const ENTITY_KINDS = ['person', 'place', 'organization', 'project', 'section'];
-
     /**
      * @param array<int,string> $templateKinds resource template id => citation kind
      */
@@ -50,10 +47,24 @@ class CitationMeta
         // Dublin Core for every resource.
         $this->dublinCore($headMeta, $resource, $canonical);
 
-        // Highwire only for citable works.
-        if (!in_array($kind, self::ENTITY_KINDS, true)) {
+        // Highwire only for citable works. Whether a kind is a descriptive
+        // record is CitationKind's to answer — this class kept its own list of
+        // kind strings, and the two drifted: the Authority Resource template
+        // resolved to the 'item' default and so handed Zotero a citation_title
+        // for vocabulary terms like "Artefact".
+        if (!$this->isAuthority($kind)) {
             $this->highwire($headMeta, $resource, $kind, $canonical);
         }
+    }
+
+    /**
+     * Whether this kind is a descriptive record rather than a citable work.
+     * An unknown kind string (a config typo) is treated as citable, matching
+     * the default_kind fallback rather than silently muting a real work.
+     */
+    private function isAuthority(string $kind): bool
+    {
+        return CitationKind::tryFrom($kind)?->isAuthorityRecord() ?? false;
     }
 
     // ─── Highwire Press (citation_*) ────────────────────────────────────────

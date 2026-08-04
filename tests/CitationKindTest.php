@@ -28,8 +28,10 @@ test('the entity templates are not citable works', function (): void {
     $config = require __DIR__ . '/../config/module.config.php';
     $kinds = $config['dre_seo']['citation']['template_kinds'];
 
-    // 2 organisation, 3 location, 4 persons, 5 projects, 7 research sections.
-    foreach ([2, 3, 4, 5, 7] as $templateId) {
+    // 2 organisation, 3 location, 4 persons, 5 projects, 6 authority resources
+    // (subjects / languages / genres / sponsors), 7 research sections,
+    // 23 journals (a publication venue, not a work).
+    foreach ([2, 3, 4, 5, 6, 7, 23] as $templateId) {
         $kind = CitationKind::from($kinds[$templateId]);
         assertTrue($kind->isAuthorityRecord(), "template {$templateId} must be an authority record");
     }
@@ -37,6 +39,22 @@ test('the entity templates are not citable works', function (): void {
     foreach ([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22] as $templateId) {
         $kind = CitationKind::from($kinds[$templateId]);
         assertTrue(!$kind->isAuthorityRecord(), "template {$templateId} must be citable");
+    }
+});
+
+test('every template the site defines has a citation kind', function (): void {
+    // The Authority Resource template (6) and the Journal template (23) were
+    // both absent from this map, so they fell through to default_kind 'item'
+    // and a subject heading was offered as a citable work. A template the map
+    // does not name is the failure mode, so name them all.
+    $config = require __DIR__ . '/../config/module.config.php';
+    $kinds = $config['dre_seo']['citation']['template_kinds'];
+
+    foreach ([2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as $templateId) {
+        assertTrue(
+            isset($kinds[$templateId]),
+            "template {$templateId} is unmapped and would be cited as a generic work"
+        );
     }
 });
 

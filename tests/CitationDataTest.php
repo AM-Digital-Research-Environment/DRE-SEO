@@ -96,7 +96,16 @@ test('a chapter reads its book title from isPartOf, not the container slot', fun
 test('authority records are not citable', function (): void {
     $data = citationDataService();
 
-    foreach ([2 => 'organisation', 3 => 'location', 4 => 'person', 5 => 'project', 7 => 'section'] as $templateId => $label) {
+    $authorities = [
+        2  => 'organisation',
+        3  => 'location',
+        4  => 'person',
+        5  => 'project',
+        6  => 'subject heading',   // and languages, genres, sponsors — all template 6
+        7  => 'section',
+        23 => 'journal',           // a venue, not a work
+    ];
+    foreach ($authorities as $templateId => $label) {
         $item = new ItemRepresentation('An ' . $label, $templateId, null, [
             'dcterms:title' => [literalValue('An ' . $label)],
         ]);

@@ -18,15 +18,23 @@ use Omeka\Api\Representation\ItemRepresentation;
  * the citation contract, so the panel and the Zotero/Scholar meta tags cannot
  * drift apart); the theme owns the markup and styling.
  *
- * Returns null when the panel should show nothing generated — the feature is
- * off, or the resource is an authority record (person / place / organisation /
- * project / research section), which is not a citable work. The theme must
- * degrade to its own baseline in that case, and must not assume this helper
- * exists at all: the module is optional.
+ * Three answers, and the theme needs all three kept apart:
  *
- * Otherwise returns:
+ *   null                      no opinion — the feature is off, or (as the theme
+ *                             sees it) the module is not installed at all. The
+ *                             theme keeps its own baseline.
+ *   ['citable' => false, …]   this IS a record the module knows, and it is a
+ *                             descriptive one — a person, a place, a subject
+ *                             heading, a journal. There is no citation because
+ *                             there should not be one, which is a different
+ *                             statement from "I cannot tell you", and the theme
+ *                             titles the panel accordingly.
+ *   ['citable' => true, …]    a citable work, with styles and downloads.
+ *
+ * The full shape:
  *   [
- *     'record'       => <CitationRecord::toArray()>,
+ *     'citable'      => bool,
+ *     'record'       => <CitationRecord::toArray()>,   // citable only
  *     'defaultStyle' => 'curated' | 'chicago',
  *     'styles'       => ['curated' => ['label'=>…, 'html'=>…], 'chicago'=>…, 'apa'=>…, 'mla'=>…],
  *     'downloads'    => ['bibtex' => ['url'=>…, 'label'=>…, 'ext'=>…], 'ris'=>…, …],
@@ -74,7 +82,7 @@ class Citation extends AbstractHelper
             return null;
         }
         if (!$this->citationData->isCitable(CitationKindMap::templateId($item))) {
-            return null;
+            return self::notCitable();
         }
 
         /** @var PhpRenderer $view */
@@ -83,7 +91,7 @@ class Citation extends AbstractHelper
 
         $record = $this->citationData->build($item, $url);
         if ($record === null) {
-            return null;
+            return self::notCitable();
         }
 
         $locale = ViewLocale::forCitation($view);
@@ -103,7 +111,7 @@ class Citation extends AbstractHelper
             ];
         }
         if (!$styles) {
-            return null;
+            return self::notCitable();
         }
 
         $downloads = [];
@@ -123,12 +131,30 @@ class Citation extends AbstractHelper
             : (isset($styles[$this->defaultStyle]) ? $this->defaultStyle : (string) array_key_first($styles));
 
         return [
+            'citable'      => true,
             // The theme reads the record as an array; toArray() is that
             // published contract, and the only place the array form is built.
             'record'       => $record->toArray(),
             'defaultStyle' => $default,
             'styles'       => $styles,
             'downloads'    => $downloads,
+        ];
+    }
+
+    /**
+     * A descriptive record: the module has an opinion, and the opinion is that
+     * there is nothing here to cite.
+     *
+     * @return array<string,mixed>
+     */
+    private static function notCitable(): array
+    {
+        return [
+            'citable'      => false,
+            'record'       => null,
+            'defaultStyle' => null,
+            'styles'       => [],
+            'downloads'    => [],
         ];
     }
 

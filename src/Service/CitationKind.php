@@ -24,6 +24,16 @@ enum CitationKind: string
     case Organization = 'organization';
     case Project = 'project';
     case Section = 'section';
+    /**
+     * The Authority Resource template (6), which carries every controlled
+     * vocabulary the archive keeps: subjects, languages, genres, resource
+     * types, target audiences, sponsors, playlists. One template for all of
+     * them, where IWAC had a resource class per kind — which is how these
+     * came to be treated as citable works when the citation stack was ported.
+     */
+    case Authority = 'authority';
+    /** A publication venue (template 23), not a work that is cited on its own. */
+    case Journal = 'journal';
 
     // Bibliographic works.
     case Article = 'article';
@@ -41,15 +51,21 @@ enum CitationKind: string
     case Item = 'item';
 
     /**
-     * Descriptive authority records (person / place / organisation / project /
-     * research section) are not citable works: no "How to cite" panel, no
-     * citation record, no export. Mirrors CitationMeta's ENTITY_KINDS, which
-     * withholds the Highwire tags from the same set.
+     * Descriptive records — a person, a place, an organisation, a project, a
+     * research section, a vocabulary term, a journal — are not citable works:
+     * no citation, no export, and no Highwire tags either, since a subject
+     * heading offered to Zotero as a scholarly article is worse than nothing.
+     *
+     * This is the single source of truth for that question. {@see CitationMeta}
+     * used to keep its own list of kind strings, which is why the Authority
+     * Resource template went on emitting citation_title for terms like
+     * "Artefact" long after the panel had learned better.
      */
     public function isAuthorityRecord(): bool
     {
         return match ($this) {
-            self::Person, self::Place, self::Organization, self::Project, self::Section => true,
+            self::Person, self::Place, self::Organization, self::Project,
+            self::Section, self::Authority, self::Journal => true,
             default => false,
         };
     }

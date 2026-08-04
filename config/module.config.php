@@ -240,6 +240,7 @@ return [
                 3  => 'place',        // location
                 4  => 'person',       // persons
                 5  => 'project',      // projects
+                6  => 'authority',    // subjects, languages, genres, sponsors, …
                 7  => 'section',      // research sections
                 10 => 'item',         // research items (generic document)
                 11 => 'article',      // journal article
@@ -254,6 +255,7 @@ return [
                 20 => 'dataset',      // research data
                 21 => 'podcast',      // podcast episode
                 22 => 'video',        // YouTube video
+                23 => 'journal',      // publication venue, not a work
             ],
 
             // The formatted citations offered in the record rail, in the order
