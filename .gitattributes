@@ -12,7 +12,25 @@
 *.woff2 binary
 *.mo   binary
 
-# Exclude development cruft from `composer archive` / GitHub release tarballs.
-/.gitattributes export-ignore
-/.gitignore     export-ignore
-/.github        export-ignore
+# Language stats: .phtml files are Omeka S view templates, i.e. PHP — not HTML.
+*.phtml linguist-language=PHP
+
+# ---------------------------------------------------------------------------
+# Release archive contents
+#
+# `git archive --prefix=DRESeo/` (see .github/workflows/release.yml) builds the
+# installable module zip and honours every `export-ignore` below. What ships is
+# exactly what Omeka needs at runtime — Module.php, config/, src/, view/, asset/,
+# language/, composer.json — plus README, LICENSE and CHANGELOG for whoever
+# unpacks it. Everything else is repository furniture and stays out.
+#
+# Consequence worth knowing: `composer check` / `composer test` do NOT run inside
+# an unpacked release, because tests/ is excluded by design. Run them from a clone.
+# ---------------------------------------------------------------------------
+/.gitattributes  export-ignore
+/.gitignore      export-ignore
+/.github         export-ignore
+/tests           export-ignore
+/CITATION.cff    export-ignore
+/CONTRIBUTING.md export-ignore
+/SECURITY.md     export-ignore

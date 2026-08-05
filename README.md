@@ -1,5 +1,11 @@
 # DRE SEO
 
+[![CI](https://github.com/AM-Digital-Research-Environment/DRE-SEO/actions/workflows/ci.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/DRE-SEO/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/AM-Digital-Research-Environment/DRE-SEO?sort=semver&label=release)](https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/latest)
+[![Omeka S ^4.2.0](https://img.shields.io/badge/Omeka%20S-%5E4.2.0-3b5f7d)](https://omeka.org/s/)
+[![PHP >= 8.2](https://img.shields.io/badge/PHP-%E2%89%A5%208.2-777bb4)](https://www.php.net/)
+[![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-009260)](LICENSE)
+
 Search-engine optimisation and XML sitemap for the **Africa Multiple DRE** Omeka S
 instance ([data.africamultiple.uni-bayreuth.de](https://data.africamultiple.uni-bayreuth.de)).
 
@@ -36,10 +42,13 @@ automatically** from each item's metadata, with the configurable defaults fillin
 
 ## Installation
 
-The module folder **must be named `DRESeo`** inside Omeka's `modules/` directory (the folder
-name has to match the namespace, exactly like `DRESearch`). Deploy it the same way as the
-other DRE modules (the `omeka-s-docker` sideload / `EXTRA_MODULES` mechanism or the
-ansible-bootstrap copy), then:
+Download `DRESeo.zip` from the [latest release](https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/latest)
+and unpack it into Omeka's `modules/` directory. The archive already unpacks to a folder named
+`DRESeo`, which is required — the folder name has to match the namespace, exactly like
+`DRESearch`. Each release also carries a `.sha256` file if you want to verify the download.
+
+For the DRE instances, deploy it the same way as the other DRE modules (the `omeka-s-docker`
+sideload / `EXTRA_MODULES` mechanism or the ansible-bootstrap copy). Either way, then:
 
 1. **Admin → Modules → DRE SEO → Install.**
 2. **Configure** (see below) — at minimum paste your Google Search Console snippet and pick a
@@ -213,7 +222,12 @@ content via the robots.txt `Sitemap:` line and Search Console.
 
 ```
 DRESeo/
-├── .github/workflows/ci.yml          # PHP 8.2 + production PHP 8.5 checks
+├── .github/workflows/
+│   ├── ci.yml                       # PHP 8.2 + production PHP 8.5 checks, Omeka smoke test
+│   └── release.yml                  # tag -> DRESeo.zip + SHA-256 on the GitHub release
+├── CHANGELOG.md
+├── CITATION.cff                     # how to cite the module (GitHub / Zenodo read this)
+├── LICENSE                          # GPL-3.0-or-later
 ├── Module.php                       # listeners, ACL, install/uninstall, config form
 ├── composer.json                    # type omeka-module; PSR-4 DRESeo\ -> src/ (no runtime deps)
 ├── config/
@@ -237,6 +251,10 @@ DRESeo/
 ├── tests/                            # unit harness, PHP lint runner, Omeka integration smoke
 └── language/template.pot
 ```
+
+`tests/` and the repository furniture are `export-ignore`d in `.gitattributes`, so the release
+zip holds only what Omeka needs at runtime plus the README, licence and changelog. Run
+`composer check` from a clone, not from an unpacked release.
 
 ## Development and testing
 
@@ -297,7 +315,22 @@ sitemap cache directory (`files/dre-seo-cache/`) can be deleted manually if desi
 
 ---
 
+## Citing this module
+
+Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff), which GitHub renders under
+**Cite this repository** in the sidebar:
+
+> Madore, Frédérick. *DRE SEO: search-engine optimisation, structured data and citation
+> metadata for Omeka S*. Africa Multiple Cluster of Excellence, University of Bayreuth.
+> <https://github.com/AM-Digital-Research-Environment/DRE-SEO>
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and the release procedure,
+and [SECURITY.md](SECURITY.md) for reporting a vulnerability privately. Changes are recorded
+in [CHANGELOG.md](CHANGELOG.md).
+
 ## Licence
 
-GPL-3.0-or-later. © Frédérick Madore / Africa Multiple Cluster of Excellence, University of
-Bayreuth.
+[GPL-3.0-or-later](LICENSE). © Frédérick Madore / Africa Multiple Cluster of Excellence,
+University of Bayreuth.

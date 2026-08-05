@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "DRE SEO: search-engine optimisation, structured data and citation metadata for Omeka S"
+abstract: >-
+  An Omeka S module that adds the discovery layer the platform does not ship with.
+  It injects per-page meta descriptions, Open Graph and Twitter cards, canonical
+  links and schema.org JSON-LD — set by hand for static site pages, derived
+  automatically for every resource page from its metadata and resource template.
+  It emits Highwire Press and Dublin Core citation tags so the Zotero Connector,
+  Google Scholar and other reference managers capture each record as a correctly
+  typed reference, formats Chicago, APA and MLA citations on the record page, and
+  serves BibTeX, RIS and CSL-JSON downloads. It also serves an XML sitemap index
+  with per-type children, a robots.txt, a Google Search Console verification tag,
+  and an optional IndexNow ping when public content changes. Built for the Africa
+  Multiple Cluster of Excellence Digital Research Environment.
+type: software
+authors:
+  - family-names: Madore
+    given-names: Frédérick
+    orcid: "https://orcid.org/0000-0003-0959-2092"
+    affiliation: "University of Bayreuth"
+    website: "https://www.frederickmadore.com/"
+repository-code: "https://github.com/AM-Digital-Research-Environment/DRE-SEO"
+url: "https://github.com/AM-Digital-Research-Environment/DRE-SEO"
+license: GPL-3.0-or-later
+version: 0.9.0
+date-released: "2026-08-04"
+keywords:
+  - Omeka S
+  - search engine optimisation
+  - schema.org
+  - JSON-LD
+  - structured data
+  - citation metadata
+  - Highwire Press tags
+  - Zotero
+  - Google Scholar
+  - XML sitemap
+  - IndexNow
+  - digital humanities
+  - research data infrastructure

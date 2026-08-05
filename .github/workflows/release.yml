@@ -1,0 +1,128 @@
+name: Release
+
+# Builds the installable Omeka module zip for a version tag and attaches it to the
+# GitHub release, so every tagged version ships an asset an admin can drop straight
+# into `modules/`. The archive comes from `git archive`, which honours the
+# `export-ignore` rules in .gitattributes — tests and repository furniture stay out.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)build and upload, e.g. v0.9.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish DRESeo.zip
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository at ${{ steps.tag.outputs.tag }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: dom, json, mbstring
+          coverage: none
+          tools: composer:v2
+
+      # A tag that cannot pass its own test suite must not ship an asset.
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Lint and test
+        run: composer check
+
+      - name: Check declared versions match the tag
+        shell: bash
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          fail=0
+
+          ini_version="$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' config/module.ini | head -1)"
+          if [ "$ini_version" != "$VERSION" ]; then
+            echo "::error file=config/module.ini::version is '${ini_version}', tag says '${VERSION}'"
+            fail=1
+          fi
+
+          cff_version="$(sed -nE 's/^version:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' CITATION.cff | head -1)"
+          if [ "$cff_version" != "$VERSION" ]; then
+            echo "::error file=CITATION.cff::version is '${cff_version}', tag says '${VERSION}'"
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "module.ini and CITATION.cff both declare ${VERSION}."
+
+      # The folder name inside the zip must be exactly `DRESeo` — Omeka matches the
+      # module directory against the PHP namespace.
+      - name: Build DRESeo.zip
+        shell: bash
+        run: |
+          git archive --format=zip --prefix=DRESeo/ -o DRESeo.zip HEAD
+          sha256sum DRESeo.zip > DRESeo.zip.sha256
+          cat DRESeo.zip.sha256
+
+      - name: Verify archive contents
+        shell: bash
+        run: |
+          contents="$(unzip -Z1 DRESeo.zip)"
+          fail=0
+
+          for required in DRESeo/Module.php DRESeo/config/module.ini DRESeo/composer.json DRESeo/LICENSE; do
+            if ! grep -qxF "$required" <<< "$contents"; then
+              echo "::error::${required} is missing from the archive"
+              fail=1
+            fi
+          done
+
+          # export-ignore regressions are silent otherwise — the zip just quietly grows.
+          if grep -qE '^DRESeo/(tests/|\.github/|\.git)' <<< "$contents"; then
+            echo "::error::development files leaked into the archive:"
+            grep -E '^DRESeo/(tests/|\.github/|\.git)' <<< "$contents"
+            fail=1
+          fi
+
+          echo "Archive holds $(grep -vc '/$' <<< "$contents") files."
+          exit "$fail"
+
+      - name: Publish release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — replacing its assets."
+            gh release upload "$TAG" DRESeo.zip DRESeo.zip.sha256 --clobber
+          else
+            prerelease=''
+            case "$TAG" in *-*) prerelease='--prerelease' ;; esac
+            gh release create "$TAG" DRESeo.zip DRESeo.zip.sha256 \
+              --title "$TAG" \
+              --generate-notes \
+              $prerelease
+          fi
