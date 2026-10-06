@@ -156,7 +156,7 @@ test('the theme-facing array form is complete and reversible', function (): void
     foreach ([
         'id', 'kind', 'cslType', 'title', 'authors', 'editors', 'issued', 'container',
         'publisher', 'bookTitle', 'volume', 'issue', 'pageFirst', 'pageLast', 'issn',
-        'isbn', 'doi', 'url', 'language', 'abstract', 'keywords', 'accession',
+        'isbn', 'doi', 'url', 'language', 'abstract', 'keywords', 'accession', 'degree',
     ] as $key) {
         assertTrue(array_key_exists($key, $array), "the published contract is missing '{$key}'");
     }
@@ -173,4 +173,7 @@ test('the theme-facing array form is complete and reversible', function (): void
     assertSameValue('55-80', $back->pageRange());
     assertSameValue(7, $back->issued->day);
     assertSameValue(['Islam', 'Benin'], $back->keywords);
+
+    $thesis = new CitationRecord(id: 1, kind: CitationKind::Thesis, degree: 'masters');
+    assertSameValue('masters', CitationRecord::fromArray($thesis->toArray())->degree);
 });

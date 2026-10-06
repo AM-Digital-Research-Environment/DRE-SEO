@@ -23,6 +23,18 @@ final class CitationExport
         'csljson' => ['json', 'application/vnd.citationstyles.csl+json; charset=utf-8'],
     ];
 
+    /**
+     * BibTeX entry type and `type` label per thesis degree. Classic BibTeX has
+     * only @phdthesis and @mastersthesis; the `type` field relabels the rest,
+     * and a thesis that names no degree (a habilitation) prints as a plain
+     * "Thesis" rather than as a PhD.
+     */
+    private const THESIS_ENTRIES = [
+        'doctoral'  => ['phdthesis', null],
+        'masters'   => ['mastersthesis', null],
+        'bachelors' => ['mastersthesis', "Bachelor's thesis"],
+    ];
+
     public function serialize(CitationRecord $record, string $format): ?string
     {
         return match ($format) {
@@ -80,7 +92,9 @@ final class CitationExport
                 $this->addField($fields, 'publisher', $record->publisher);
                 break;
             case CitationKind::Thesis:
+                [$type, $label] = self::THESIS_ENTRIES[$record->degree ?? ''] ?? ['phdthesis', 'Thesis'];
                 $this->addField($fields, 'school', $record->publisher ?? $record->container);
+                $this->addField($fields, 'type', $label);
                 break;
             case CitationKind::Report:
                 $this->addField($fields, 'institution', $record->publisher ?? $record->container);

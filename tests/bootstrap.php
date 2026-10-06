@@ -172,6 +172,8 @@ namespace Omeka\Api\Representation {
                 private readonly array $values = [],
                 private readonly ?string $publicUrl = null,
                 private readonly int $idValue = 1,
+                /** The class's vocabulary term, e.g. 'fabio:MastersThesis'. */
+                private readonly ?string $classTerm = null,
             ) {
             }
 
@@ -214,16 +216,23 @@ namespace Omeka\Api\Representation {
 
             public function resourceClass(): ?object
             {
-                return $this->classLabel === null
+                return $this->classLabel === null && $this->classTerm === null
                     ? null
-                    : new class ($this->classLabel) {
-                        public function __construct(private readonly string $label)
-                        {
+                    : new class ((string) $this->classLabel, (string) $this->classTerm) {
+                        public function __construct(
+                            private readonly string $label,
+                            private readonly string $term,
+                        ) {
                         }
 
                         public function label(): string
                         {
                             return $this->label;
+                        }
+
+                        public function term(): string
+                        {
+                            return $this->term;
                         }
                     };
             }

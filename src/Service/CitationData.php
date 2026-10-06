@@ -25,6 +25,7 @@ use Omeka\Api\Representation\ValueRepresentation;
  *   • the container (journal, proceedings, book) is the linked record in
  *     **dcterms:isPartOf**; **dcterms:publisher** is its own field, and doubles
  *     as a thesis's awarding institution or a report's issuing body;
+ *   • a thesis's degree is its resource class (fabio:MastersThesis, …);
  *   • authors come from the first populated of bibo:authorList, dcterms:creator
  *     and marcrel:aut — with podcasts and videos reading their host/speaker
  *     roles first, since they carry no dcterms:creator at all;
@@ -43,6 +44,13 @@ final class CitationData
     /** Generic creator roles, tried after any kind-specific ones. */
     private const AUTHOR_TERMS = ['bibo:authorList', 'dcterms:creator', 'marcrel:aut'];
     private const EDITOR_TERMS = ['bibo:editorList', 'marcrel:edt'];
+
+    /** Thesis degree per FaBiO class term; see {@see degree()}. */
+    private const THESIS_DEGREES = [
+        'fabio:DoctoralThesis' => 'doctoral',
+        'fabio:MastersThesis' => 'masters',
+        'fabio:BachelorsThesis' => 'bachelors',
+    ];
 
     public function __construct(private readonly CitationKindMap $kinds)
     {
@@ -97,7 +105,21 @@ final class CitationData
             abstract: $abstract !== null ? $this->clip($abstract) : null,
             keywords: $this->keywords($item),
             accession: $this->accession($item),
+            degree: $kind === CitationKind::Thesis ? $this->degree($item) : null,
         );
+    }
+
+    /**
+     * A thesis's degree, from its FaBiO class. The doctoral, habilitation,
+     * master's and bachelor's templates all share the 'thesis' kind, so the
+     * class is the one place the degree is recorded. The habilitation
+     * template's class (plain fabio:Thesis) names none, so it stays null.
+     */
+    private function degree(ItemRepresentation $item): ?string
+    {
+        $class = $item->resourceClass();
+
+        return $class ? (self::THESIS_DEGREES[$class->term()] ?? null) : null;
     }
 
     // ─── Creators ────────────────────────────────────────────────────────────

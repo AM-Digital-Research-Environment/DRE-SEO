@@ -115,6 +115,7 @@ test('a doctoral thesis names its awarding institution', function (): void {
         'publisher' => 'Université Laval',
         'issued' => IssuedDate::parse('2018'),
         'url' => null,
+        'degree' => 'doctoral',
     ]);
 
     assertSameValue(
@@ -129,6 +130,38 @@ test('a doctoral thesis names its awarding institution', function (): void {
     assertSameValue(
         'Madore, Frédérick. “Islam politique.” Université Laval, 2018. PhD diss.',
         $formatter->format($record, 'mla')
+    );
+});
+
+test('a thesis below or beside the doctorate is not called a PhD', function (): void {
+    // The master's, bachelor's and habilitation templates share the doctoral
+    // template's 'thesis' kind; only the degree tells them apart.
+    $formatter = new CitationFormatter();
+    $thesis = static fn (?string $degree): CitationRecord => citationFixture(CitationKind::Thesis, [
+        'title' => 'Islam politique',
+        'authors' => [Creator::parse('Frédérick Madore', false)],
+        'publisher' => 'Universität Bayreuth',
+        'issued' => IssuedDate::parse('2018'),
+        'url' => null,
+        'degree' => $degree,
+    ]);
+
+    assertSameValue(
+        'Madore, Frédérick. “Islam politique.” Master’s thesis, Universität Bayreuth, 2018.',
+        $formatter->format($thesis('masters'), 'chicago')
+    );
+    assertSameValue(
+        'Madore, F. (2018). <em>Islam politique</em>. [Bachelor’s thesis, Universität Bayreuth].',
+        $formatter->format($thesis('bachelors'), 'apa')
+    );
+    assertSameValue(
+        'Madore, Frédérick. “Islam politique.” Universität Bayreuth, 2018. Mémoire de master.',
+        $formatter->format($thesis('masters'), 'mla', 'fr')
+    );
+    // No degree on record (a habilitation): a plain thesis, never a PhD.
+    assertSameValue(
+        'Madore, Frédérick. “Islam politique.” Thesis, Universität Bayreuth, 2018.',
+        $formatter->format($thesis(null), 'chicago')
     );
 });
 

@@ -135,7 +135,7 @@ Driven by `config/module.config.php → dre_seo.structured_data.template_types` 
 | Projects (5) | `ResearchProject` |
 | Research sections (7) | `Collection` |
 | Research items (10) | `CreativeWork` |
-| Publications (11–20) | `ScholarlyArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `BlogPosting` … (book reviews are `ScholarlyArticle`, not `Review`, which Google requires to carry a `reviewRating`) |
+| Publications (11–20, 24–32) | `ScholarlyArticle` / `NewsArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `BlogPosting` / `CreativeWorkSeries` … (book reviews are `ScholarlyArticle`, not `Review`, which Google requires to carry a `reviewRating`; encyclopedia entries and legal commentaries are `Chapter`, since schema.org has no entry type; a series editorship is a `CreativeWorkSeries`, as it may edit a book series or a journal) |
 | Podcasts (21) | `PodcastEpisode` (host/guest ← `marcrel:hst` / `:spk`) |
 | YouTube videos (22) | `VideoObject` (`thumbnailUrl` from the ingested media, `uploadDate` from `dcterms:date`, speaker ← `marcrel:spk`, canonical watch URL ← `fabio:hasURL`) |
 
@@ -165,7 +165,15 @@ vocabularies Zotero's *Embedded Metadata* translator reads:
   resource, including person/place/organisation pages, as a generic fallback.
 
 The Highwire item-type mapping lives in `dre_seo.citation.template_kinds`
-(`config/module.config.php`) and is overridable. `citation_pdf_url` is emitted only for a
+(`config/module.config.php`) and is overridable. The thesis templates (doctoral 16,
+habilitation 30, master's 31, bachelor's 32) share the `thesis` kind; the degree comes from the
+item's FaBiO class, so only a `fabio:DoctoralThesis` is cited as a PhD dissertation, and the
+habilitation's plain `fabio:Thesis` reads as "Thesis".
+
+Both template maps are keyed by instance-specific template ids, and a template neither names
+falls back silently to `CreativeWork` / `item`. `tests/amira-templates.php` lists the AMIRA
+instance's templates: when the site gains one, add it there and the suite fails until both
+maps name it. `citation_pdf_url` is emitted only for a
 **public** PDF media, so restricted bitstreams are never exposed. Toggle the whole feature with
 **Emit citation meta tags** in Configure (on by default). The same tags double as
 [Google Scholar](https://scholar.google.com) indexing signals.

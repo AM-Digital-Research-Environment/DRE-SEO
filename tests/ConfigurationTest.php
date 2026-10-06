@@ -10,6 +10,40 @@ test('production template mappings include synced YouTube videos', function (): 
     assertSameValue('video', $config['dre_seo']['citation']['template_kinds'][22] ?? null);
 });
 
+test('every citable template has an explicit schema.org type', function (): void {
+    // An unnamed template falls back to default_type CreativeWork, so a
+    // newspaper article or a master's thesis is typed as nothing in particular.
+    // Entity templates are exempt: the Authority Resource and Journal records
+    // have no better type that also takes the creative-work properties.
+    $config = require __DIR__ . '/../config/module.config.php';
+    $types = $config['dre_seo']['structured_data']['template_types'];
+    $templates = require __DIR__ . '/amira-templates.php';
+
+    foreach ($templates['publications'] + $templates['works'] as $templateId => $label) {
+        assertTrue(
+            isset($types[$templateId]),
+            "template {$templateId} ({$label}) has no schema.org type and would be a generic CreativeWork"
+        );
+    }
+});
+
+test('the publication templates 24-32 are typed for what they are', function (): void {
+    $config = require __DIR__ . '/../config/module.config.php';
+    $types = $config['dre_seo']['structured_data']['template_types'];
+    $kinds = $config['dre_seo']['citation']['template_kinds'];
+
+    assertSameValue('NewsArticle', $types[25] ?? null);
+    // ERef's "series_editor" covers editing a book series *or* a journal.
+    assertSameValue('CreativeWorkSeries', $types[29] ?? null);
+    foreach ([30, 31, 32] as $templateId) {
+        assertSameValue('Thesis', $types[$templateId] ?? null, "template {$templateId}");
+        assertSameValue('thesis', $kinds[$templateId] ?? null, "template {$templateId}");
+    }
+    // Encyclopedia entries and legal commentaries sit inside an edited volume.
+    assertSameValue('chapter', $kinds[26] ?? null);
+    assertSameValue('chapter', $kinds[27] ?? null);
+});
+
 test('the citation stack is wired end to end', function (): void {
     $config = require __DIR__ . '/../config/module.config.php';
 

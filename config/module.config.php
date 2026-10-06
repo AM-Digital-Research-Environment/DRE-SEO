@@ -206,8 +206,9 @@ return [
             ],
         ],
         'structured_data' => [
-            // schema.org @type per Omeka resource template id (see
-            // MongoDB2OmekaS/config/config.py RESOURCE_TEMPLATES + PUBLICATION_TEMPLATES).
+            // schema.org @type per Omeka resource template id (pinned in
+            // MongoDB2OmekaS/config/profiles/amira.json; tests/amira-templates.php
+            // fails the suite when a site template is missing here).
             'default_type'   => 'CreativeWork',
             'template_types' => [
                 2  => 'Organization',     // organisation (foaf:Organization)
@@ -228,6 +229,15 @@ return [
                 20 => 'Dataset',          // research data
                 21 => 'PodcastEpisode',   // podcasts (fabio:AudioDocument)
                 22 => 'VideoObject',      // YouTube video (bibo:AudioVisualDocument)
+                24 => 'ScholarlyArticle', // preprint (fabio:Preprint)
+                25 => 'NewsArticle',      // newspaper article (fabio:NewspaperArticle)
+                26 => 'Chapter',          // legal commentary (fabio:Entry): an entry in a commentary volume
+                27 => 'Chapter',          // encyclopedia entry (fabio:ReferenceEntry): schema.org has no entry type
+                28 => 'Book',             // translation (bibo:Document)
+                29 => 'CreativeWorkSeries', // series editorship (fabio:Series): a book series or a journal
+                30 => 'Thesis',           // habilitation (fabio:Thesis)
+                31 => 'Thesis',           // master's thesis
+                32 => 'Thesis',           // bachelor's thesis
             ],
         ],
         'citation' => [
@@ -256,6 +266,17 @@ return [
                 21 => 'podcast',      // podcast episode
                 22 => 'video',        // YouTube video
                 23 => 'journal',      // publication venue, not a work
+                24 => 'report',       // preprint: an unpublished manuscript, cited like a working paper
+                25 => 'article',      // newspaper article (the newspaper is the journal title)
+                26 => 'chapter',      // legal commentary: an entry in a commentary volume
+                27 => 'chapter',      // encyclopedia entry: an entry in an edited reference work
+                28 => 'book',         // translation
+                29 => 'book',         // series editorship (the editors stand as "eds.")
+                // The thesis templates share one kind; CitationData reads the
+                // degree from the FaBiO class, so only 16 is cited as a PhD.
+                30 => 'thesis',       // habilitation
+                31 => 'thesis',       // master's thesis
+                32 => 'thesis',       // bachelor's thesis
             ],
 
             // The formatted citations offered in the record rail, in the order

@@ -93,6 +93,30 @@ test('a chapter reads its book title from isPartOf, not the container slot', fun
     assertSameValue('Brill', $record->publisher);
 });
 
+test('a thesis reads its degree from the resource class', function (): void {
+    $data = citationDataService();
+    // Template id => the class the AMIRA template assigns.
+    $theses = [
+        16 => ['fabio:DoctoralThesis', 'doctoral'],
+        30 => ['fabio:Thesis', null],          // habilitation: the class names no degree
+        31 => ['fabio:MastersThesis', 'masters'],
+        32 => ['fabio:BachelorsThesis', 'bachelors'],
+    ];
+    foreach ($theses as $templateId => [$classTerm, $degree]) {
+        $item = new ItemRepresentation('A thesis', $templateId, null, [
+            'dcterms:title' => [literalValue('A thesis')],
+        ], null, 1, $classTerm);
+        $record = $data->build($item);
+
+        assertSameValue(CitationKind::Thesis, $record->kind, "template {$templateId}");
+        assertSameValue($degree, $record->degree, "template {$templateId}");
+    }
+
+    // Only theses carry a degree, whatever the class.
+    $article = new ItemRepresentation('A', 11, null, [], null, 1, 'fabio:MastersThesis');
+    assertSameValue(null, $data->build($article)->degree);
+});
+
 test('authority records are not citable', function (): void {
     $data = citationDataService();
 

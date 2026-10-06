@@ -9,8 +9,32 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-06
+
+### Fixed
+
+- The publication templates 24–32 (preprint, newspaper article, legal commentary,
+  encyclopedia entry, translation, series editorship, habilitation, master's and bachelor's
+  thesis) were in neither template map, so their items were typed `CreativeWork` and cited
+  as generic research items. Both maps now name them: a newspaper article is a
+  `NewsArticle` cited as an article, encyclopedia entries and legal commentaries are
+  chapters of their volume, a series editorship is a `CreativeWorkSeries` cited as an
+  edited book, a preprint is cited like a working paper, and the three theses are
+  `Thesis`.
+- A master's or bachelor's thesis is no longer cited as a "PhD diss." The thesis
+  templates share one kind, so the degree is now read from the item's FaBiO class
+  (`fabio:DoctoralThesis`, `fabio:MastersThesis`, `fabio:BachelorsThesis`) and drives the
+  Chicago/APA/MLA label and the BibTeX entry type (`@mastersthesis`, with a `type` field
+  for a bachelor's thesis). A thesis whose class names no degree — the habilitation's
+  plain `fabio:Thesis` — reads as "Thesis" rather than claiming a doctorate.
+
 ### Added
 
+- `degree` in the citation record's theme-facing array (`'doctoral'`, `'masters'`,
+  `'bachelors'` or `null`). Additive; no existing key changed.
+- `tests/amira-templates.php`, the instance's template list that the configuration tests
+  check both maps against. The 0.9.0 test asserted a fixed list of ids, which the nine new
+  templates were never added to.
 - `LICENSE` — the GPL-3.0 text the module has declared since 0.1.0 in `composer.json`,
   `config/module.ini` and the README, but never shipped.
 - `CITATION.cff`, so GitHub and Zenodo can render a citation for the module itself.
@@ -177,7 +201,8 @@ GitHub release and shipped no installable asset.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/tag/v0.8.0
 [0.7.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/commit/6dacce1

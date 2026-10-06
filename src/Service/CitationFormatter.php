@@ -40,13 +40,15 @@ final class CitationFormatter
         'en' => [
             'and' => 'and', 'et_al' => 'et al.', 'in' => 'In', 'eds' => 'edited by',
             'no' => 'no.', 'vol' => 'vol.', 'pp' => 'pp.', 'p' => 'p.',
-            'phd' => 'PhD diss.', 'video' => 'Video', 'dataset' => 'Data set',
+            'phd' => 'PhD diss.', 'masters' => 'Master’s thesis', 'bachelors' => 'Bachelor’s thesis',
+            'thesis' => 'Thesis', 'video' => 'Video', 'dataset' => 'Data set',
             'podcast' => 'Podcast episode', 'untitled' => 'Untitled',
         ],
         'fr' => [
             'and' => 'et', 'et_al' => 'et al.', 'in' => 'Dans', 'eds' => 'sous la dir. de',
             'no' => 'n°', 'vol' => 'vol.', 'pp' => 'p.', 'p' => 'p.',
-            'phd' => 'thèse de doctorat', 'video' => 'Vidéo', 'dataset' => 'Jeu de données',
+            'phd' => 'thèse de doctorat', 'masters' => 'mémoire de master', 'bachelors' => 'mémoire de licence',
+            'thesis' => 'thèse', 'video' => 'Vidéo', 'dataset' => 'Jeu de données',
             'podcast' => 'Épisode de podcast', 'untitled' => 'Sans titre',
         ],
     ];
@@ -137,7 +139,7 @@ final class CitationFormatter
                 break;
 
             case CitationKind::Thesis:
-                $seg = $this->str($locale, 'phd');
+                $seg = $this->degree($record, $locale);
                 $inst = $this->esc($record->publisher);
                 if ($inst !== '') {
                     $seg .= ', ' . $inst;
@@ -246,7 +248,7 @@ final class CitationFormatter
 
             case CitationKind::Thesis:
                 $inst = $this->esc($record->publisher);
-                $label = $this->str($locale, 'phd');
+                $label = $this->degree($record, $locale);
                 $seg = '[' . $this->ucfirst($label) . ($inst !== '' ? ', ' . $inst : '') . ']';
                 $parts[] = $this->terminate($seg);
                 break;
@@ -336,7 +338,7 @@ final class CitationFormatter
                 if ($py !== '') {
                     $parts[] = $this->terminate($py);
                 }
-                $parts[] = $this->terminate($this->esc($this->ucfirst($this->str($locale, 'phd'))));
+                $parts[] = $this->terminate($this->esc($this->ucfirst($this->degree($record, $locale))));
                 break;
 
             default: // book, report, dataset, video, item
@@ -389,6 +391,21 @@ final class CitationFormatter
             CitationKind::Video => $this->ucfirst($this->str($locale, 'video')),
             default => '',
         };
+    }
+
+    /**
+     * A thesis's degree line — "PhD diss.", "Master’s thesis". A record that
+     * names no degree (a habilitation) is a plain "Thesis" rather than a
+     * doctorate the record cannot vouch for.
+     */
+    private function degree(CitationRecord $record, string $locale): string
+    {
+        return $this->str($locale, match ($record->degree) {
+            'doctoral' => 'phd',
+            'masters' => 'masters',
+            'bachelors' => 'bachelors',
+            default => 'thesis',
+        });
     }
 
     // ─── Creators (authors / editors) ────────────────────────────────────────

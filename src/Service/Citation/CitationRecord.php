@@ -16,7 +16,7 @@ use DRESeo\Service\CitationKind;
  *     **dcterms:isPartOf** — the Journal authority items in item set 41268 —
  *     while **dcterms:publisher** is a separate field, not a container;
  *   • a thesis's awarding institution and a report's issuing body are that
- *     same dcterms:publisher;
+ *     same dcterms:publisher, and a thesis's degree is its FaBiO resource class;
  *   • dates are NumericDataTypes timestamps (YYYY, YYYY-MM or YYYY-MM-DD);
  *   • the accession id is **dre:id**;
  *   • DOIs live in **bibo:doi**;
@@ -57,6 +57,11 @@ final class CitationRecord
         public readonly array $keywords = [],
         /** The DRE accession id (dre:id). */
         public readonly ?string $accession = null,
+        /**
+         * A thesis's degree — 'doctoral', 'masters' or 'bachelors' — or null
+         * when the record does not name one (a habilitation, or any other kind).
+         */
+        public readonly ?string $degree = null,
     ) {
     }
 
@@ -128,6 +133,7 @@ final class CitationRecord
             'abstract'  => $this->abstract,
             'keywords'  => $this->keywords,
             'accession' => $this->accession,
+            'degree'    => $this->degree,
         ];
     }
 
@@ -171,6 +177,7 @@ final class CitationRecord
                 'is_string'
             )),
             accession: $string('accession'),
+            degree: $string('degree'),
         );
     }
 }

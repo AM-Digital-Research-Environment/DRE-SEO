@@ -13,7 +13,7 @@ require_once __DIR__ . '/../src/Service/Citation/IssuedDate.php';
 require_once __DIR__ . '/../src/Service/Citation/CitationRecord.php';
 require_once __DIR__ . '/../src/Service/CitationExport.php';
 
-function exportFixture(CitationKind $kind = CitationKind::Article): CitationRecord
+function exportFixture(CitationKind $kind = CitationKind::Article, ?string $degree = null): CitationRecord
 {
     return new CitationRecord(
         id: 42,
@@ -35,6 +35,7 @@ function exportFixture(CitationKind $kind = CitationKind::Article): CitationReco
         abstract: 'An abstract.',
         keywords: ['Islam', 'Benin'],
         accession: 'abz-01-0000',
+        degree: $degree,
     );
 }
 
@@ -86,9 +87,20 @@ test('BibTeX routes the container by kind', function (): void {
     assertTrue(str_starts_with($conference, '@inproceedings{'), 'conference entry type');
     assertTrue($field($conference, 'booktitle', 'Journal of African History'), 'proceedings in booktitle');
 
-    $thesis = $export->serialize(exportFixture(CitationKind::Thesis), 'bibtex');
+    $thesis = $export->serialize(exportFixture(CitationKind::Thesis, 'doctoral'), 'bibtex');
     assertTrue(str_starts_with($thesis, '@phdthesis{'), 'thesis entry type');
     assertTrue($field($thesis, 'school', 'Brill'), 'the awarding institution is the school');
+    assertTrue(!preg_match('/^\s*type\s/m', $thesis), 'a dissertation needs no type override');
+
+    // Classic BibTeX has no bachelor's or generic thesis; `type` relabels them.
+    $masters = $export->serialize(exportFixture(CitationKind::Thesis, 'masters'), 'bibtex');
+    assertTrue(str_starts_with($masters, '@mastersthesis{'), "master's thesis entry type");
+    $bachelors = $export->serialize(exportFixture(CitationKind::Thesis, 'bachelors'), 'bibtex');
+    assertTrue(str_starts_with($bachelors, '@mastersthesis{'), "bachelor's thesis entry type");
+    assertTrue($field($bachelors, 'type', "Bachelor's thesis"), "a bachelor's thesis is relabelled");
+    $habilitation = $export->serialize(exportFixture(CitationKind::Thesis), 'bibtex');
+    assertTrue(str_starts_with($habilitation, '@phdthesis{'), 'a thesis with no degree stays @phdthesis');
+    assertTrue($field($habilitation, 'type', 'Thesis'), 'but is not printed as a PhD');
 
     $report = $export->serialize(exportFixture(CitationKind::Report), 'bibtex');
     assertTrue(str_starts_with($report, '@techreport{'), 'report entry type');
