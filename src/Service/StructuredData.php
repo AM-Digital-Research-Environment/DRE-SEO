@@ -414,13 +414,6 @@ class StructuredData
     private function sameAs(AbstractResourceEntityRepresentation $resource): array
     {
         $out = [];
-        $wisski = $resource->value('dre:wisskiUrl');
-        if ($wisski instanceof ValueRepresentation) {
-            $uri = $wisski->uri() ?: trim((string) $wisski);
-            if ($uri !== '') {
-                $out[] = $uri;
-            }
-        }
         $handle = $resource->value('dre:rdspaceHandle');
         if ($handle instanceof ValueRepresentation) {
             $h = trim((string) $handle);

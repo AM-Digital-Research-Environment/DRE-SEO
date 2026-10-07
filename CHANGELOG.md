@@ -9,6 +9,15 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-10-07
+
+### Removed
+
+- JSON-LD `sameAs` no longer includes `dre:wisskiUrl`, which persons and research items
+  carried. WissKI was retired on 2026-10-07, and the property is being cleared from every
+  AMIRA item. The RDSpace handle (`dre:rdspaceHandle`) still feeds `sameAs`, and a video's
+  watch URL still joins it.
+
 ## [0.10.0] — 2026-10-06
 
 ### Fixed
@@ -201,7 +210,8 @@ GitHub release and shipped no installable asset.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/tag/v0.8.0

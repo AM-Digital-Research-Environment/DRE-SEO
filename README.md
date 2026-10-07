@@ -131,7 +131,7 @@ Driven by `config/module.config.php → dre_seo.structured_data.template_types` 
 |---|---|
 | Organisation (2) | `Organization` |
 | Location (3) | `Place` (+ `geo` when coordinates exist) |
-| Persons (4) | `Person` (+ `affiliation`, `sameAs` ← `dre:wisskiUrl` / `dre:rdspaceHandle`) |
+| Persons (4) | `Person` (+ `affiliation`, `sameAs` ← `dre:rdspaceHandle`) |
 | Projects (5) | `ResearchProject` |
 | Research sections (7) | `Collection` |
 | Research items (10) | `CreativeWork` |

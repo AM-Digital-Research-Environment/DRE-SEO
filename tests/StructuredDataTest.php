@@ -45,3 +45,23 @@ test('YouTube resources emit current VideoObject fields', function (): void {
     assertSameValue('English', $data['inLanguage']);
     assertSameValue('Research stories', $data['isPartOf']['name']);
 });
+
+test('Person sameAs comes from the RDSpace handle, never a WissKI URL', function (): void {
+    // WissKI was retired in October 2026 and its dre:wisskiUrl values are being
+    // cleared; one still on a record must not resurface as an identity link.
+    $person = new Resource(
+        'Example, Ada',
+        4,
+        null,
+        [
+            'dre:wisskiUrl' => [new Value(uriValue: 'https://wisski.example.test/wisski/navigate/1/view')],
+            'dre:rdspaceHandle' => [new Value('10962/12345')],
+        ]
+    );
+    $builder = new StructuredData([4 => 'Person']);
+
+    $data = $builder->forResource($person, new SiteRepresentation(), null, null);
+
+    assertSameValue('Person', $data['@type']);
+    assertSameValue(['https://hdl.handle.net/10962/12345'], $data['sameAs']);
+});
