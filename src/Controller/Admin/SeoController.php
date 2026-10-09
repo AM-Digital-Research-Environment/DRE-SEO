@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace DRESeo\Controller\Admin;
 
 use DRESeo\Form\PageSeoForm;
+use DRESeo\Service\DefaultSite;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
@@ -23,6 +25,7 @@ class SeoController extends AbstractActionController
         private readonly PageSeoStore $pageSeoStore,
         private readonly ApiManager $api,
         private readonly Settings $settings,
+        private readonly DefaultSite $defaultSite,
     ) {
     }
 
@@ -100,20 +103,7 @@ class SeoController extends AbstractActionController
 
     private function resolveSite(): ?SiteRepresentation
     {
-        $defaultSiteId = (int) $this->settings->get('default_site');
-        if ($defaultSiteId) {
-            try {
-                return $this->api->read('sites', $defaultSiteId)->getContent();
-            } catch (\Throwable $e) {
-                // fall through
-            }
-        }
-        try {
-            $sites = $this->api->search('sites', ['limit' => 1])->getContent();
-            return $sites[0] ?? null;
-        } catch (\Throwable $e) {
-            return null;
-        }
+        return $this->defaultSite->get();
     }
 
     private function hostUrl(SiteRepresentation $site): string
@@ -129,7 +119,6 @@ class SeoController extends AbstractActionController
 
     private function boolSetting(string $key, bool $default = false): bool
     {
-        $value = $this->settings->get($key, $default ? '1' : '0');
-        return $value === '1' || $value === 1 || $value === true;
+        return SettingFlag::isOn($this->settings, $key, $default);
     }
 }

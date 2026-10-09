@@ -10,6 +10,11 @@ final class CitationDataFactory implements FactoryInterface
 {
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): CitationData
     {
-        return new CitationData($container->get(CitationKindMap::class));
+        $config = $container->get('Config')['dre_seo']['citation'] ?? [];
+
+        return new CitationData(
+            $container->get(CitationKindMap::class),
+            isset($config['publisher']) ? (string) $config['publisher'] : null,
+        );
     }
 }

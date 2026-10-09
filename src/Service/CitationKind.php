@@ -53,8 +53,13 @@ enum CitationKind: string
     /**
      * Descriptive records — a person, a place, an organisation, a project, a
      * research section, a vocabulary term, a journal — are not citable works:
-     * no citation, no export, and no Highwire tags either, since a subject
-     * heading offered to Zotero as a scholarly article is worse than nothing.
+     * no Highwire tags, since a subject heading offered to Zotero or Google
+     * Scholar as a scholarly article is worse than nothing.
+     *
+     * They are still citable as what they are: an entry in the AMIRA database,
+     * the way a reader cites a dictionary entry or an authority file. That
+     * entry citation names the record, the database and the date the record
+     * last changed, and claims no author ({@see CitationFormatter}).
      *
      * This is the single source of truth for that question. {@see CitationMeta}
      * used to keep its own list of kind strings, which is why the Authority
@@ -97,6 +102,10 @@ enum CitationKind: string
             self::Dataset => 'dataset',
             self::Podcast => 'broadcast',
             self::Video => 'motion_picture',
+            // A database entry is cited as a page of the website that holds
+            // it — CSL's `webpage`, which Zotero imports as a Web Page.
+            self::Person, self::Place, self::Organization, self::Project,
+            self::Section, self::Authority, self::Journal => 'webpage',
             default => 'document',
         };
     }
@@ -117,6 +126,8 @@ enum CitationKind: string
             self::Report => 'techreport',
             self::Post => 'online',
             self::Dataset => 'dataset',
+            self::Person, self::Place, self::Organization, self::Project,
+            self::Section, self::Authority, self::Journal => 'online',
             default => 'misc',
         };
     }
@@ -135,7 +146,52 @@ enum CitationKind: string
             self::Dataset => 'DATA',
             self::Podcast => 'SOUND',
             self::Video => 'VIDEO',
+            // ELEC (web page) is the type Zotero and EndNote both read back as a
+            // web page; DBASE would claim the record is the whole database.
+            self::Person, self::Place, self::Organization, self::Project,
+            self::Section, self::Authority, self::Journal => 'ELEC',
             default => 'GEN',
+        };
+    }
+
+    /**
+     * The Zotero item type the Embedded Metadata translator should create, sent
+     * as an exact type id in DC.type (the translator accepts any id it knows
+     * and lets it win over its citation_title guess). Null leaves detection to
+     * the Highwire container tags: citation_journal_title already says "journal
+     * article", and a research item is no single Zotero type.
+     */
+    public function zoteroType(): ?string
+    {
+        return match ($this) {
+            self::Conference => 'conferencePaper',
+            self::Chapter => 'bookSection',
+            self::Book => 'book',
+            self::Thesis => 'thesis',
+            self::Report => 'report',
+            self::Post => 'blogPost',
+            self::Dataset => 'dataset',
+            self::Podcast => 'podcast',
+            self::Video => 'videoRecording',
+            default => null,
+        };
+    }
+
+    /**
+     * What an entry citation calls the record ("Person record"); null for a
+     * work, which is described by its own title and container instead.
+     */
+    public function entryLabel(): ?string
+    {
+        return match ($this) {
+            self::Person => 'Person record',
+            self::Place => 'Place record',
+            self::Organization => 'Organisation record',
+            self::Project => 'Project record',
+            self::Section => 'Research section record',
+            self::Authority => 'Authority record',
+            self::Journal => 'Journal record',
+            default => null,
         };
     }
 
@@ -144,6 +200,9 @@ enum CitationKind: string
      * generic author terms. Podcasts and videos carry no dcterms:creator — the
      * host, guest and speaker roles are where their people live (the same
      * fallbacks CitationMeta uses for the Highwire tags).
+     *
+     * A podcast's host is credited as such ("host"), which is why the first
+     * term is also the role {@see roleFor()} reports.
      *
      * @return string[]
      */
@@ -154,5 +213,15 @@ enum CitationKind: string
             self::Video => ['marcrel:spk'],
             default => [],
         };
+    }
+
+    /**
+     * The role label a creator read from $term carries in a citation — the
+     * podcast host is "host" (Chicago, MLA) or "(Host)" (APA). Null for every
+     * other role, which the styles print without a label.
+     */
+    public function roleFor(string $term): ?string
+    {
+        return $this === self::Podcast && $term === 'marcrel:hst' ? 'host' : null;
     }
 }

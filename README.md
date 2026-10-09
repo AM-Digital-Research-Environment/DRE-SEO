@@ -27,10 +27,12 @@ tables, no theme edits.
 |---|---|
 | **Meta tags** | `<title>`, `<meta name="description">`, canonical link on every public page. |
 | **Open Graph / Twitter** | `og:title/description/image/type/url/site_name/locale` + `twitter:card/title/description/image/site` so shared links render a rich preview. |
-| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, CreativeWork, Dataset, scholarly types …), plus `WebSite` + `SearchAction` on the home page and `BreadcrumbList` on resource pages. |
+| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with authority URIs as `sameAs`; `WebSite` on the home page, `CollectionPage` on item-set pages and `BreadcrumbList` on resource pages. |
+| **Citations** | "Cite this record" on every record page — Chicago, APA, MLA and BibTeX/RIS/CSL-JSON downloads for works, and an entry citation ("Person record. AMIRA. Last modified …") for authority records. |
+| **FAIR Signposting** | `cite-as`, `describedby`, `type`, `license` and `item` links on item pages, for FAIR assessors such as F-UJI. |
 | **Citation metadata (Zotero)** | Highwire Press `citation_*` + Dublin Core `DC.*` `<meta>` tags so the **Zotero Connector**, Google Scholar, Mendeley and other reference managers capture each item/publication as a properly-typed reference (with authors, date, container, DOI, PDF …). |
 | **og:image** | The first image attached to an item; falls back to a site-wide default share image. |
-| **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, with `<lastmod>`, `<changefreq>`, `<priority>`. Cached. |
+| **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, each with its real `<lastmod>`; the index dates each child by its latest change. No `<changefreq>`/`<priority>` by default — Google and Bing ignore them. Cached. |
 | **robots.txt** | `/robots.txt` disallowing `/admin` and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site. |
 | **Google Search Console** | Paste the verification snippet in the module config; the `<meta name="google-site-verification">` tag is injected site-wide. |
 | **IndexNow ping** | Optionally notifies Bing/Yandex when public content changes. Concurrent edits coalesce into one background batch; failed submissions are retained for a later retry. |
@@ -129,11 +131,13 @@ Driven by `config/module.config.php → dre_seo.structured_data.template_types` 
 
 | Template | `@type` |
 |---|---|
-| Organisation (2) | `Organization` |
-| Location (3) | `Place` (+ `geo` when coordinates exist) |
-| Persons (4) | `Person` (+ `affiliation`, `sameAs` ← `dre:rdspaceHandle`) |
-| Projects (5) | `ResearchProject` |
-| Research sections (7) | `Collection` |
+| Organisation (2) | `Organization` (+ `sameAs` ← Wikidata) |
+| Location (3) | `Place` (+ numeric `geo`, `containedInPlace`, `sameAs` ← Wikidata) |
+| Persons (4) | `Person` (natural-order `name`, `givenName`/`familyName`, `affiliation`, `sameAs` ← GND and `dre:rdspaceHandle`) |
+| Projects (5) | `ResearchProject` (+ `funder`, `parentOrganization`, `alternateName`) |
+| Authority Resource (6) | `DefinedTerm` in its vocabulary (`inDefinedTermSet` ← `dcterms:type`, `sameAs` ← LCSH / Wikidata) |
+| Research sections (7) | `ResearchProject` (+ `member`) |
+| Journals (23) | `Periodical` (+ `issn`) |
 | Research items (10) | `CreativeWork` |
 | Publications (11–20, 24–32) | `ScholarlyArticle` / `NewsArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `BlogPosting` / `CreativeWorkSeries` … (book reviews are `ScholarlyArticle`, not `Review`, which Google requires to carry a `reviewRating`; encyclopedia entries and legal commentaries are `Chapter`, since schema.org has no entry type; a series editorship is a `CreativeWorkSeries`, as it may edit a book series or a journal) |
 | Podcasts (21) | `PodcastEpisode` (host/guest ← `marcrel:hst` / `:spk`) |
@@ -178,17 +182,47 @@ maps name it. `citation_pdf_url` is emitted only for a
 **Emit citation meta tags** in Configure (on by default). The same tags double as
 [Google Scholar](https://scholar.google.com) indexing signals.
 
-**Podcasts** (template 21) are the one type Zotero detects from Dublin Core rather than
-Highwire: there is no `citation_*` container tag for a podcast, so `DC.type` is set to the
-literal `podcast` (Zotero's *Embedded Metadata* translator accepts any exact Zotero item-type
-id there). Host and guests ride `citation_author`, which Zotero folds onto the podcast's
-*podcaster* role. The series title and episode number have no flat-`<meta>` equivalent that
-Zotero reads (it picks up `seriesTitle` / `episodeNumber` only from a nested RDF Series node),
-so they are omitted from the citation tags; the series is still exposed in the resource's
-JSON-LD via `isPartOf`.
+Every work's `DC.type` names its exact Zotero item type where the Highwire tags cannot
+(`thesis`, `report`, `book`, `bookSection`, `conferencePaper`, `blogPost`, `dataset`, `podcast`,
+`videoRecording`): Zotero's *Embedded Metadata* translator accepts any exact Zotero item-type
+id there, and it wins over the translator's `journalArticle` guess. The Highwire tags are
+written from the same citation record as the formatted citations below, so Zotero, Scholar
+and the record page agree on every field.
 
-**YouTube videos** (template 22) emit `DC.type=videoRecording` so Zotero can select its
-native video item type; manually curated `marcrel:spk` values are exposed as creators.
+**Podcasts** (template 21) credit their host (`marcrel:hst`) in `citation_author`, which Zotero
+folds onto the podcast's *podcaster* role; guests are not authors. The series title and
+episode number have no flat-`<meta>` equivalent that Zotero reads, so they are omitted from
+the tags; the JSON-LD carries them as `partOfSeries` and `episodeNumber`.
+
+**YouTube videos** (template 22) emit `DC.type=videoRecording`; manually curated
+`marcrel:spk` values are exposed as creators.
+
+Zotero does not read JSON-LD, and its COinS and unAPI translators outrank Embedded Metadata,
+so the `<meta>` tags are — and should stay — the one channel it reads.
+
+### Cite this record
+
+The theme's record rail calls the `dreCitation($item)` view helper, which formats the record in
+**Chicago** (18th ed.), **APA** (7th) and **MLA** (9th) and links BibTeX / RIS / CSL-JSON
+downloads at `/cite/{id}/{format}`. A hand-entered `dcterms:bibliographicCitation` is offered
+first, as *As catalogued*. Each document type follows its style's own form — a thesis names
+its awarding institution (`marcrel:dgg`), a newspaper article its full date, a podcast its
+host and episode, a YouTube video its platform, a research item its project and the archive.
+
+**Authority records** — persons, places, organisations, projects, research sections, subject
+headings and other vocabulary terms, journals — are not works and get no Highwire tags. They
+are cited as entries of the database, the way Wikidata or the Deutsche Biographie cite an
+index entry:
+
+> “Aas, Norbert.” Person record. Africa Multiple Interactive Research Atlas (AMIRA). Africa
+> Multiple Cluster of Excellence, University of Bayreuth. Last modified June 9, 2026.
+> https://data.africamultiple.uni-bayreuth.de/s/amira/item/778.
+
+The date is the record's last modification, which tells a reader which state of a changing
+record was cited; it stands in for the access date the styles ask of changing pages. Entries
+download as a web page (BibTeX `@online`, RIS `ELEC`, CSL `webpage` — the forms Zotero reads
+back as one). The helper's `citeAs` key (`'work'` or `'entry'`) tells the theme which it is;
+`citable` stays "is a work". The publisher is `dre_seo.citation.publisher`.
 
 ---
 
@@ -305,11 +339,12 @@ OMEKA_PATH=/path/to/omeka-s composer integration
 
 ## Roadmap
 
-* **COinS** (`<span class="Z3988">`) as a complementary reference-embedding signal for
-  translators that prefer it, and to expose multiple references on list pages.
-* **unAPI** + per-item **BibTeX / RIS** export links ("Cite / Export") for one-click download.
-* Structured-data & citation enrichment: `sameAs` ORCID / GND / VIAF on persons, `geo` from the
-  geoloc data on places, `Dataset` `distribution` for research data (`license` is now emitted).
+* Not **COinS** or **unAPI**: Zotero ranks both translators ahead of Embedded Metadata, so
+  either would replace the richer Highwire tags with a poorer reference.
+* Signposting `author` links and JSON-LD author `sameAs` from each linked person's GND / ORCID
+  URI (one extra value read per author).
+* Share images of at least 1200 px: Omeka's `large` derivative is 800 px, below what Google
+  Discover and large link previews ask for.
 * Per-static-page SEO fields **inline in the page editor** (currently a central table).
 * `hreflang` / multilingual metadata once localized page variants exist.
 * Image / news sitemap extensions; optional nginx-level caching of `/sitemap*.xml`.

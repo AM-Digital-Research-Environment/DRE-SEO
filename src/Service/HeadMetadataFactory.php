@@ -14,6 +14,8 @@ final class HeadMetadataFactory implements FactoryInterface
             $container->get('Omeka\Settings'),
             $container->get(StructuredData::class),
             $container->get(CitationMeta::class),
+            $container->get(CitationKindMap::class),
+            $container->get(ResourceSummary::class),
         );
     }
 }

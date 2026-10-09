@@ -9,6 +9,94 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-09
+
+### Added
+
+- Authority records are cited as entries of the database. A person, place, organisation,
+  project, research section, subject heading or journal has no author and is not a work,
+  but it can be cited as what it is: `“Aas, Norbert.” Person record. Africa Multiple
+  Interactive Research Atlas (AMIRA). Africa Multiple Cluster of Excellence, University of
+  Bayreuth. Last modified June 9, 2026. <permalink>.` — in Chicago, APA and MLA, with
+  BibTeX `@online`, RIS `ELEC` and CSL `webpage` downloads (the types Zotero reads back as
+  a web page). The last-modified date stands in for an access date. They still carry no
+  Highwire tags, so Google Scholar never indexes them as articles. The publisher named is
+  `dre_seo.citation.publisher`.
+- `dreCitation()` returns `citeAs` (`'work'` or `'entry'`) beside `citable`, which keeps
+  its meaning ("is a work"). The citation record's array form gains `place`, `number`,
+  `event`, `platform`, `genre`, `archive`, `updated`, `authorRole` and `isEntry`.
+  Additive; no existing key changed.
+- FAIR Signposting (level 1) `<link>` elements on item pages: `cite-as` (the DOI, else the
+  permalink), `describedby` for the CSL-JSON, BibTeX, RIS and Omeka JSON-LD descriptions,
+  `type`, `license` (when it is a URI) and `item` for the public files.
+- Item-set landing pages are described by their item set: title, description, image and a
+  `CollectionPage` in JSON-LD. They had no description at all.
+- Records without a description get one built from their metadata ("Book chapter by Ute
+  Fendler, Marie-Anne Kohl et al. (2024), in Of Worlds and Artworks.") instead of a
+  boilerplate that repeated the title. The meta description, `og:description` and JSON-LD
+  share it (`ResourceSummary`).
+
+### Fixed
+
+- Citations for every document type, checked against the live records:
+  - a thesis names its awarding institution, read from `marcrel:dgg`; none did;
+  - ISBNs are read from `bibo:isbn13`, where ERef records keep them; none were cited;
+  - a page range written into `bibo:pages` ("S. 23-38") is read;
+  - ISBD's spaced colon ("Title : Subtitle") becomes a colon;
+  - a quoted title that ends in punctuation no longer gets a second period, and its own
+    double quotes nest as single ones;
+  - a conference paper without proceedings is cited as presented ("Paper presented at
+    …", APA "[Paper presentation]"), not "In" its own title;
+  - APA attaches the descriptor to the title (`*Title* [Data set].`) and names a thesis
+    "[Doctoral dissertation, Institution]"; MLA italicises a thesis title and ends
+    "Institution, PhD dissertation", closes the last container with the URL after a comma
+    and abbreviates months;
+  - a newspaper or other unnumbered periodical article carries its full date;
+  - a YouTube video is cited on its platform ("YouTube video, July 8, 2022");
+  - a podcast credits its host as host and numbers the episode ("(No. 1) [Audio podcast
+    episode]");
+  - a research item is cited as an archival object — its project and the archive — rather
+    than with its project as publisher; a book or report in a series names it (Chicago);
+  - page ranges take an en dash.
+- `og:locale` was always `en`: the locale lookup used `method_exists()` on a view helper,
+  which never finds one. It now reads the page language (`en_US`, `fr_FR`, …).
+- `og:type` is `profile` for a person, `book` for a book, `video.other` for a video and
+  `website` for the other descriptive records, item sets and media, instead of `article`
+  everywhere.
+- JSON-LD no longer claims the site's default share image, or Omeka's generic audio and
+  file icons, as a record's image. Link previews still fall back to the share image.
+- Subject headings and other vocabulary terms (template 6) are `DefinedTerm`s in their
+  vocabulary, journals (23) `Periodical`s and research sections (7) `ResearchProject`s with
+  members; they were `CreativeWork` and `Collection`.
+- Media pages are `noindex, follow` and titled by their item when their own title is a
+  file URL. They emit no Highwire tags, and neither do item-set pages.
+- The sitemap index dates each child sitemap by the latest change among its URLs, not by
+  the time it was generated.
+
+### Changed
+
+- JSON-LD: persons are named in natural order with `givenName`, `familyName` and the
+  record's form as `alternateName`; authority URIs (GND, Wikidata, LCSH) become `sameAs`;
+  places carry numeric coordinates and `containedInPlace`; projects `funder`,
+  `parentOrganization` and `alternateName`; works their DOI as `identifier`,
+  `dateModified`, page numbers, `funder`, a typed container (`PublicationIssue` →
+  `PublicationVolume` → `Periodical`, a chapter's `Book`, a podcast's `PodcastSeries`),
+  creators linked to an organisation as `Organization`; videos `embedUrl` and `duration`;
+  datasets `distribution` and `includedInDataCatalog`.
+- The home page's `WebSite` drops the `SearchAction`; Google retired the sitelinks search
+  box in November 2024.
+- The shipped sitemap config emits no `<priority>` or `<changefreq>`; Google and Bing both
+  document that they ignore them. They can still be set in `config/local.config.php`.
+- Indexable pages carry `robots: max-image-preview:large`, and link previews
+  `og:image:alt`.
+- The Highwire tags are written from the same citation record as the formatted citations
+  and downloads. `DC.type` names the exact Zotero item type for theses, reports, books,
+  chapters, conference papers, blog posts, datasets, podcasts and videos. A podcast's
+  `citation_author` is its host only, as on the record page; guests were listed as authors.
+- `CitationMeta` and `StructuredData` read through the shared `ResourceValueReader`
+  instead of private copies, and the four copies of the default-site lookup are one
+  `DefaultSite` service.
+
 ## [0.10.1] — 2026-10-07
 
 ### Removed
@@ -210,7 +298,8 @@ GitHub release and shipped no installable asset.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.8.0...v0.9.0

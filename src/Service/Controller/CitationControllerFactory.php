@@ -6,6 +6,7 @@ namespace DRESeo\Service\Controller;
 use DRESeo\Controller\CitationController;
 use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationExport;
+use DRESeo\Service\DefaultSite;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
@@ -18,6 +19,7 @@ final class CitationControllerFactory implements FactoryInterface
             $container->get(CitationExport::class),
             $container->get('Omeka\ApiManager'),
             $container->get('Omeka\Settings'),
+            $container->get(DefaultSite::class),
         );
     }
 }

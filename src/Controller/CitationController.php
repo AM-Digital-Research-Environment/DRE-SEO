@@ -5,12 +5,12 @@ namespace DRESeo\Controller;
 
 use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationExport;
-use DRESeo\Service\CitationKindMap;
+use DRESeo\Service\DefaultSite;
+use DRESeo\Service\SettingFlag;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Omeka\Api\Manager as ApiManager;
 use Omeka\Api\Representation\ItemRepresentation;
-use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Settings\Settings;
 
 /**
@@ -18,9 +18,10 @@ use Omeka\Settings\Settings;
  *
  * Reuses the {@see CitationData} mapping + {@see CitationExport} serialisers that
  * back the theme's "Cite this record" rail, so a reader can save a record
- * straight into Zotero / Mendeley / EndNote / a LaTeX bibliography. Only public,
- * citable items resolve — authority records (person / place / organisation /
- * project / research section) and non-public items 404.
+ * straight into Zotero / Mendeley / EndNote / a LaTeX bibliography. Only public
+ * items resolve. A work exports as its own type; an authority record (person,
+ * place, subject heading, …) exports as a web page of the database, the same
+ * entry citation the record page shows.
  *
  * The canonical URL baked into the export is the *default site's* item page, so
  * a downloaded citation points at the same address regardless of which site the
@@ -33,12 +34,13 @@ class CitationController extends AbstractActionController
         private readonly CitationExport $citationExport,
         private readonly ApiManager $api,
         private readonly Settings $settings,
+        private readonly DefaultSite $defaultSite,
     ) {
     }
 
     public function indexAction(): Response
     {
-        if (!$this->enabled()) {
+        if (!SettingFlag::isOn($this->settings, 'dre_seo_citation_meta', true)) {
             return $this->notFound();
         }
 
@@ -53,11 +55,8 @@ class CitationController extends AbstractActionController
             return $this->notFound();
         }
 
-        $record = $this->citationData->build($item, $this->itemUrl($item));
-        if ($record === null) {
-            return $this->notFound(); // authority record — not a citable work
-        }
-
+        $site = $this->defaultSite->get();
+        $record = $this->citationData->build($item, $this->itemUrl($item), $site?->title());
         $body = $this->citationExport->serialize($record, $format);
         if ($body === null) {
             return $this->notFound();
@@ -77,17 +76,14 @@ class CitationController extends AbstractActionController
         } catch (\Throwable $e) {
             return null;
         }
-        if (!$item instanceof ItemRepresentation || !$item->isPublic()) {
-            return null;
-        }
 
-        return $this->citationData->isCitable(CitationKindMap::templateId($item)) ? $item : null;
+        return $item instanceof ItemRepresentation && $item->isPublic() ? $item : null;
     }
 
     /** The default site's public page URL — the citation's stable canonical. */
     private function itemUrl(ItemRepresentation $item): ?string
     {
-        $site = $this->resolveSite();
+        $site = $this->defaultSite->get();
         if (!$site) {
             return null;
         }
@@ -98,34 +94,6 @@ class CitationController extends AbstractActionController
         }
 
         return $url !== '' ? $url : null;
-    }
-
-    /** The configured default site, else the first site. */
-    private function resolveSite(): ?SiteRepresentation
-    {
-        $defaultSiteId = (int) $this->settings->get('default_site');
-        if ($defaultSiteId) {
-            try {
-                return $this->api->read('sites', $defaultSiteId)->getContent();
-            } catch (\Throwable $e) {
-                // fall through to first site
-            }
-        }
-        try {
-            $sites = $this->api->search('sites', ['limit' => 1])->getContent();
-        } catch (\Throwable $e) {
-            return null;
-        }
-
-        return $sites[0] ?? null;
-    }
-
-    /** Shares the citation kill-switch with the Highwire/DC meta tags. */
-    private function enabled(): bool
-    {
-        $value = $this->settings->get('dre_seo_citation_meta', '1');
-
-        return $value === '1' || $value === 1 || $value === true;
     }
 
     private function fileResponse(string $content, string $contentType, string $filename): Response

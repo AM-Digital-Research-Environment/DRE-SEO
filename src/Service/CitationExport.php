@@ -13,6 +13,12 @@ use DRESeo\Service\Citation\IssuedDate;
  *
  * All three are dependency-free string builders (the module carries no vendor/),
  * and all emit UTF-8 — BibTeX targets biber/biblatex, which reads UTF-8 directly.
+ * The RIS tags follow the ones Zotero's own RIS translator reads back (T2 is a
+ * book's series and a web page's site, M3 a thesis or website type, DB/AN the
+ * archive and accession number, M1 a podcast's episode number).
+ *
+ * An entry (an authority record) is exported as a web page of the database:
+ * BibTeX @online, RIS ELEC, CSL `webpage`, dated by when the record last changed.
  */
 final class CitationExport
 {
@@ -35,6 +41,13 @@ final class CitationExport
         'bachelors' => ['mastersthesis', "Bachelor's thesis"],
     ];
 
+    /** The thesis type exported to RIS M3 and CSL `genre`. */
+    private const THESIS_GENRES = [
+        'doctoral'  => 'Doctoral dissertation',
+        'masters'   => "Master's thesis",
+        'bachelors' => "Bachelor's thesis",
+    ];
+
     public function serialize(CitationRecord $record, string $format): ?string
     {
         return match ($format) {
@@ -53,6 +66,29 @@ final class CitationExport
             ? preg_replace('/[^A-Za-z0-9._-]+/', '-', $record->accession)
             : 'item-' . $record->id;
         return trim((string) $stem, '-') . '.' . $ext;
+    }
+
+    // ─── Shared ──────────────────────────────────────────────────────────────
+
+    /** The date an export carries: an entry's last change, a work's publication. */
+    private function date(CitationRecord $record): IssuedDate
+    {
+        return $record->isEntry() ? $record->updated : $record->issued;
+    }
+
+    /** CSL `genre` / RIS M3: an entry's or research item's form, a thesis's degree. */
+    private function genre(CitationRecord $record): ?string
+    {
+        if ($record->kind === CitationKind::Thesis) {
+            return self::THESIS_GENRES[$record->degree ?? ''] ?? 'Thesis';
+        }
+        return $record->genre;
+    }
+
+    /** A book's or report's container is its series, not a containing work. */
+    private function isSeries(CitationRecord $record): bool
+    {
+        return in_array($record->kind, [CitationKind::Book, CitationKind::Report], true);
     }
 
     // ─── BibTeX ──────────────────────────────────────────────────────────────
@@ -78,41 +114,60 @@ final class CitationExport
         }
 
         // Container routes to journal / booktitle / publisher-adjacent fields.
-        switch ($kind) {
-            case CitationKind::Article:
-                $this->addField($fields, 'journal', $record->container);
-                $this->addField($fields, 'publisher', $record->publisher);
-                break;
-            case CitationKind::Chapter:
-                $this->addField($fields, 'booktitle', $record->bookTitle);
-                $this->addField($fields, 'publisher', $record->publisher);
-                break;
-            case CitationKind::Conference:
-                $this->addField($fields, 'booktitle', $record->container);
-                $this->addField($fields, 'publisher', $record->publisher);
-                break;
-            case CitationKind::Thesis:
-                [$type, $label] = self::THESIS_ENTRIES[$record->degree ?? ''] ?? ['phdthesis', 'Thesis'];
-                $this->addField($fields, 'school', $record->publisher ?? $record->container);
-                $this->addField($fields, 'type', $label);
-                break;
-            case CitationKind::Report:
-                $this->addField($fields, 'institution', $record->publisher ?? $record->container);
-                break;
-            case CitationKind::Book:
-            case CitationKind::Dataset:
-                $this->addField($fields, 'publisher', $record->publisher);
-                break;
-            default: // post, podcast, video, item
-                $this->addField($fields, 'howpublished', $record->container ?? $record->publisher);
-                break;
+        if ($record->isEntry()) {
+            // biblatex @online: the database is the organisation that hosts
+            // the page, the record type a note.
+            $this->addField($fields, 'organization', $record->archive);
+            $this->addField($fields, 'publisher', $record->publisher);
+            $this->addField($fields, 'note', $record->genre);
+        } else {
+            switch ($kind) {
+                case CitationKind::Article:
+                    $this->addField($fields, 'journal', $record->container);
+                    $this->addField($fields, 'publisher', $record->publisher);
+                    break;
+                case CitationKind::Chapter:
+                    $this->addField($fields, 'booktitle', $record->bookTitle);
+                    $this->addField($fields, 'publisher', $record->publisher);
+                    break;
+                case CitationKind::Conference:
+                    $this->addField($fields, 'booktitle', $record->container);
+                    $this->addField($fields, 'eventtitle', $record->event);
+                    $this->addField($fields, 'publisher', $record->publisher);
+                    break;
+                case CitationKind::Thesis:
+                    [$type, $label] = self::THESIS_ENTRIES[$record->degree ?? ''] ?? ['phdthesis', 'Thesis'];
+                    $this->addField($fields, 'school', $record->publisher ?? $record->container);
+                    $this->addField($fields, 'type', $label);
+                    break;
+                case CitationKind::Report:
+                    $this->addField($fields, 'institution', $record->publisher);
+                    $this->addField($fields, 'series', $record->container);
+                    break;
+                case CitationKind::Book:
+                    $this->addField($fields, 'publisher', $record->publisher);
+                    $this->addField($fields, 'series', $record->container);
+                    break;
+                case CitationKind::Dataset:
+                    $this->addField($fields, 'publisher', $record->publisher);
+                    break;
+                default: // post, podcast, video, item
+                    $this->addField($fields, 'howpublished', $record->container ?? $record->platform ?? $record->publisher);
+                    break;
+            }
         }
+        $this->addField($fields, 'address', $record->place);
 
-        if ($record->issued->hasYear()) {
-            $fields['year'] = (string) $record->issued->year;
+        $date = $this->date($record);
+        if ($date->hasYear()) {
+            $fields['year'] = (string) $date->year;
+            // biblatex reads the full date; classic BibTeX ignores the field.
+            if ($date->month !== null) {
+                $fields['date'] = $this->isoDate($date);
+            }
         }
         $this->addField($fields, 'volume', $record->volume);
-        $this->addField($fields, 'number', $record->issue);
+        $this->addField($fields, 'number', $record->issue ?? $record->number);
         $pages = $record->pageRange();
         if ($pages !== null) {
             $fields['pages'] = str_replace('-', '--', $pages);
@@ -201,23 +256,34 @@ final class CitationExport
         }
         $lines[] = $this->risLine('TI', $record->title);
 
-        // Container: T2 is the generic secondary/container title (journal, book,
-        // proceedings, blog) that Zotero/EndNote map correctly for every type.
-        $lines[] = $this->risLine('T2', $record->container ?? $record->bookTitle);
-        $lines[] = $this->risLine('PB', $record->publisher);
+        // T2 is the secondary title Zotero reads by type: a journal, a book's
+        // or report's series, a chapter's book, a web page's site.
+        $lines[] = $this->risLine('T2', $record->isEntry()
+            ? $record->archive
+            : ($record->container ?? $record->bookTitle ?? $record->event));
+        $lines[] = $this->risLine('PB', $record->publisher ?? ($record->kind === CitationKind::Video ? $record->platform : null));
+        $lines[] = $this->risLine('CY', $record->place);
 
-        if ($record->issued->hasYear()) {
-            $lines[] = $this->risLine('PY', (string) $record->issued->year);
-            $lines[] = $this->risLine('DA', $this->risDate($record->issued));
+        $date = $this->date($record);
+        if ($date->hasYear()) {
+            $lines[] = $this->risLine('PY', (string) $date->year);
+            $lines[] = $this->risLine('DA', $this->risDate($date));
         }
         $lines[] = $this->risLine('VL', $record->volume);
         $lines[] = $this->risLine('IS', $record->issue);
+        $lines[] = $this->risLine('M1', $record->number);
+        $lines[] = $this->risLine('M3', $this->genre($record));
         $lines[] = $this->risLine('SP', $record->pageFirst);
         $lines[] = $this->risLine('EP', $record->pageLast);
         // SN carries whichever standard number the kind has (RIS has one slot).
         $lines[] = $this->risLine('SN', $record->issn ?? $record->isbn);
         $lines[] = $this->risLine('DO', $record->doi);
         $lines[] = $this->risLine('UR', $record->url);
+        // A research item or entry is held in the archive under its accession id.
+        if ($record->archive !== null) {
+            $lines[] = $this->risLine('DB', $record->archive);
+            $lines[] = $this->risLine('AN', $record->accession);
+        }
         $lines[] = $this->risLine('LA', $record->language);
         foreach ($record->keywords as $keyword) {
             $lines[] = $this->risLine('KW', $keyword);
@@ -266,6 +332,18 @@ final class CitationExport
         return $out;
     }
 
+    private function isoDate(IssuedDate $date): string
+    {
+        $out = sprintf('%04d', $date->year);
+        if ($date->month !== null) {
+            $out .= sprintf('-%02d', $date->month);
+            if ($date->day !== null) {
+                $out .= sprintf('-%02d', $date->day);
+            }
+        }
+        return $out;
+    }
+
     // ─── CSL-JSON ────────────────────────────────────────────────────────────
 
     private function cslJson(CitationRecord $record): string
@@ -286,24 +364,41 @@ final class CitationExport
             $item['editor'] = $editors;
         }
 
-        $container = $record->container ?? $record->bookTitle;
+        if ($record->isEntry()) {
+            // A web page's container is the site it is on.
+            $container = $record->archive;
+        } elseif ($this->isSeries($record)) {
+            $container = null;
+            if ($record->container !== null) {
+                $item['collection-title'] = $record->container;
+            }
+            if ($record->volume !== null) {
+                $item['collection-number'] = $record->volume;
+            }
+        } else {
+            $container = $record->container ?? $record->bookTitle;
+        }
         if ($container !== null) {
             $item['container-title'] = $container;
         }
-        if ($record->publisher !== null) {
-            $item['publisher'] = $record->publisher;
+        $optional = [
+            'publisher'        => $record->publisher ?? ($record->kind === CitationKind::Video ? $record->platform : null),
+            'publisher-place'  => $record->place,
+            'event-title'      => $record->event,
+            'volume'           => $this->isSeries($record) ? null : $record->volume,
+            'issue'            => $record->issue,
+            'number'           => $record->number,
+            'page'             => $record->pageRange(),
+            'genre'            => $this->genre($record),
+            'archive'          => $record->archive,
+            'archive_location' => $record->archive !== null ? $record->accession : null,
+        ];
+        foreach ($optional as $field => $value) {
+            if ($value !== null && $value !== '') {
+                $item[$field] = $value;
+            }
         }
-        if ($record->volume !== null) {
-            $item['volume'] = $record->volume;
-        }
-        if ($record->issue !== null) {
-            $item['issue'] = $record->issue;
-        }
-        $pages = $record->pageRange();
-        if ($pages !== null) {
-            $item['page'] = $pages;
-        }
-        $dateParts = $this->cslDateParts($record->issued);
+        $dateParts = $this->cslDateParts($this->date($record));
         if ($dateParts) {
             $item['issued'] = ['date-parts' => [$dateParts]];
         }

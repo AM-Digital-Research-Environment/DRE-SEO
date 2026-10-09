@@ -4,21 +4,21 @@ declare(strict_types=1);
 namespace DRESeo\Service\Concern;
 
 use DRESeo\Service\Citation\CitationRecord;
+use DRESeo\Service\Citation\IssuedDate;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
 
 /**
- * Shared leaf value-readers for the citation services.
+ * Shared leaf value-readers for the citation, meta-tag and structured-data
+ * services.
  *
  * These are the DRE's field conventions in one place: linked-resource labels
  * via displayTitle, the dcterms:subject keyword set, the dre:id accession, the
- * bibo:doi normalisation and the public-PDF lookup.
- *
+ * bibo:doi normalisation, the ISBN properties, the identifier URIs that become
+ * `sameAs`, and the public-PDF lookup. {@see \DRESeo\Service\CitationData},
  * {@see \DRESeo\Service\CitationMeta} and {@see \DRESeo\Service\StructuredData}
- * still carry their own private copies of the leaf readers; folding them onto
- * this trait is a mechanical follow-up, deliberately kept out of the diff that
- * introduced the citation stack.
+ * all read through it, so a convention changes in one place.
  */
 trait ResourceValueReader
 {
@@ -33,6 +33,12 @@ trait ResourceValueReader
 
     /** Abstracts are clipped to this many characters before being emitted. */
     private const ABSTRACT_MAX = 5000;
+
+    /**
+     * ISBN properties, preferred first. ERef and EPub records carry
+     * bibo:isbn13; bibo:isbn is the generic term a hand-entered record may use.
+     */
+    private const ISBN_TERMS = ['bibo:isbn13', 'bibo:isbn', 'bibo:isbn10'];
 
     /**
      * First non-empty literal/label across the given terms, in order, tags stripped.
@@ -149,6 +155,71 @@ trait ResourceValueReader
         return ($doi ?? '') !== '' ? $doi : null;
     }
 
+    /** The first ISBN the record carries, as entered. */
+    private function isbn(AbstractResourceEntityRepresentation $resource): ?string
+    {
+        return $this->firstString($resource, self::ISBN_TERMS);
+    }
+
+    /**
+     * Every URI a property holds: URI-typed values by their URI, literals that
+     * are themselves http(s) URLs, and a bare Wikidata id ("Q209829"), which
+     * the location records store in place of the entity URI.
+     *
+     * @return string[]
+     */
+    private function uris(AbstractResourceEntityRepresentation $resource, string $term): array
+    {
+        $out = [];
+        foreach ($resource->value($term, ['all' => true]) as $value) {
+            if (!$value instanceof ValueRepresentation || $value->valueResource()) {
+                continue;
+            }
+            $uri = trim((string) ($value->uri() ?? ''));
+            if ($uri === '') {
+                $uri = trim(strip_tags((string) $value));
+            }
+            if (preg_match('/\AQ\d+\z/', $uri)) {
+                $uri = 'https://www.wikidata.org/entity/' . $uri;
+            }
+            if (preg_match('#\Ahttps?://\S+\z#i', $uri)) {
+                $out[$uri] = $uri;
+            }
+        }
+        return array_values($out);
+    }
+
+    /**
+     * The record's identity links — `sameAs` in JSON-LD: the authority URIs in
+     * dcterms:identifier (GND for people, Wikidata for places and institutions,
+     * LCSH and Wikidata for subject headings) and the RDSpace handle. WissKI
+     * links are retired and deliberately never read.
+     *
+     * @return string[]
+     */
+    private function identityUris(AbstractResourceEntityRepresentation $resource): array
+    {
+        $out = $this->uris($resource, 'dcterms:identifier');
+        $handle = $this->firstString($resource, ['dre:rdspaceHandle']);
+        if ($handle !== null) {
+            $out[] = str_starts_with($handle, 'http') ? $handle : 'https://hdl.handle.net/' . ltrim($handle, '/');
+        }
+        return array_values(array_unique($out));
+    }
+
+    /** When the Omeka record last changed, to the day. */
+    private function modifiedDate(AbstractResourceEntityRepresentation $resource): IssuedDate
+    {
+        try {
+            $modified = $resource->modified();
+        } catch (\Throwable $e) {
+            return IssuedDate::unknown();
+        }
+        return $modified instanceof \DateTimeInterface
+            ? IssuedDate::parse($modified->format('Y-m-d'))
+            : IssuedDate::unknown();
+    }
+
     /** The original URL of the item's first public PDF media, if any. */
     private function pdfUrl(AbstractResourceEntityRepresentation $resource): ?string
     {
@@ -170,16 +241,29 @@ trait ResourceValueReader
     }
 
     /**
-     * The resource's citation page range, read from bibo:pageStart/pageEnd.
-     * The join rule itself belongs to the record, so a page range reads the
-     * same whether it came from a resource or from a built citation.
+     * The first and last page: bibo:pageStart/pageEnd, else the page range
+     * ERef sometimes writes into bibo:pages as text ("S. 23-38").
+     *
+     * @return array{0:?string,1:?string}
+     */
+    private function pageBounds(AbstractResourceEntityRepresentation $resource): array
+    {
+        $first = $this->firstString($resource, ['bibo:pageStart']);
+        $last = $this->firstString($resource, ['bibo:pageEnd']);
+        if ($first === null && $last === null) {
+            return CitationRecord::splitPages($this->firstString($resource, ['bibo:pages']));
+        }
+        return [$first, $last];
+    }
+
+    /**
+     * The resource's citation page range. The join rule itself belongs to the
+     * record, so a page range reads the same whether it came from a resource or
+     * from a built citation.
      */
     private function pageRange(AbstractResourceEntityRepresentation $resource): ?string
     {
-        return CitationRecord::joinPages(
-            $this->firstString($resource, ['bibo:pageStart']),
-            $this->firstString($resource, ['bibo:pageEnd'])
-        );
+        return CitationRecord::joinPages(...$this->pageBounds($resource));
     }
 
     /** Whitespace-normalise, strip tags and clip to $max characters. */

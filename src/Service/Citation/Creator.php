@@ -6,9 +6,8 @@ namespace DRESeo\Service\Citation;
 /**
  * One author or editor of a citable work.
  *
- * DRE person records display as "First Last", so a name is split on the last
- * whitespace-delimited token; an already-inverted "Family, Given" literal is
- * detected by its comma. Institutions — creators linked to an Organisation
+ * AMIRA person records display as "Family, Given", detected by the comma; a
+ * name written "Given Family" is split on its last whitespace-delimited token. Institutions — creators linked to an Organisation
  * authority record — are the exception that drives the shape of this class:
  * they must survive as a single field, never split or inverted, or "Africa
  * Multiple Cluster of Excellence" is filed under the surname "Excellence".

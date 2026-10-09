@@ -14,6 +14,7 @@ final class StructuredDataFactory implements FactoryInterface
         return new StructuredData(
             $config['template_types'] ?? [],
             $config['default_type'] ?? 'CreativeWork',
+            $container->get(CitationKindMap::class),
         );
     }
 }

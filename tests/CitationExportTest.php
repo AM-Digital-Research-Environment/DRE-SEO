@@ -211,3 +211,84 @@ test('download filenames are sanitised and extension-correct', function (): void
 test('an unknown format serialises to nothing', function (): void {
     assertSameValue(null, (new CitationExport())->serialize(exportFixture(), 'endnote'));
 });
+
+test('an authority record exports as a web page of the database', function (): void {
+    $export = new CitationExport();
+    $record = new CitationRecord(
+        id: 778,
+        kind: CitationKind::Person,
+        title: 'Aas, Norbert',
+        publisher: 'Africa Multiple Cluster of Excellence',
+        url: 'https://data.africamultiple.uni-bayreuth.de/s/amira/item/778',
+        genre: 'Person record',
+        archive: 'AMIRA',
+        updated: IssuedDate::parse('2026-06-09'),
+    );
+
+    $ris = $export->serialize($record, 'ris');
+    assertTrue(str_starts_with($ris, "TY  - ELEC\r\n"), 'RIS web page');
+    assertTrue(str_contains($ris, "T2  - AMIRA\r\n"), 'the site is the secondary title');
+    assertTrue(str_contains($ris, "M3  - Person record\r\n"), 'the record type is the website type');
+    assertTrue(str_contains($ris, "DA  - 2026/06/09\r\n"), 'dated by its last change');
+    assertTrue(!str_contains($ris, 'AU  - '), 'an entry has no author');
+
+    $csl = json_decode((string) $export->serialize($record, 'csljson'), true, flags: JSON_THROW_ON_ERROR)[0];
+    assertSameValue('webpage', $csl['type']);
+    assertSameValue('AMIRA', $csl['container-title']);
+    assertSameValue('Person record', $csl['genre']);
+    assertSameValue([[2026, 6, 9]], $csl['issued']['date-parts']);
+
+    $bibtex = $export->serialize($record, 'bibtex');
+    assertTrue(str_starts_with($bibtex, '@online{item-778,'), 'biblatex @online');
+    assertTrue((bool) preg_match('/organization\s+= \{AMIRA\}/', $bibtex), 'the database hosts the page');
+    assertTrue((bool) preg_match('/date\s+= \{2026-06-09\}/', $bibtex), 'biblatex full date');
+});
+
+test('a book exports its series as a series, not a container', function (): void {
+    $export = new CitationExport();
+    $record = new CitationRecord(
+        id: 1,
+        kind: CitationKind::Book,
+        title: 'Writing the Slave Trade Trauma',
+        container: 'Afrikanische Literaturen',
+        publisher: 'Akademische Verlagsanstalt',
+        volume: '1',
+        isbn: '978-3-96091-668-0',
+        place: 'München',
+    );
+
+    $csl = json_decode((string) $export->serialize($record, 'csljson'), true, flags: JSON_THROW_ON_ERROR)[0];
+    assertSameValue('Afrikanische Literaturen', $csl['collection-title']);
+    assertSameValue('1', $csl['collection-number']);
+    assertTrue(!isset($csl['container-title']), 'a book sits in no container');
+    assertSameValue('München', $csl['publisher-place']);
+
+    $bibtex = $export->serialize($record, 'bibtex');
+    assertTrue((bool) preg_match('/series\s+= \{Afrikanische Literaturen\}/', $bibtex), 'BibTeX series');
+    assertTrue((bool) preg_match('/address\s+= \{München\}/', $bibtex), 'BibTeX address');
+
+    $ris = $export->serialize($record, 'ris');
+    assertTrue(str_contains($ris, "T2  - Afrikanische Literaturen\r\n"), 'Zotero reads a book T2 as its series');
+    assertTrue(str_contains($ris, "SN  - 978-3-96091-668-0\r\n"), 'the ISBN');
+});
+
+test('a research item exports the archive that holds it', function (): void {
+    $record = new CitationRecord(
+        id: 8179,
+        kind: CitationKind::Item,
+        title: 'Untitled',
+        container: 'Liberian broadcasts',
+        accession: 'abn-99-009f',
+        genre: 'Moving image',
+        archive: 'AMIRA',
+    );
+    $export = new CitationExport();
+
+    $ris = $export->serialize($record, 'ris');
+    assertTrue(str_contains($ris, "DB  - AMIRA\r\n") && str_contains($ris, "AN  - abn-99-009f\r\n"), 'archive and accession');
+
+    $csl = json_decode((string) $export->serialize($record, 'csljson'), true, flags: JSON_THROW_ON_ERROR)[0];
+    assertSameValue('AMIRA', $csl['archive']);
+    assertSameValue('abn-99-009f', $csl['archive_location']);
+    assertSameValue('Moving image', $csl['genre']);
+});

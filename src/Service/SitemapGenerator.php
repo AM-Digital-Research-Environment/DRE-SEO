@@ -46,18 +46,26 @@ class SitemapGenerator
     {
         $cacheKey = $this->cacheKey($siteId, 'index', $hostUrl, (string) $this->chunkSize());
         return $this->cached($cacheKey, $ttl, function () use ($hostUrl, $siteId) {
-            $children = ['sitemap-pages.xml', 'sitemap-item-sets.xml'];
-            $chunks = max(1, (int) ceil($this->countItems($siteId) / $this->chunkSize()));
+            // Each child's lastmod is the latest change among the URLs it
+            // lists. The generation time would change on every rebuild, and
+            // Google and Bing both stop trusting a lastmod that does.
+            $children = [
+                'sitemap-pages.xml' => $this->latestPageChange($siteId),
+                'sitemap-item-sets.xml' => $this->latestItemSetChange($siteId),
+            ];
+            $size = $this->chunkSize();
+            $chunks = max(1, (int) ceil($this->countItems($siteId) / $size));
             for ($i = 1; $i <= $chunks; $i++) {
-                $children[] = 'sitemap-items-' . $i . '.xml';
+                $children['sitemap-items-' . $i . '.xml'] = $this->latestItemChange($siteId, ($i - 1) * $size, $size);
             }
 
-            $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('c');
             $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
                 . '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
-            foreach ($children as $child) {
+            foreach ($children as $child => $modified) {
+                $lastmod = $this->w3c($modified);
                 $xml .= '  <sitemap><loc>' . $this->esc($hostUrl . '/' . $child) . '</loc>'
-                    . '<lastmod>' . $now . '</lastmod></sitemap>' . "\n";
+                    . ($lastmod !== null ? '<lastmod>' . $lastmod . '</lastmod>' : '')
+                    . '</sitemap>' . "\n";
             }
             $xml .= '</sitemapindex>' . "\n";
             return $xml;
@@ -268,6 +276,51 @@ class SitemapGenerator
             $this->logDatabaseFailure('count public items', $siteId, $e);
             return 0;
         }
+    }
+
+    /** The latest modification among one chunk of public items, or null. */
+    private function latestItemChange(int $siteId, int $offset, int $limit): ?string
+    {
+        return $this->latest(
+            'SELECT MAX(t.modified) FROM (SELECT r.modified FROM resource r
+             JOIN item_site isi ON isi.item_id = r.id
+             WHERE r.resource_type = :t AND r.is_public = 1 AND isi.site_id = :s
+             ORDER BY r.id LIMIT ' . max(0, $limit) . ' OFFSET ' . max(0, $offset) . ') t',
+            ['t' => 'Omeka\\Entity\\Item', 's' => $siteId],
+            $siteId
+        );
+    }
+
+    private function latestItemSetChange(int $siteId): ?string
+    {
+        return $this->latest(
+            'SELECT MAX(r.modified) FROM resource r
+             JOIN site_item_set sis ON sis.item_set_id = r.id
+             WHERE r.resource_type = :t AND r.is_public = 1 AND sis.site_id = :s',
+            ['t' => 'Omeka\\Entity\\ItemSet', 's' => $siteId],
+            $siteId
+        );
+    }
+
+    private function latestPageChange(int $siteId): ?string
+    {
+        return $this->latest(
+            'SELECT MAX(modified) FROM site_page WHERE site_id = :s AND is_public = 1',
+            ['s' => $siteId],
+            $siteId
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function latest(string $query, array $params, int $siteId): ?string
+    {
+        try {
+            $value = $this->connection->fetchOne($query, $params);
+        } catch (\Throwable $e) {
+            $this->logDatabaseFailure('read a sitemap lastmod', $siteId, $e);
+            return null;
+        }
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /** @return array<array{id:int,modified:?string}> */

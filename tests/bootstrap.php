@@ -174,12 +174,23 @@ namespace Omeka\Api\Representation {
                 private readonly int $idValue = 1,
                 /** The class's vocabulary term, e.g. 'fabio:MastersThesis'. */
                 private readonly ?string $classTerm = null,
+                /** o:modified, as 'Y-m-d' or a full timestamp. */
+                private readonly ?string $modifiedValue = null,
+                /** @var array<int,object> media attached to the item */
+                private readonly array $mediaList = [],
             ) {
             }
 
             public function id(): int
             {
                 return $this->idValue;
+            }
+
+            public function modified(): ?\DateTime
+            {
+                return $this->modifiedValue === null
+                    ? null
+                    : new \DateTime($this->modifiedValue, new \DateTimeZone('UTC'));
             }
 
             public function displayTitle(?string $default = null): string
@@ -192,10 +203,15 @@ namespace Omeka\Api\Representation {
                 return true;
             }
 
-            /** @return array<int,object> no media in the stub. */
+            /** @return array<int,object> the media the stub was given. */
             public function media(): array
             {
-                return [];
+                return $this->mediaList;
+            }
+
+            public function primaryMedia(): ?object
+            {
+                return $this->mediaList[0] ?? null;
             }
 
             public function resourceTemplate(): ?object

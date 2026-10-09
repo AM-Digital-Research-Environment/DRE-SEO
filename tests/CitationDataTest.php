@@ -117,25 +117,119 @@ test('a thesis reads its degree from the resource class', function (): void {
     assertSameValue(null, $data->build($article)->degree);
 });
 
-test('authority records are not citable', function (): void {
+test('authority records are not works, and are cited as database entries', function (): void {
     $data = citationDataService();
 
     $authorities = [
-        2  => 'organisation',
-        3  => 'location',
-        4  => 'person',
-        5  => 'project',
-        6  => 'subject heading',   // and languages, genres, sponsors — all template 6
-        7  => 'section',
-        23 => 'journal',           // a venue, not a work
+        2  => ['organisation', 'Organisation record'],
+        3  => ['location', 'Place record'],
+        4  => ['person', 'Person record'],
+        5  => ['project', 'Project record'],
+        6  => ['subject heading', 'Authority record'],   // and languages, genres, sponsors — all template 6
+        7  => ['section', 'Research section record'],
+        23 => ['journal', 'Journal record'],            // a venue, not a work
     ];
-    foreach ($authorities as $templateId => $label) {
+    foreach ($authorities as $templateId => [$label, $genre]) {
         $item = new ItemRepresentation('An ' . $label, $templateId, null, [
             'dcterms:title' => [literalValue('An ' . $label)],
-        ]);
-        assertTrue(!$data->isCitable($templateId), "{$label} must not be citable");
-        assertSameValue(null, $data->build($item), "{$label} must yield no record");
+            // A record's own links are not authorship of the entry.
+            'dcterms:creator' => [linkedValue('Someone')],
+        ], null, 9, null, '2026-06-09T07:22:31+00:00');
+        assertTrue(!$data->isCitable($templateId), "{$label} must not be a citable work");
+
+        $record = $data->build($item, 'https://example.test/s/amira/item/9', 'AMIRA');
+        assertTrue($record->isEntry(), "{$label} is cited as an entry");
+        assertSameValue($genre, $record->genre, $label);
+        assertSameValue('AMIRA', $record->archive, $label);
+        assertSameValue([], $record->authors, "an entry claims no author ({$label})");
+        assertSameValue(2026, $record->updated->year, $label);
+        assertSameValue(9, $record->updated->day, $label);
+        assertTrue(!$record->issued->hasYear(), "an entry has no publication date ({$label})");
     }
+});
+
+test('an entry names the publisher the module is configured with', function (): void {
+    $config = require __DIR__ . '/../config/module.config.php';
+    $citation = $config['dre_seo']['citation'];
+    $data = new CitationData(
+        new CitationKindMap($citation['template_kinds'], $citation['default_kind']),
+        'Africa Multiple Cluster of Excellence'
+    );
+    $person = new ItemRepresentation('Aas, Norbert', 4, 'Person', [], null, 778);
+
+    assertSameValue('Africa Multiple Cluster of Excellence', $data->build($person)->publisher);
+    assertSameValue('Aas, Norbert', $data->build($person)->title);
+});
+
+test('a thesis names its degree grantor as the awarding institution', function (): void {
+    $item = new ItemRepresentation('Das Archiv als Heimat', 16, null, [
+        'dcterms:title' => [literalValue('Das Archiv als Heimat : Die Fantasie Afrika')],
+        'marcrel:dgg' => [literalValue('Universität Bayreuth, Bayreuth International Graduate School of African Studies')],
+        'marcrel:pup' => [linkedValue('Bayreuth', 3)],
+    ], null, 1, 'fabio:DoctoralThesis');
+
+    $record = citationDataService()->build($item);
+
+    assertSameValue('Universität Bayreuth, Bayreuth International Graduate School of African Studies', $record->publisher);
+    assertSameValue('Bayreuth', $record->place);
+    // ISBD's spaced colon is a cataloguing convention, not a citation one.
+    assertSameValue('Das Archiv als Heimat: Die Fantasie Afrika', $record->title);
+});
+
+test('ISBNs and text page ranges are read where ERef writes them', function (): void {
+    $data = citationDataService();
+
+    $entry = new ItemRepresentation('Internationalisierung', 27, null, [
+        'bibo:isbn13' => [literalValue('978-3-8252-5425-4')],
+        'bibo:pageStart' => [literalValue('98')],
+        'bibo:pageEnd' => [literalValue('102')],
+    ]);
+    $record = $data->build($entry);
+    assertSameValue('978-3-8252-5425-4', $record->isbn);
+    assertSameValue('98-102', $record->pageRange());
+
+    $paper = new ItemRepresentation('Externalisierung', 12, null, [
+        'bibo:pages' => [literalValue('S. 23-38')],
+    ]);
+    assertSameValue('23-38', $data->build($paper)->pageRange());
+});
+
+test('works read the fields their style needs', function (): void {
+    $data = citationDataService();
+
+    // A podcast: episode number, and the host's role.
+    $podcast = $data->build(new ItemRepresentation('Episode', 21, null, [
+        'marcrel:hst' => [linkedValue('Akese, Grace Abena')],
+        'bibo:number' => [literalValue('1')],
+    ]));
+    assertSameValue('1', $podcast->number);
+    assertSameValue('host', $podcast->authorRole);
+
+    // A YouTube video names its platform.
+    $video = $data->build(new ItemRepresentation('A talk', 22, null, [
+        'fabio:hasURL' => [new ValueRepresentation('', null, 'https://www.youtube.com/watch?v=VNHDMq_Vz9g')],
+    ]));
+    assertSameValue('YouTube', $video->platform);
+
+    // A conference paper without proceedings keeps where it was presented.
+    $paper = $data->build(new ItemRepresentation('Intonation', 13, null, [
+        'bibo:presentedAt' => [literalValue('Speech Prosody 2022, University of Lisbon')],
+    ]));
+    assertSameValue('Speech Prosody 2022, University of Lisbon', $paper->event);
+    assertSameValue(null, $paper->container);
+
+    // A research item is held in the archive and typed by its resource type;
+    // a publication is only catalogued there.
+    $researchItem = $data->build(new ItemRepresentation('Untitled', 10, null, [
+        'dcterms:type' => [linkedValue('Moving image', 6)],
+        'dcterms:isPartOf' => [linkedValue('Liberian broadcasts', 5)],
+        'marcrel:cre' => [linkedValue('Gbenyon, Charles')],
+    ]), null, 'AMIRA');
+    assertSameValue('Moving image', $researchItem->genre);
+    assertSameValue('AMIRA', $researchItem->archive);
+    assertSameValue('Liberian broadcasts', $researchItem->container);
+    assertSameValue('Gbenyon', $researchItem->authors[0]->family, 'marcrel:cre is a creator');
+    assertSameValue(null, $data->build(new ItemRepresentation('An article', 11), null, 'AMIRA')->archive);
 });
 
 test('an item with no template falls back to the default kind and still cites', function (): void {

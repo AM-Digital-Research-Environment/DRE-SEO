@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 namespace DRESeo\Controller;
 
+use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
+use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
-use Omeka\Api\Manager as ApiManager;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Settings\Settings;
 
@@ -26,8 +27,8 @@ class SitemapController extends AbstractActionController
 {
     public function __construct(
         private readonly SitemapGenerator $generator,
-        private readonly ApiManager $api,
         private readonly Settings $settings,
+        private readonly DefaultSite $defaultSite,
     ) {
     }
 
@@ -108,7 +109,7 @@ class SitemapController extends AbstractActionController
     public function robotsAction(): Response
     {
         $lines = ['User-agent: *'];
-        if ($this->boolSetting('dre_seo_noindex_site')) {
+        if (SettingFlag::isOn($this->settings, 'dre_seo_noindex_site')) {
             $lines[] = 'Disallow: /';
         } else {
             $lines[] = 'Disallow: /admin/';
@@ -140,20 +141,7 @@ class SitemapController extends AbstractActionController
 
     private function resolveSite(): ?SiteRepresentation
     {
-        $defaultSiteId = (int) $this->settings->get('default_site');
-        if ($defaultSiteId) {
-            try {
-                return $this->api->read('sites', $defaultSiteId)->getContent();
-            } catch (\Throwable $e) {
-                // fall through to first site
-            }
-        }
-        try {
-            $sites = $this->api->search('sites', ['limit' => 1])->getContent();
-            return $sites[0] ?? null;
-        } catch (\Throwable $e) {
-            return null;
-        }
+        return $this->defaultSite->get();
     }
 
     private function siteUrl(SiteRepresentation $site): string
@@ -181,13 +169,7 @@ class SitemapController extends AbstractActionController
 
     private function sitemapEnabled(): bool
     {
-        return $this->boolSetting('dre_seo_sitemap_enabled', true);
-    }
-
-    private function boolSetting(string $key, bool $default = false): bool
-    {
-        $value = $this->settings->get($key, $default ? '1' : '0');
-        return $value === '1' || $value === 1 || $value === true;
+        return SettingFlag::isOn($this->settings, 'dre_seo_sitemap_enabled', true);
     }
 
     private function xml(string $body): Response

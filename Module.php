@@ -22,6 +22,7 @@ declare(strict_types=1);
 
 namespace DRESeo;
 
+use DRESeo\Service\DefaultSite;
 use DRESeo\Service\HeadMetadata;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
@@ -33,6 +34,7 @@ use Laminas\Mvc\MvcEvent;
 use Laminas\ServiceManager\ServiceLocatorInterface;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
+use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Module\AbstractModule;
@@ -68,9 +70,6 @@ class Module extends AbstractModule
         'dre_seo_noindex_browse'  => '1',
         'dre_seo_sitemap_ttl'     => '86400',
     ];
-
-    private ?string $cachedSiteSlug = null;
-    private bool $siteSlugResolved = false;
 
     public function getConfig(): array
     {
@@ -180,7 +179,14 @@ class Module extends AbstractModule
         }
         $site = $this->currentSite($view);
         if ($site) {
-            $this->headMetadata()->applyBrowse($view, $site);
+            // An item set's landing page is a browse of its items; Omeka hands
+            // the set to the view, and its metadata describes the page.
+            $itemSet = $view->itemSet ?? null;
+            $this->headMetadata()->applyBrowse(
+                $view,
+                $site,
+                $itemSet instanceof ItemSetRepresentation ? $itemSet : null
+            );
         }
     }
 
@@ -227,7 +233,7 @@ class Module extends AbstractModule
         $services = $this->getServiceLocator();
         $settings = $services->get('Omeka\Settings');
 
-        if ((string) $settings->get('dre_seo_ping_enabled', '0') !== '1') {
+        if (!Service\SettingFlag::isOn($settings, 'dre_seo_ping_enabled')) {
             return;
         }
         $indexNowKey = trim((string) $settings->get('dre_seo_indexnow_key', ''));
@@ -338,40 +344,14 @@ class Module extends AbstractModule
 
     private function resourcePublicUrl(object $resource): ?string
     {
-        $slug = $this->defaultSiteSlug();
-        if ($slug === null) {
+        $site = $this->getServiceLocator()->get(DefaultSite::class)->get();
+        if ($site === null || !method_exists($resource, 'siteUrl')) {
             return null;
         }
         try {
-            if (method_exists($resource, 'siteUrl')) {
-                return $resource->siteUrl($slug, true);
-            }
+            return $resource->siteUrl($site->slug(), true);
         } catch (\Throwable $e) {
-            // ignore
+            return null;
         }
-        return null;
-    }
-
-    private function defaultSiteSlug(): ?string
-    {
-        if ($this->siteSlugResolved) {
-            return $this->cachedSiteSlug;
-        }
-        $this->siteSlugResolved = true;
-        $services = $this->getServiceLocator();
-        try {
-            $settings = $services->get('Omeka\Settings');
-            $api = $services->get('Omeka\ApiManager');
-            $defaultSiteId = (int) $settings->get('default_site');
-            if ($defaultSiteId) {
-                $this->cachedSiteSlug = $api->read('sites', $defaultSiteId)->getContent()->slug();
-            } else {
-                $sites = $api->search('sites', ['limit' => 1])->getContent();
-                $this->cachedSiteSlug = $sites ? $sites[0]->slug() : null;
-            }
-        } catch (\Throwable $e) {
-            $this->cachedSiteSlug = null;
-        }
-        return $this->cachedSiteSlug;
     }
 }

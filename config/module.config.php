@@ -27,6 +27,8 @@ return [
             Service\PageSeoStore::class     => Service\PageSeoStoreFactory::class,
             Service\Pinger::class           => Service\PingerFactory::class,
             Service\PingQueue::class        => Service\PingQueueFactory::class,
+            Service\DefaultSite::class      => Service\DefaultSiteFactory::class,
+            Service\ResourceSummary::class  => Service\ResourceSummaryFactory::class,
         ],
         'invokables' => [
             // Stateless serialisers: no config, no dependencies.
@@ -190,20 +192,12 @@ return [
     'dre_seo' => [
         'sitemap' => [
             'item_chunk_size' => 50000,
-            'priority' => [
-                'home'    => '1.0',
-                'section' => '0.8',
-                'project' => '0.8',
-                'item'    => '0.6',
-                'page'    => '0.5',
-                'browse'  => '0.4',
-            ],
-            'changefreq' => [
-                'home'   => 'daily',
-                'item'   => 'monthly',
-                'page'   => 'monthly',
-                'browse' => 'weekly',
-            ],
+            // <priority> and <changefreq> per URL kind (home, section, item,
+            // page, browse). Empty by default: Google and Bing both document
+            // that they ignore them and read only an accurate <lastmod>. Fill
+            // these from config/local.config.php for a consumer that wants them.
+            'priority'   => [],
+            'changefreq' => [],
         ],
         'structured_data' => [
             // schema.org @type per Omeka resource template id (pinned in
@@ -215,7 +209,8 @@ return [
                 3  => 'Place',            // location
                 4  => 'Person',           // persons
                 5  => 'ResearchProject',  // projects
-                7  => 'Collection',       // research sections
+                6  => 'DefinedTerm',      // authority resource: subjects, languages, genres, tags
+                7  => 'ResearchProject',  // research sections (frapo:ResearchGroup, with members)
                 10 => 'CreativeWork',     // research items
                 11 => 'ScholarlyArticle', // article (fabio:JournalArticle)
                 12 => 'CreativeWork',     // working paper
@@ -229,6 +224,7 @@ return [
                 20 => 'Dataset',          // research data
                 21 => 'PodcastEpisode',   // podcasts (fabio:AudioDocument)
                 22 => 'VideoObject',      // YouTube video (bibo:AudioVisualDocument)
+                23 => 'Periodical',       // journal (bibo:Journal), a venue rather than a work
                 24 => 'ScholarlyArticle', // preprint (fabio:Preprint)
                 25 => 'NewsArticle',      // newspaper article (fabio:NewspaperArticle)
                 26 => 'Chapter',          // legal commentary (fabio:Entry): an entry in a commentary volume
@@ -245,6 +241,9 @@ return [
             // kinds (person/place/organization/project/section) emit Dublin Core
             // only; the rest emit kind-specific citation_* tags for Zotero.
             'default_kind'   => 'item',
+            // Who publishes the database, named in the entry citation of an
+            // authority record ("Aas, Norbert." Person record. AMIRA. <publisher>.).
+            'publisher'      => 'Africa Multiple Cluster of Excellence, University of Bayreuth',
             'template_kinds' => [
                 2  => 'organization', // organisation
                 3  => 'place',        // location

@@ -11,6 +11,7 @@ use DRESeo\Service\ViewLocale;
 use Laminas\View\Helper\AbstractHelper;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\ItemRepresentation;
+use Omeka\Api\Representation\SiteRepresentation;
 
 /**
  * dreCitation($item) — the view-model the theme renders in the record page's
@@ -23,18 +24,23 @@ use Omeka\Api\Representation\ItemRepresentation;
  *   null                      no opinion — the feature is off, or (as the theme
  *                             sees it) the module is not installed at all. The
  *                             theme keeps its own baseline.
- *   ['citable' => false, …]   this IS a record the module knows, and it is a
- *                             descriptive one — a person, a place, a subject
- *                             heading, a journal. There is no citation because
- *                             there should not be one, which is a different
- *                             statement from "I cannot tell you", and the theme
- *                             titles the panel accordingly.
- *   ['citable' => true, …]    a citable work, with styles and downloads.
+ *   ['citable' => false,      a descriptive record — a person, a place, a
+ *    'citeAs' => 'entry', …]  subject heading, a journal. It is not a work, so
+ *                             no Highwire tags claim it is one, but it can be
+ *                             cited as what it is: an entry of the AMIRA
+ *                             database, with its type, the database, the
+ *                             publisher and the date the record last changed.
+ *   ['citable' => true,       a citable work, with styles and downloads.
+ *    'citeAs' => 'work', …]
+ *
+ * `citeAs` was added in 0.11.0; a theme that predates it reads `citable` alone
+ * and shows the entry citation under its "This record" heading.
  *
  * The full shape:
  *   [
  *     'citable'      => bool,
- *     'record'       => <CitationRecord::toArray()>,   // citable only
+ *     'citeAs'       => 'work' | 'entry',
+ *     'record'       => <CitationRecord::toArray()>,
  *     'defaultStyle' => 'curated' | 'chicago',
  *     'styles'       => ['curated' => ['label'=>…, 'html'=>…], 'chicago'=>…, 'apa'=>…, 'mla'=>…],
  *     'downloads'    => ['bibtex' => ['url'=>…, 'label'=>…, 'ext'=>…], 'ris'=>…, …],
@@ -81,18 +87,13 @@ class Citation extends AbstractHelper
         if (!$this->enabled) {
             return null;
         }
-        if (!$this->citationData->isCitable(CitationKindMap::templateId($item))) {
-            return self::notCitable();
-        }
+        $isWork = $this->citationData->isCitable(CitationKindMap::templateId($item));
 
         /** @var PhpRenderer $view */
         $view = $this->getView();
-        $url = $this->itemUrl($view, $item);
-
-        $record = $this->citationData->build($item, $url);
-        if ($record === null) {
-            return self::notCitable();
-        }
+        $site = $this->currentSite($view);
+        $url = $this->itemUrl($item, $site);
+        $record = $this->citationData->build($item, $url, $site?->title());
 
         $locale = ViewLocale::forCitation($view);
 
@@ -111,7 +112,7 @@ class Citation extends AbstractHelper
             ];
         }
         if (!$styles) {
-            return self::notCitable();
+            return self::notCitable($isWork);
         }
 
         $downloads = [];
@@ -131,7 +132,8 @@ class Citation extends AbstractHelper
             : (isset($styles[$this->defaultStyle]) ? $this->defaultStyle : (string) array_key_first($styles));
 
         return [
-            'citable'      => true,
+            'citable'      => $isWork,
+            'citeAs'       => $isWork ? 'work' : 'entry',
             // The theme reads the record as an array; toArray() is that
             // published contract, and the only place the array form is built.
             'record'       => $record->toArray(),
@@ -142,15 +144,16 @@ class Citation extends AbstractHelper
     }
 
     /**
-     * A descriptive record: the module has an opinion, and the opinion is that
-     * there is nothing here to cite.
+     * Nothing to offer: no style is configured. The module still has an
+     * opinion on whether the record is a work.
      *
      * @return array<string,mixed>
      */
-    private static function notCitable(): array
+    private static function notCitable(bool $isWork): array
     {
         return [
-            'citable'      => false,
+            'citable'      => $isWork,
+            'citeAs'       => $isWork ? 'work' : 'entry',
             'record'       => null,
             'defaultStyle' => null,
             'styles'       => [],
@@ -174,13 +177,22 @@ class Citation extends AbstractHelper
         return $text !== '' ? $text : null;
     }
 
-    private function itemUrl(PhpRenderer $view, ItemRepresentation $item): ?string
+    private function currentSite(PhpRenderer $view): ?SiteRepresentation
     {
         try {
             $site = $view->currentSite();
-            if (!$site) {
-                return null;
-            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return $site instanceof SiteRepresentation ? $site : null;
+    }
+
+    private function itemUrl(ItemRepresentation $item, ?SiteRepresentation $site): ?string
+    {
+        if ($site === null) {
+            return null;
+        }
+        try {
             $url = (string) $item->siteUrl($site->slug(), true);
         } catch (\Throwable $e) {
             return null;

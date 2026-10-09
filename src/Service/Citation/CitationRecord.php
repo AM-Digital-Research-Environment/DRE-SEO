@@ -8,15 +8,24 @@ use DRESeo\Service\CitationKind;
 /**
  * A normalised, CSL-shaped citation for one DRE item — the single value every
  * citation consumer reads: the formatted Chicago/APA/MLA text, the BibTeX / RIS
- * / CSL-JSON exports, and the theme's "Cite this record" rail.
+ * / CSL-JSON exports, the Highwire meta tags and the theme's "Cite this record"
+ * rail.
+ *
+ * Two shapes share it. A **work** (a publication, a research item, a podcast)
+ * carries its creators, its publication date and its container. An **entry** —
+ * a person, a place, a subject heading, any record whose kind is an authority
+ * record — is cited as a page of the database: its title, the database name
+ * ($archive), the body that publishes the database ($publisher) and the date the
+ * record last changed ($updated), with no creators at all.
  *
  * The field conventions it normalises away are the DRE's own, and they differ
  * from a plain Dublin Core reading:
  *   • the container (journal, proceedings, book) is a linked record in
  *     **dcterms:isPartOf** — the Journal authority items in item set 41268 —
  *     while **dcterms:publisher** is a separate field, not a container;
- *   • a thesis's awarding institution and a report's issuing body are that
- *     same dcterms:publisher, and a thesis's degree is its FaBiO resource class;
+ *   • a report's issuing body is that same dcterms:publisher; a thesis's
+ *     awarding institution is its degree grantor (marcrel:dgg) before its
+ *     publisher, and its degree is its FaBiO resource class;
  *   • dates are NumericDataTypes timestamps (YYYY, YYYY-MM or YYYY-MM-DD);
  *   • the accession id is **dre:id**;
  *   • DOIs live in **bibo:doi**;
@@ -62,7 +71,63 @@ final class CitationRecord
          * when the record does not name one (a habilitation, or any other kind).
          */
         public readonly ?string $degree = null,
+        /** Place of publication (marcrel:pup) — exported, not printed. */
+        public readonly ?string $place = null,
+        /** A podcast's episode number. */
+        public readonly ?string $number = null,
+        /** Where a conference paper was presented, when it has no proceedings. */
+        public readonly ?string $event = null,
+        /** The platform a video is published on ("YouTube"), from its watch URL. */
+        public readonly ?string $platform = null,
+        /**
+         * The form of the work in words: an entry's label ("Person record") or a
+         * research item's resource type ("Moving image"). CSL `genre`.
+         */
+        public readonly ?string $genre = null,
+        /** The database the record is held in — the AMIRA site title. */
+        public readonly ?string $archive = null,
+        /** When the record itself last changed; an entry's only date. */
+        public readonly IssuedDate $updated = new IssuedDate(),
+        /** The role the authors hold when it is not authorship ('host'). */
+        public readonly ?string $authorRole = null,
     ) {
+    }
+
+    /** Whether this is an entry citation (a descriptive record), not a work. */
+    public function isEntry(): bool
+    {
+        return $this->kind->isAuthorityRecord();
+    }
+
+    /**
+     * Normalise a catalogued title for citation: ISBD's spaced colon ("Title :
+     * Subtitle"), which ERef and EPub records carry, becomes the colon every
+     * citation style expects, and runs of whitespace collapse.
+     */
+    public static function tidyTitle(?string $title): ?string
+    {
+        if ($title === null) {
+            return null;
+        }
+        $title = trim(preg_replace('/\s+/u', ' ', $title) ?? $title);
+        $title = preg_replace('/\s+:\s+/u', ': ', $title) ?? $title;
+
+        return $title !== '' ? $title : null;
+    }
+
+    /**
+     * Read a page range written as text — "S. 23-38", "pp. 5–17", "112" — into
+     * a first and last page. Returns [null, null] for anything else.
+     *
+     * @return array{0:?string,1:?string}
+     */
+    public static function splitPages(?string $pages): array
+    {
+        if ($pages === null || !preg_match('/(\d+)(?:\s*[-–—]\s*(\d+))?/u', $pages, $m)) {
+            return [null, null];
+        }
+
+        return [$m[1], ($m[2] ?? '') !== '' ? $m[2] : null];
     }
 
     /**
@@ -134,6 +199,15 @@ final class CitationRecord
             'keywords'  => $this->keywords,
             'accession' => $this->accession,
             'degree'    => $this->degree,
+            'place'     => $this->place,
+            'number'    => $this->number,
+            'event'     => $this->event,
+            'platform'  => $this->platform,
+            'genre'     => $this->genre,
+            'archive'   => $this->archive,
+            'updated'   => $this->updated->toArray(),
+            'authorRole' => $this->authorRole,
+            'isEntry'   => $this->isEntry(),
         ];
     }
 
@@ -178,6 +252,14 @@ final class CitationRecord
             )),
             accession: $string('accession'),
             degree: $string('degree'),
+            place: $string('place'),
+            number: $string('number'),
+            event: $string('event'),
+            platform: $string('platform'),
+            genre: $string('genre'),
+            archive: $string('archive'),
+            updated: IssuedDate::fromArray(is_array($data['updated'] ?? null) ? $data['updated'] : []),
+            authorRole: $string('authorRole'),
         );
     }
 }

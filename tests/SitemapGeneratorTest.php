@@ -23,9 +23,19 @@ final class FakeConnection extends Connection
     /** @var string[] */
     public array $queries = [];
 
+    /** @var array<string,?string> latest modification per child: 'pages', 'item-sets', 'items' */
+    public array $latest = [];
+
     public function fetchOne(string $query, array $params = []): mixed
     {
         $this->queries[] = $query;
+        if (str_contains($query, 'MAX(')) {
+            return match (true) {
+                str_contains($query, 'FROM site_page') => $this->latest['pages'] ?? null,
+                str_contains($query, 'site_item_set') => $this->latest['item-sets'] ?? null,
+                default => $this->latest['items'] ?? null,
+            };
+        }
         return $this->itemCounts[(int) ($params['s'] ?? 0)] ?? 0;
     }
 
@@ -178,4 +188,30 @@ test('sitemap database failures return safe empty data and are logged', function
     assertSameValue(3, count($logger->records['err'] ?? []));
     assertTrue(str_contains($logger->records['err'][0]['message'], 'sitemap generation'));
     assertSameValue(42, $logger->records['err'][0]['extra']['site_id']);
+});
+
+test('sitemap index dates each child by its latest change, never by the rebuild', function (): void {
+    $connection = new FakeConnection();
+    $connection->itemCounts = [1 => 1];
+    $connection->latest = ['pages' => '2026-06-25 08:52:27', 'item-sets' => null, 'items' => '2026-10-07 12:00:00'];
+    $generator = new SitemapGenerator($connection, sitemapConfig(), null, new MemoryLogger());
+
+    $xml = $generator->buildIndex('https://example.test', 1, 0);
+
+    assertTrue(str_contains($xml, 'sitemap-pages.xml</loc><lastmod>2026-06-25T08:52:27+00:00</lastmod>'), 'pages dated by their latest edit');
+    assertTrue(str_contains($xml, 'sitemap-items-1.xml</loc><lastmod>2026-10-07T12:00:00+00:00</lastmod>'), 'items dated by their latest edit');
+    assertTrue(str_contains($xml, 'sitemap-item-sets.xml</loc></sitemap>'), 'no change on record means no lastmod');
+});
+
+test('the shipped sitemap config emits no priority or changefreq hints', function (): void {
+    // Google and Bing both document that they ignore them.
+    $config = require __DIR__ . '/../config/module.config.php';
+    $connection = new FakeConnection();
+    $connection->items[1] = [['id' => 5, 'modified' => '2026-01-01 00:00:00']];
+    $generator = new SitemapGenerator($connection, $config['dre_seo']['sitemap'], null, new MemoryLogger());
+
+    $xml = $generator->buildItems('https://example.test/s/amira', 1, 1, 0);
+
+    assertTrue(!str_contains($xml, '<priority>') && !str_contains($xml, '<changefreq>'));
+    assertTrue(str_contains($xml, '<lastmod>2026-01-01T00:00:00+00:00</lastmod>'));
 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace DRESeo\Service\Controller;
 
 use DRESeo\Controller\SitemapController;
+use DRESeo\Service\DefaultSite;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -14,8 +15,8 @@ final class SitemapControllerFactory implements FactoryInterface
     {
         return new SitemapController(
             $container->get(SitemapGenerator::class),
-            $container->get('Omeka\ApiManager'),
             $container->get('Omeka\Settings'),
+            $container->get(DefaultSite::class),
         );
     }
 }

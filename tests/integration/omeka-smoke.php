@@ -213,6 +213,8 @@ try {
         DRESeo\Service\PageSeoStore::class,
         DRESeo\Service\Pinger::class,
         DRESeo\Service\PingQueue::class,
+        DRESeo\Service\DefaultSite::class,
+        DRESeo\Service\ResourceSummary::class,
     ];
     foreach ($serviceTypes as $type) {
         smokeAssert($services->get($type) instanceof $type, sprintf('Factory failed for %s.', $type));
@@ -342,7 +344,10 @@ try {
     $decodedHeadScript = html_entity_decode($headScript, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     smokeAssert(str_contains($decodedHeadScript, 'application/ld+json'), 'JSON-LD did not use HeadScript.');
     smokeAssert(!str_contains($decodedHeadScript, '//<!--'), 'HeadScript wrapped JSON-LD in a JavaScript comment.');
-    smokeAssert(str_contains($decodedHeadScript, '\\u003C\\/script\\u003E'), 'JSON-LD script-breakout text was not escaped.');
+    // JSON_HEX_TAG escapes the angle brackets, so the value cannot close the
+    // script element; the slash may stay literal (URLs read cleanly).
+    smokeAssert(str_contains($decodedHeadScript, '\\u003C/script\\u003E'), 'JSON-LD script-breakout text was not escaped.');
+    smokeAssert(substr_count($decodedHeadScript, '</script>') === 1, 'JSON-LD content closed its own script element.');
 
     /** @var DRESeo\Service\SitemapGenerator $generator */
     $generator = $services->get(DRESeo\Service\SitemapGenerator::class);

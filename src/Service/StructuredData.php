@@ -3,8 +3,11 @@ declare(strict_types=1);
 
 namespace DRESeo\Service;
 
+use DRESeo\Service\Citation\Creator;
+use DRESeo\Service\Concern\ResourceValueReader;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
+use Omeka\Api\Representation\ItemRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
 
@@ -12,32 +15,55 @@ use Omeka\Api\Representation\ValueRepresentation;
  * Builds schema.org JSON-LD documents for resource and site pages.
  *
  * The resource template id selects the @type (see the 'dre_seo.structured_data'
- * config map). Entity templates (Person / Place / Organization) get an entity
- * shape; everything else gets a scholarly "creative work" shape with authors,
- * dates, subjects, language, coverage and containment. All values are read
- * through the representation API, so labels of linked authority items come for
- * free via displayTitle().
+ * config map). Descriptive records get an entity shape — a Person, Place,
+ * Organization, ResearchProject, DefinedTerm (a subject heading or other
+ * vocabulary term) or Periodical (a journal) — with their authority links as
+ * `sameAs`. Everything else gets a scholarly "creative work" shape: authors in
+ * natural name order, dates, identifiers, subjects, language, coverage,
+ * containment and funding. All values are read through the representation API,
+ * so labels of linked authority items come for free via displayTitle().
+ *
+ * Google renders only a few of these types as rich results (Article, Video,
+ * Dataset in Dataset Search, Breadcrumb); the rest still state what each page
+ * is about for any consumer that reads schema.org.
  */
 class StructuredData
 {
-    private const ENTITY_TYPES = ['Person', 'Place', 'Organization'];
+    use ResourceValueReader;
+
+    /** Types that describe a thing rather than a work: they take no authors, dates or containers. */
+    private const ENTITY_TYPES = [
+        'Person', 'Place', 'Organization', 'ResearchOrganization', 'ResearchProject',
+        'DefinedTerm', 'Periodical',
+    ];
+
+    /** Article types whose container is a periodical. */
+    private const PERIODICAL_PARTS = ['ScholarlyArticle', 'NewsArticle', 'Article', 'BlogPosting'];
 
     /** @param array<int,string> $templateTypes resource template id => schema @type */
     public function __construct(
         private readonly array $templateTypes,
         private readonly string $defaultType = 'CreativeWork',
+        private readonly ?CitationKindMap $kinds = null,
     ) {
     }
 
-    /** @return array<mixed> */
+    /**
+     * @param string|null $image       the resource's own image — never a site-wide
+     *                                 fallback, which would claim the site logo
+     *                                 depicts the person or the book
+     * @param string|null $description the page description, when the caller has
+     *                                 already worked it out
+     * @return array<mixed>
+     */
     public function forResource(
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site,
         ?string $canonical,
-        ?string $image
+        ?string $image,
+        ?string $description = null
     ): array {
-        $templateId = $resource->resourceTemplate() ? $resource->resourceTemplate()->id() : null;
-        $type = $this->templateTypes[$templateId] ?? $this->defaultType;
+        $type = $this->typeFor($resource);
 
         $data = [
             '@context' => 'https://schema.org',
@@ -55,15 +81,18 @@ class StructuredData
                 $data['thumbnailUrl'] = $image;
             }
         }
-        // description is a required field for several rich-result types (notably
-        // Dataset) and is universally useful; fall back to a typed boilerplate —
-        // mirroring the <meta name="description"> fallback — so it is never absent.
-        $data['description'] = $this->firstLiteral($resource, ['dcterms:description', 'dcterms:abstract', 'bibo:abstract'])
-            ?? $this->fallbackDescription($resource);
+        // description is required for Dataset and universally useful; fall back
+        // to a typed sentence — mirroring the <meta name="description"> — so it
+        // is never absent. Dataset Search reads at most 5000 characters.
+        $data['description'] = $this->clip(
+            $description
+                ?? $this->firstString($resource, ['dcterms:description', 'dcterms:abstract', 'bibo:abstract'])
+                ?? $this->fallbackDescription($resource)
+        );
 
-        $sameAs = $this->sameAs($resource);
+        $sameAs = $this->identityUris($resource);
         if ($type === 'VideoObject') {
-            $watchUrl = $this->firstUriOrLiteral($resource, 'fabio:hasURL');
+            $watchUrl = $this->uris($resource, 'fabio:hasURL')[0] ?? null;
             if ($watchUrl !== null) {
                 $sameAs[] = $watchUrl;
                 $sameAs = array_values(array_unique($sameAs));
@@ -79,7 +108,20 @@ class StructuredData
             $this->decorateWork($data, $type, $resource, $site);
         }
 
+        $modified = $this->modifiedAtom($resource);
+        if ($modified !== null) {
+            $data['dateModified'] = $modified;
+        }
+
         return $data;
+    }
+
+    /** The schema.org @type a resource is published as, from its template. */
+    public function typeFor(AbstractResourceEntityRepresentation $resource): string
+    {
+        $templateId = $resource->resourceTemplate() ? $resource->resourceTemplate()->id() : null;
+
+        return $this->templateTypes[$templateId] ?? $this->defaultType;
     }
 
     /** @return array<mixed>|null */
@@ -112,23 +154,42 @@ class StructuredData
         ];
     }
 
-    /** @return array<mixed> */
+    /**
+     * The home page's WebSite node, which Google reads for the site name. The
+     * SearchAction it once carried fed the sitelinks search box, which Google
+     * retired in November 2024, so it is no longer emitted.
+     *
+     * @return array<mixed>
+     */
     public function webSite(PhpRenderer $view, SiteRepresentation $site): array
     {
-        $home = $this->homeUrl($view, $site);
         return [
-            '@context'        => 'https://schema.org',
-            '@type'           => 'WebSite',
-            'name'            => $site->title(),
-            'url'             => $home,
-            'potentialAction' => [
-                '@type'       => 'SearchAction',
-                'target'      => [
-                    '@type'       => 'EntryPoint',
-                    'urlTemplate' => $home . 'dre-search?q={search_term_string}',
-                ],
-                'query-input' => 'required name=search_term_string',
-            ],
+            '@context' => 'https://schema.org',
+            '@type'    => 'WebSite',
+            'name'     => $site->title(),
+            'url'      => $this->homeUrl($view, $site),
+        ];
+    }
+
+    /**
+     * An item set's landing page: a CollectionPage about the set.
+     *
+     * @return array<mixed>
+     */
+    public function collectionPage(
+        PhpRenderer $view,
+        AbstractResourceEntityRepresentation $itemSet,
+        SiteRepresentation $site,
+        string $url,
+        string $description
+    ): array {
+        return [
+            '@context'    => 'https://schema.org',
+            '@type'       => 'CollectionPage',
+            'name'        => (string) $itemSet->displayTitle(),
+            'url'         => $url,
+            'description' => $this->clip($description),
+            'isPartOf'    => ['@type' => 'WebSite', 'name' => $site->title(), 'url' => $this->homeUrl($view, $site)],
         ];
     }
 
@@ -141,18 +202,76 @@ class StructuredData
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site
     ): void {
-        if ($type === 'Person') {
-            $affiliation = $this->firstLink($resource, 'dcterms:isPartOf', $site);
-            if ($affiliation) {
-                $data['affiliation'] = ['@type' => 'Organization', 'name' => $affiliation['name']];
-            }
+        $alternate = $this->firstString($resource, ['dcterms:alternative']);
+
+        switch ($type) {
+            case 'Person':
+                // Records are titled "Surname, Forename"; schema.org's name is
+                // the name as written, with the parts alongside.
+                $creator = Creator::parse((string) $resource->displayTitle(), false);
+                if ($creator->given !== null) {
+                    $data['name'] = $creator->given . ' ' . $creator->family;
+                    $data['givenName'] = $creator->given;
+                    $data['familyName'] = $creator->family;
+                    $data['alternateName'] = $creator->literal;
+                }
+                $affiliation = $this->firstLink($resource, 'dcterms:isPartOf', $site);
+                if ($affiliation) {
+                    $data['affiliation'] = array_filter(['@type' => 'Organization'] + $affiliation);
+                }
+                break;
+
+            case 'Place':
+                $lat = $this->firstString($resource, ['schema:latitude', 'geo:lat']);
+                $lng = $this->firstString($resource, ['schema:longitude', 'geo:long']);
+                if ($lat !== null && $lng !== null && is_numeric($lat) && is_numeric($lng)) {
+                    $data['geo'] = ['@type' => 'GeoCoordinates', 'latitude' => (float) $lat, 'longitude' => (float) $lng];
+                }
+                $within = $this->firstLink($resource, 'dcterms:isPartOf', $site);
+                if ($within) {
+                    $data['containedInPlace'] = array_filter(['@type' => 'Place'] + $within);
+                }
+                break;
+
+            case 'ResearchProject':
+            case 'ResearchOrganization':
+            case 'Organization':
+                $parent = $this->firstLink($resource, 'dcterms:isPartOf', $site);
+                if ($parent) {
+                    $data['parentOrganization'] = array_filter(['@type' => 'Organization'] + $parent);
+                }
+                $funders = $this->links($resource, ['frapo:isFundedBy'], $site, 'Organization');
+                if ($funders) {
+                    $data['funder'] = $funders;
+                }
+                $members = $this->links($resource, ['foaf:member'], $site, 'Person');
+                if ($members) {
+                    $data['member'] = $members;
+                }
+                $identifier = $this->firstString($resource, ['dre:id']);
+                if ($identifier !== null && $type !== 'Organization') {
+                    $data['identifier'] = $identifier;
+                }
+                break;
+
+            case 'DefinedTerm':
+                // Subjects, languages, genres and tags share one template; the
+                // vocabulary each belongs to is its dcterms:type.
+                $scheme = $this->firstLabel($resource, 'dcterms:type');
+                if ($scheme !== null) {
+                    $data['inDefinedTermSet'] = ['@type' => 'DefinedTermSet', 'name' => $scheme];
+                }
+                break;
+
+            case 'Periodical':
+                $issn = $this->firstString($resource, ['bibo:issn', 'bibo:eissn']);
+                if ($issn !== null) {
+                    $data['issn'] = $issn;
+                }
+                break;
         }
-        if ($type === 'Place') {
-            $lat = $this->firstLiteral($resource, ['schema:latitude', 'geo:lat']);
-            $lng = $this->firstLiteral($resource, ['schema:longitude', 'geo:long']);
-            if ($lat !== null && $lng !== null) {
-                $data['geo'] = ['@type' => 'GeoCoordinates', 'latitude' => $lat, 'longitude' => $lng];
-            }
+        if ($alternate !== null && !isset($data['alternateName'])) {
+            $data['alternateName'] = $alternate;
         }
     }
 
@@ -163,9 +282,15 @@ class StructuredData
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site
     ): void {
-        // marcrel:hst / :spk are the podcast host / guest(s); they trail the
+        // marcrel:hst / :spk are the podcast host / guest(s) and a video's
+        // speakers; marcrel:cre is a research item's creator. They trail the
         // scholarly author roles so they only fill in when those are absent.
-        $authors = $this->links($resource, ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:hst', 'marcrel:spk'], $site, 'Person');
+        $authors = $this->links(
+            $resource,
+            ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre', 'marcrel:hst', 'marcrel:spk'],
+            $site,
+            'Person'
+        );
         if ($authors) {
             // Google reads a Dataset's authors from `creator`; every other work
             // type uses `author`.
@@ -174,30 +299,30 @@ class StructuredData
         // marcrel:sde is the podcast sound engineer (a production contributor).
         $contributors = $this->links($resource, ['dcterms:contributor', 'bibo:editorList', 'marcrel:edt', 'marcrel:sde'], $site, 'Person');
         if ($contributors) {
-            $data['contributor'] = $contributors;
+            $data[in_array($type, ['Book', 'Chapter', 'PublicationIssue', 'CreativeWorkSeries'], true) ? 'editor' : 'contributor'] = $contributors;
         }
 
-        $date = $this->firstLiteral($resource, ['dcterms:issued', 'dcterms:date']);
+        $date = $this->firstString($resource, ['dcterms:issued', 'dcterms:date']);
         if ($date !== null) {
             $data[$type === 'VideoObject' ? 'uploadDate' : 'datePublished'] = $date;
         } else {
-            $created = $this->firstLiteral($resource, ['dcterms:created']);
+            $created = $this->firstString($resource, ['dcterms:created']);
             if ($created !== null) {
                 $data['dateCreated'] = $created;
             }
         }
 
-        $language = $this->firstValueLabel($resource, 'dcterms:language');
+        $language = $this->firstLabel($resource, 'dcterms:language');
         if ($language !== null) {
             $data['inLanguage'] = $language;
         }
 
-        $subjects = $this->valueLabels($resource, 'dcterms:subject');
+        $subjects = $this->labels($resource, 'dcterms:subject');
         if ($subjects) {
             $data['keywords'] = implode(', ', $subjects);
         }
 
-        $places = $this->valueLabels($resource, 'dcterms:spatial');
+        $places = $this->labels($resource, 'dcterms:spatial');
         if ($places) {
             $data['spatialCoverage'] = array_map(
                 static fn (string $name) => ['@type' => 'Place', 'name' => $name],
@@ -205,18 +330,42 @@ class StructuredData
             );
         }
 
-        $partOf = $this->firstLink($resource, 'dcterms:isPartOf', $site);
-        if ($partOf) {
-            $data['isPartOf'] = array_filter([
-                '@type' => 'CreativeWork',
-                'name'  => $partOf['name'],
-                'url'   => $partOf['url'],
-            ]);
+        $doi = $this->doi($resource);
+        if ($doi !== null) {
+            $data['identifier'] = 'https://doi.org/' . $doi;
+        }
+        $isbn = $this->isbn($resource);
+        if ($isbn !== null && $type === 'Book') {
+            $data['isbn'] = $isbn;
+        }
+        [$pageFirst, $pageLast] = $this->pageBounds($resource);
+        if (in_array($type, ['ScholarlyArticle', 'NewsArticle', 'Article', 'Chapter'], true)) {
+            if ($pageFirst !== null) {
+                $data['pageStart'] = $pageFirst;
+            }
+            if ($pageLast !== null) {
+                $data['pageEnd'] = $pageLast;
+            }
         }
 
-        $publisher = $this->firstLiteralOrLabel($resource, 'dcterms:publisher');
+        $partOf = $this->firstLink($resource, 'dcterms:isPartOf', $site);
+        if ($partOf) {
+            $this->containment($data, $type, $partOf, $resource, $isbn);
+        }
+
+        $publisher = $this->firstLabel($resource, 'dcterms:publisher');
         if ($publisher !== null) {
             $data['publisher'] = ['@type' => 'Organization', 'name' => $publisher];
+        }
+        if ($type === 'Thesis') {
+            $grantor = $this->firstLabel($resource, 'marcrel:dgg');
+            if ($grantor !== null) {
+                $data['sourceOrganization'] = ['@type' => 'Organization', 'name' => $grantor];
+            }
+        }
+        $funders = $this->links($resource, ['frapo:isFundedBy'], $site, 'Organization');
+        if ($funders) {
+            $data['funder'] = $funders;
         }
 
         // license is a recommended field for Dataset and valid on any creative
@@ -226,74 +375,119 @@ class StructuredData
         if ($license !== null) {
             $data['license'] = $license;
         }
+
+        $duration = $this->firstString($resource, ['dcterms:extent']);
+        if ($duration !== null && preg_match('/\AP(?:\d|T\d)/', $duration)) {
+            $data['duration'] = $duration;
+        }
+
+        if ($type === 'VideoObject') {
+            $embed = $this->youTubeEmbed($resource);
+            if ($embed !== null) {
+                // Google takes embedUrl when the file itself (contentUrl) is
+                // not published, as for a YouTube video.
+                $data['embedUrl'] = $embed;
+            }
+        }
+        if ($type === 'PodcastEpisode') {
+            $episode = $this->firstString($resource, ['bibo:number']);
+            if ($episode !== null) {
+                $data['episodeNumber'] = $episode;
+            }
+        }
+        if ($type === 'Dataset') {
+            $this->datasetDistribution($data, $resource, $site);
+        }
+    }
+
+    /**
+     * The container, typed for what it is: an article's periodical (nested in
+     * its volume and issue when those are known), a chapter's book, a podcast
+     * episode's series; any other work just isPartOf a CreativeWork.
+     *
+     * @param array<mixed> $data
+     * @param array{name:string,url:?string} $partOf
+     */
+    private function containment(
+        array &$data,
+        string $type,
+        array $partOf,
+        AbstractResourceEntityRepresentation $resource,
+        ?string $isbn
+    ): void {
+        $node = static fn (string $nodeType, array $extra = []): array
+            => array_filter(['@type' => $nodeType, 'name' => $partOf['name'], 'url' => $partOf['url']] + $extra);
+
+        if (in_array($type, self::PERIODICAL_PARTS, true)) {
+            $periodical = $node('Periodical', array_filter(['issn' => $this->firstString($resource, ['bibo:issn'])]));
+            $volume = $this->firstString($resource, ['bibo:volume']);
+            $issue = $this->firstString($resource, ['bibo:issue']);
+            if ($volume !== null) {
+                $periodical = ['@type' => 'PublicationVolume', 'volumeNumber' => $volume, 'isPartOf' => $periodical];
+            }
+            if ($issue !== null) {
+                $periodical = ['@type' => 'PublicationIssue', 'issueNumber' => $issue, 'isPartOf' => $periodical];
+            }
+            $data['isPartOf'] = $periodical;
+            return;
+        }
+        match ($type) {
+            'Chapter' => $data['isPartOf'] = $node('Book', array_filter(['isbn' => $isbn])),
+            'PodcastEpisode' => $data['partOfSeries'] = $node('PodcastSeries'),
+            'Book' => $data['isPartOf'] = $node('BookSeries'),
+            default => $data['isPartOf'] = $node('CreativeWork'),
+        };
+    }
+
+    /**
+     * A Dataset's public files as DataDownload distributions, and the AMIRA
+     * site as the catalogue it is listed in.
+     *
+     * @param array<mixed> $data
+     */
+    private function datasetDistribution(
+        array &$data,
+        AbstractResourceEntityRepresentation $resource,
+        SiteRepresentation $site
+    ): void {
+        $data['includedInDataCatalog'] = ['@type' => 'DataCatalog', 'name' => $site->title()];
+        if (!$resource instanceof ItemRepresentation) {
+            return;
+        }
+        $downloads = [];
+        foreach ($resource->media() as $media) {
+            if (method_exists($media, 'isPublic') && !$media->isPublic()) {
+                continue;
+            }
+            $url = method_exists($media, 'originalUrl') ? $media->originalUrl() : null;
+            if (!$url) {
+                continue;
+            }
+            $downloads[] = array_filter([
+                '@type' => 'DataDownload',
+                'contentUrl' => $url,
+                'encodingFormat' => method_exists($media, 'mediaType') ? $media->mediaType() : null,
+            ]);
+        }
+        if ($downloads) {
+            $data['distribution'] = $downloads;
+        }
     }
 
     // ─── Value readers ──────────────────────────────────────────────────────
 
-    /** @param string[] $terms @return string|null */
-    private function firstLiteral(AbstractResourceEntityRepresentation $resource, array $terms): ?string
-    {
-        foreach ($terms as $term) {
-            $value = $resource->value($term);
-            if ($value instanceof ValueRepresentation) {
-                $text = trim(strip_tags((string) $value));
-                if ($text !== '') {
-                    return $text;
-                }
-            }
-        }
-        return null;
-    }
-
-    private function firstValueLabel(AbstractResourceEntityRepresentation $resource, string $term): ?string
-    {
-        $value = $resource->value($term);
-        if (!$value instanceof ValueRepresentation) {
-            return null;
-        }
-        $linked = $value->valueResource();
-        if ($linked) {
-            return (string) $linked->displayTitle();
-        }
-        $text = trim(strip_tags((string) $value));
-        return $text !== '' ? $text : null;
-    }
-
-    private function firstLiteralOrLabel(AbstractResourceEntityRepresentation $resource, string $term): ?string
-    {
-        return $this->firstValueLabel($resource, $term);
-    }
-
-    private function firstUriOrLiteral(
-        AbstractResourceEntityRepresentation $resource,
-        string $term
-    ): ?string {
-        $value = $resource->value($term);
-        if (!$value instanceof ValueRepresentation) {
-            return null;
-        }
-        $uri = trim((string) ($value->uri() ?? ''));
-        if ($uri !== '') {
-            return $uri;
-        }
-        $text = trim(strip_tags((string) $value));
-        return $text !== '' ? $text : null;
-    }
-
     /**
-     * A non-empty description when the resource carries no literal one, so the
-     * field is always present (Google requires it for Dataset, and it is good
-     * practice for every type). Mirrors HeadMetadata's <meta> fallback.
+     * A non-empty description when the resource carries no literal one and the
+     * caller supplied none, so the field is always present.
      */
     private function fallbackDescription(AbstractResourceEntityRepresentation $resource): string
     {
         $title = trim((string) $resource->displayTitle());
         $classLabel = $resource->resourceClass() ? ucfirst((string) $resource->resourceClass()->label()) : null;
-        $atlas = 'in the Africa Multiple Interactive Research Atlas (AMIRA)';
         if ($classLabel && $title !== '') {
-            return sprintf('%s %s: %s.', $classLabel, $atlas, $title);
+            return sprintf('%s: %s.', $classLabel, $title);
         }
-        return sprintf('%s %s.', $title !== '' ? $title : ($classLabel ?? 'Record'), $atlas);
+        return $title !== '' ? $title . '.' : ($classLabel ?? 'Record') . '.';
     }
 
     /**
@@ -328,28 +522,34 @@ class StructuredData
         return null;
     }
 
-    /** @return string[] */
-    private function valueLabels(AbstractResourceEntityRepresentation $resource, string $term): array
+    /** The embed URL of a YouTube video, from its watch URL. */
+    private function youTubeEmbed(AbstractResourceEntityRepresentation $resource): ?string
     {
-        $labels = [];
-        foreach ($resource->value($term, ['all' => true]) as $value) {
-            if (!$value instanceof ValueRepresentation) {
-                continue;
-            }
-            $linked = $value->valueResource();
-            $label = $linked ? (string) $linked->displayTitle() : trim(strip_tags((string) $value));
-            if ($label !== '') {
-                $labels[$label] = $label;
+        foreach ($this->uris($resource, 'fabio:hasURL') as $uri) {
+            if (preg_match('~(?:youtube\.com/(?:watch\?(?:.*&)?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})~', $uri, $m)) {
+                return 'https://www.youtube.com/embed/' . $m[1];
             }
         }
-        return array_values($labels);
+        return null;
+    }
+
+    private function modifiedAtom(AbstractResourceEntityRepresentation $resource): ?string
+    {
+        try {
+            $modified = $resource->modified();
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return $modified instanceof \DateTimeInterface ? $modified->format(DATE_ATOM) : null;
     }
 
     /**
-     * Linked resources for the first of $terms that has values.
+     * Linked resources for the first of $terms that has values. A person is
+     * named in natural order with the parts alongside; a creator linked to an
+     * Organisation record is an Organization, never split.
      *
      * @param string[] $terms
-     * @return array<array{@type:string,name:string,url?:string}>
+     * @return array<array<string,string>>
      */
     private function links(
         AbstractResourceEntityRepresentation $resource,
@@ -364,26 +564,44 @@ class StructuredData
                     continue;
                 }
                 $linked = $value->valueResource();
+                $label = $linked ? trim((string) $linked->displayTitle()) : trim(strip_tags((string) $value));
+                if ($label === '') {
+                    continue;
+                }
+                $isOrganization = $type === 'Organization' || ($this->kinds?->isOrganization($linked) ?? false);
+                $node = $this->agent($label, $isOrganization ? 'Organization' : $type);
                 if ($linked) {
-                    $node = ['@type' => $type, 'name' => (string) $linked->displayTitle()];
                     try {
                         $node['url'] = $linked->siteUrl($site->slug(), true);
                     } catch (\Throwable $e) {
                         // no url
                     }
-                    $out[$node['name']] = $node;
-                } else {
-                    $name = trim(strip_tags((string) $value));
-                    if ($name !== '') {
-                        $out[$name] = ['@type' => $type, 'name' => $name];
-                    }
                 }
+                $out[$label] = $node;
             }
             if ($out) {
                 break; // first populated term wins
             }
         }
         return array_values($out);
+    }
+
+    /** @return array<string,string> */
+    private function agent(string $label, string $type): array
+    {
+        if ($type !== 'Person') {
+            return ['@type' => $type, 'name' => $label];
+        }
+        $creator = Creator::parse($label, false);
+        if ($creator->given === null) {
+            return ['@type' => 'Person', 'name' => $label];
+        }
+        return [
+            '@type'      => 'Person',
+            'name'       => $creator->given . ' ' . $creator->family,
+            'givenName'  => $creator->given,
+            'familyName' => (string) $creator->family,
+        ];
     }
 
     /** @return array{name:string,url:?string}|null */
@@ -408,20 +626,6 @@ class StructuredData
         }
         $name = trim(strip_tags((string) $value));
         return $name !== '' ? ['name' => $name, 'url' => null] : null;
-    }
-
-    /** @return string[] */
-    private function sameAs(AbstractResourceEntityRepresentation $resource): array
-    {
-        $out = [];
-        $handle = $resource->value('dre:rdspaceHandle');
-        if ($handle instanceof ValueRepresentation) {
-            $h = trim((string) $handle);
-            if ($h !== '') {
-                $out[] = str_starts_with($h, 'http') ? $h : 'https://hdl.handle.net/' . ltrim($h, '/');
-            }
-        }
-        return $out;
     }
 
     private function homeUrl(PhpRenderer $view, SiteRepresentation $site): string

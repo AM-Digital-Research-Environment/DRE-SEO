@@ -10,16 +10,17 @@ test('production template mappings include synced YouTube videos', function (): 
     assertSameValue('video', $config['dre_seo']['citation']['template_kinds'][22] ?? null);
 });
 
-test('every citable template has an explicit schema.org type', function (): void {
+test('every template has an explicit schema.org type', function (): void {
     // An unnamed template falls back to default_type CreativeWork, so a
-    // newspaper article or a master's thesis is typed as nothing in particular.
-    // Entity templates are exempt: the Authority Resource and Journal records
-    // have no better type that also takes the creative-work properties.
+    // newspaper article or a master's thesis is typed as nothing in particular
+    // — and a subject heading or a journal is claimed to be a work.
     $config = require __DIR__ . '/../config/module.config.php';
     $types = $config['dre_seo']['structured_data']['template_types'];
     $templates = require __DIR__ . '/amira-templates.php';
 
-    foreach ($templates['publications'] + $templates['works'] as $templateId => $label) {
+    assertSameValue('DefinedTerm', $types[6] ?? null, 'the Authority Resource template holds vocabulary terms');
+    assertSameValue('Periodical', $types[23] ?? null, 'the Journal template holds venues');
+    foreach ($templates['entities'] + $templates['publications'] + $templates['works'] as $templateId => $label) {
         assertTrue(
             isset($types[$templateId]),
             "template {$templateId} ({$label}) has no schema.org type and would be a generic CreativeWork"

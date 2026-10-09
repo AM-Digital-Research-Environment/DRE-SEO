@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace DRESeo\Service;
 
+use DRESeo\Service\Citation\Creator;
+use DRESeo\Service\Concern\ResourceValueReader;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemRepresentation;
+use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\MediaRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
@@ -30,7 +33,22 @@ use Omeka\Settings\Settings;
  */
 class HeadMetadata
 {
+    use ResourceValueReader;
+
     private const DESCRIPTION_MAX = 160;
+
+    /** Open Graph locales for the languages a site is likely to be set to. */
+    private const OG_LOCALES = [
+        'en' => 'en_US', 'fr' => 'fr_FR', 'de' => 'de_DE', 'pt' => 'pt_BR',
+        'es' => 'es_ES', 'sw' => 'sw_KE', 'ar' => 'ar_AR',
+    ];
+
+    /** The serialisations offered at /cite, as the media types Signposting announces. */
+    private const DESCRIBED_BY = [
+        'csljson' => 'application/vnd.citationstyles.csl+json',
+        'bibtex'  => 'application/x-bibtex',
+        'ris'     => 'application/x-research-info-systems',
+    ];
 
     /** @var array<string,bool> Signals already emitted this request. */
     private array $applied = [];
@@ -43,6 +61,8 @@ class HeadMetadata
         private readonly Settings $settings,
         private readonly StructuredData $structuredData,
         private readonly CitationMeta $citationMeta,
+        private readonly CitationKindMap $kinds,
+        private readonly ResourceSummary $summary,
     ) {
     }
 
@@ -53,32 +73,41 @@ class HeadMetadata
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site
     ): void {
-        $title = (string) $resource->displayTitle();
-        $description = $this->resourceDescription($resource);
+        $title = $this->resourceTitle($resource);
+        $fullDescription = $this->summary->describe($resource, $site->title());
+        $description = $this->truncate($fullDescription);
         $canonical = $this->absoluteResourceUrl($resource, $site);
-        $image = $this->resourceImage($view, $resource);
+        $ownImage = $this->resourceImage($view, $resource);
 
         $this->setOpenGraph($view, [
-            'og:type'  => 'article',
+            'og:type'  => $this->ogType($resource),
             'og:title' => $title,
             'og:url'   => $canonical,
         ]);
-        if ($description !== null) {
-            $this->setDescription($view, $description);
-            $this->setOpenGraph($view, ['og:description' => $description]);
-        }
+        $this->setDescription($view, $description);
+        $this->setOpenGraph($view, ['og:description' => $description]);
+        $this->ogTypeDetails($view, $resource);
         if ($canonical !== null) {
             $this->setCanonical($view, $canonical);
         }
+        // A link preview may fall back to the site's share image; the
+        // structured data may not, or it would say the logo depicts the record.
+        $image = $ownImage ?? $this->resolveDefaultImage($view);
         if ($image !== null) {
-            $this->setImage($view, $image);
+            $this->setImage($view, $image, $title);
         }
         $this->markApplied('og:title');
+
+        // A media page shows one file of an item, whose own page is the one to
+        // index; the media page stays crawlable so its links are followed.
+        if ($resource instanceof MediaRepresentation) {
+            $this->setRobots($view, 'noindex, follow');
+        }
 
         if ($this->jsonLdEnabled()) {
             $this->addJsonLd(
                 $view,
-                $this->structuredData->forResource($resource, $site, $canonical, $image)
+                $this->structuredData->forResource($resource, $site, $canonical, $ownImage, $fullDescription)
             );
             $breadcrumb = $this->structuredData->breadcrumb($view, $resource, $site, $canonical);
             if ($breadcrumb !== null) {
@@ -87,10 +116,13 @@ class HeadMetadata
         }
 
         // Highwire Press + Dublin Core <meta> so Zotero / Google Scholar capture
-        // the page as a reference.
-        if ($this->boolSetting('dre_seo_citation_meta', true)) {
-            $templateId = $resource->resourceTemplate() ? $resource->resourceTemplate()->id() : null;
-            $this->citationMeta->apply($view, $resource, $templateId, $canonical);
+        // the page as a reference, and FAIR Signposting links that point
+        // machines at the same record in citation formats.
+        if ($this->citationsEnabled()) {
+            $this->citationMeta->apply($view, $resource, $canonical);
+        }
+        if ($canonical !== null && $resource instanceof ItemRepresentation) {
+            $this->signposting($view, $resource, $canonical);
         }
     }
 
@@ -140,7 +172,7 @@ class HeadMetadata
             $image = $this->assetUrl($view, (int) $overrides['image']);
         }
         if ($image !== null) {
-            $this->setImage($view, $image);
+            $this->setImage($view, $image, $title);
         }
 
         $this->setOpenGraph($view, array_filter([
@@ -162,7 +194,13 @@ class HeadMetadata
 
     // ─── Phase 1: browse / search listing pages ─────────────────────────────
 
-    public function applyBrowse(PhpRenderer $view, SiteRepresentation $site): void
+    /**
+     * A browse listing. An item set's landing page (/item-set/{id}) is a
+     * browse of its items, and is where readers arrive from search, so it is
+     * described by the item set: its title, description and image, and a
+     * CollectionPage in JSON-LD.
+     */
+    public function applyBrowse(PhpRenderer $view, SiteRepresentation $site, ?ItemSetRepresentation $itemSet = null): void
     {
         // Self-referential canonical (full current URL) keeps facet/sort
         // variants from looking like duplicate content while staying safe for
@@ -178,6 +216,26 @@ class HeadMetadata
         if ($hasQuery && $this->boolSetting('dre_seo_noindex_browse')) {
             $this->setRobots($view, 'noindex, follow');
         }
+
+        if ($itemSet === null) {
+            return;
+        }
+        $title = (string) $itemSet->displayTitle();
+        $description = $this->summary->describe($itemSet, $site->title());
+        $this->setDescription($view, $this->truncate($description));
+        $this->setOpenGraph($view, [
+            'og:type'        => 'website',
+            'og:title'       => $title,
+            'og:url'         => $current,
+            'og:description' => $this->truncate($description),
+        ]);
+        $image = $this->resourceImage($view, $itemSet);
+        if ($image !== null) {
+            $this->setImage($view, $image, $title);
+        }
+        if (!$hasQuery && $this->jsonLdEnabled()) {
+            $this->addJsonLd($view, $this->structuredData->collectionPage($view, $itemSet, $site, $current, $description));
+        }
     }
 
     // ─── Phase 2: site-wide constants + gap-fill (view.layout) ──────────────
@@ -190,6 +248,9 @@ class HeadMetadata
         if ($this->boolSetting('dre_seo_noindex_site')) {
             $this->setRobots($view, 'noindex, nofollow', true);
         }
+        // An indexable page lets Google show its image at full width in Search
+        // and Discover, where the default is a small thumbnail.
+        $this->setRobots($view, 'max-image-preview:large');
 
         // Verification tags — site-wide, on every public page.
         $gsc = $this->extractToken($this->stringSetting('dre_seo_gsc_verification'), 'google-site-verification');
@@ -204,7 +265,7 @@ class HeadMetadata
         // Open Graph / Twitter constants.
         if ($site !== null) {
             $headMeta->setProperty('og:site_name', $site->title());
-            $headMeta->setProperty('og:locale', $this->locale($view));
+            $headMeta->setProperty('og:locale', $this->ogLocale($view));
         }
         $headMeta->appendName('twitter:card', 'summary_large_image');
         $twitter = trim($this->stringSetting('dre_seo_twitter_site'));
@@ -222,7 +283,7 @@ class HeadMetadata
         if (!$this->isApplied('image')) {
             $img = $this->resolveDefaultImage($view);
             if ($img !== null) {
-                $this->setImage($view, $img);
+                $this->setImage($view, $img, $site ? $site->title() : null);
             }
         }
         if (!$this->isApplied('canonical')) {
@@ -251,24 +312,28 @@ class HeadMetadata
     {
         $view->headMeta()->setName('description', $description);
         // Twitter reads og:description, but set the explicit one too for clarity.
-        $view->headMeta()->appendName('twitter:description', $description);
+        $view->headMeta()->setName('twitter:description', $description);
         $this->description = $description;
         $this->markApplied('description');
     }
 
     public function setCanonical(PhpRenderer $view, ?string $url): void
     {
-        if ($url === null || $url === '') {
+        if ($url === null || $url === '' || $this->isApplied('canonical')) {
             return;
         }
         $view->headLink(['rel' => 'canonical', 'href' => $url]);
         $this->markApplied('canonical');
     }
 
-    public function setImage(PhpRenderer $view, string $url): void
+    public function setImage(PhpRenderer $view, string $url, ?string $alt = null): void
     {
         $this->setOpenGraph($view, ['og:image' => $url]);
-        $view->headMeta()->appendName('twitter:image', $url);
+        $view->headMeta()->setName('twitter:image', $url);
+        if ($alt !== null && trim($alt) !== '') {
+            $view->headMeta()->setProperty('og:image:alt', $alt);
+            $view->headMeta()->setName('twitter:image:alt', $alt);
+        }
         $this->markApplied('image');
     }
 
@@ -281,7 +346,7 @@ class HeadMetadata
         $this->markApplied('robots');
     }
 
-    /** @param array<string,string> $tags og property => content */
+    /** @param array<string,string|null> $tags og property => content */
     public function setOpenGraph(PhpRenderer $view, array $tags): void
     {
         $headMeta = $view->headMeta();
@@ -292,7 +357,7 @@ class HeadMetadata
             $headMeta->setProperty($property, $content);
             // Twitter falls back to og:* for most fields; mirror title only.
             if ($property === 'og:title') {
-                $headMeta->appendName('twitter:title', $content);
+                $headMeta->setName('twitter:title', $content);
             }
             $this->markApplied($property);
         }
@@ -303,7 +368,7 @@ class HeadMetadata
     {
         $json = json_encode(
             $data,
-            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_PRETTY_PRINT
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_PRETTY_PRINT
         );
         if ($json === false) {
             return;
@@ -319,41 +384,160 @@ class HeadMetadata
 
     // ─── Helpers ────────────────────────────────────────────────────────────
 
-    private function resourceDescription(AbstractResourceEntityRepresentation $resource): ?string
+    /**
+     * The page title. A media record is often titled with its source URL
+     * ("https://epub.uni-bayreuth.de/…/file.pdf"); its item's title says more.
+     */
+    private function resourceTitle(AbstractResourceEntityRepresentation $resource): string
     {
-        foreach (['dcterms:description', 'dcterms:abstract', 'bibo:abstract'] as $term) {
-            $value = $resource->value($term);
-            if ($value !== null) {
-                $text = trim(strip_tags((string) $value));
-                if ($text !== '') {
-                    return $this->truncate($text);
-                }
+        $title = trim((string) $resource->displayTitle());
+        if ($resource instanceof MediaRepresentation
+            && ($title === '' || preg_match('#\Ahttps?://#i', $title))
+        ) {
+            try {
+                return trim((string) $resource->item()->displayTitle()) ?: $title;
+            } catch (\Throwable $e) {
+                return $title;
             }
         }
-        // Fallback: a typed, human-readable boilerplate so the tag is never empty.
-        $type = $resource->resourceClass() ? $resource->resourceClass()->label() : 'Record';
-        return $this->truncate(sprintf(
-            '%s in the Africa Multiple Interactive Research Atlas (AMIRA).',
-            (string) $resource->displayTitle() ?: $type
-        ));
+        return $title;
     }
 
+    /**
+     * Open Graph type: a person's page is a profile, a book a book, a video a
+     * video; any other work is an article, and a descriptive record, an item
+     * set or a media page is a website.
+     */
+    private function ogType(AbstractResourceEntityRepresentation $resource): string
+    {
+        if (!$resource instanceof ItemRepresentation) {
+            return 'website';
+        }
+        return match ($this->kinds->forResource($resource)) {
+            CitationKind::Person => 'profile',
+            CitationKind::Book => 'book',
+            CitationKind::Video => 'video.other',
+            CitationKind::Place, CitationKind::Organization, CitationKind::Project,
+            CitationKind::Section, CitationKind::Authority, CitationKind::Journal => 'website',
+            default => 'article',
+        };
+    }
+
+    /** The properties each Open Graph type defines, where the record has them. */
+    private function ogTypeDetails(PhpRenderer $view, AbstractResourceEntityRepresentation $resource): void
+    {
+        if (!$resource instanceof ItemRepresentation) {
+            return;
+        }
+        $type = $this->ogType($resource);
+        $tags = [];
+        if ($type === 'profile') {
+            $creator = Creator::parse((string) $resource->displayTitle(), false);
+            if ($creator->given !== null) {
+                $tags['profile:first_name'] = $creator->given;
+                $tags['profile:last_name'] = (string) $creator->family;
+            }
+        } elseif ($type === 'book') {
+            $tags['book:isbn'] = $this->isbn($resource);
+        } elseif ($type === 'article') {
+            try {
+                $modified = $resource->modified();
+            } catch (\Throwable $e) {
+                $modified = null;
+            }
+            if ($modified instanceof \DateTimeInterface) {
+                $tags['article:modified_time'] = $modified->format(DATE_ATOM);
+            }
+        }
+        foreach ($tags as $property => $content) {
+            if ($content !== null && $content !== '') {
+                $view->headMeta()->setProperty($property, $content);
+            }
+        }
+    }
+
+    /**
+     * The resource's own image: a thumbnail chosen for it, else the large
+     * derivative of its primary media. Omeka gives a media with no derivative
+     * a generic icon (an audio or a PDF symbol) as its thumbnail URL; that is
+     * no picture of the record, so it is not used. Null when there is none.
+     */
     private function resourceImage(PhpRenderer $view, AbstractResourceEntityRepresentation $resource): ?string
     {
+        try {
+            $asset = $resource->thumbnail();
+            if ($asset) {
+                return $this->absolutize($view, $asset->assetUrl());
+            }
+        } catch (\Throwable $e) {
+            // no chosen thumbnail
+        }
+
         $media = null;
         if ($resource instanceof ItemRepresentation) {
             $media = $resource->primaryMedia();
         } elseif ($resource instanceof MediaRepresentation) {
             $media = $resource;
         }
-        if ($media instanceof MediaRepresentation) {
+        if ($media instanceof MediaRepresentation && $media->hasThumbnails()) {
             $thumb = $media->thumbnailUrl('large');
             if ($thumb) {
                 return $this->absolutize($view, $thumb);
             }
         }
-        // Item sets and media without a thumbnail fall through to the default.
-        return $this->resolveDefaultImage($view);
+        return null;
+    }
+
+    /**
+     * FAIR Signposting (signposting.org/FAIR, level 1) as HTML <link> elements:
+     * the identifier to cite, the machine-readable descriptions of the record,
+     * what kind of thing the page is about, its licence and its public files.
+     * F-UJI and other FAIR assessors read these; search engines ignore them.
+     */
+    private function signposting(PhpRenderer $view, ItemRepresentation $item, string $canonical): void
+    {
+        $doi = $this->doi($item);
+        $links = [['rel' => 'cite-as', 'href' => $doi !== null ? 'https://doi.org/' . $doi : $canonical]];
+
+        if ($this->citationsEnabled()) {
+            foreach (self::DESCRIBED_BY as $format => $mediaType) {
+                $links[] = [
+                    'rel'  => 'describedby',
+                    'href' => $view->serverUrl('/cite/' . $item->id() . '/' . $format),
+                    'type' => $mediaType,
+                ];
+            }
+        }
+        try {
+            $links[] = ['rel' => 'describedby', 'href' => $item->apiUrl(), 'type' => 'application/ld+json'];
+        } catch (\Throwable $e) {
+            // no API URL
+        }
+
+        $links[] = ['rel' => 'type', 'href' => 'https://schema.org/' . $this->structuredData->typeFor($item)];
+        $links[] = ['rel' => 'type', 'href' => 'https://schema.org/AboutPage'];
+
+        $license = $this->uris($item, 'dcterms:license')[0] ?? null;
+        if ($license !== null) {
+            $links[] = ['rel' => 'license', 'href' => $license];
+        }
+
+        $files = 0;
+        foreach ($item->media() as $media) {
+            if ($files >= 10 || (method_exists($media, 'isPublic') && !$media->isPublic())) {
+                continue;
+            }
+            $url = method_exists($media, 'originalUrl') ? $media->originalUrl() : null;
+            $type = method_exists($media, 'mediaType') ? $media->mediaType() : null;
+            if ($url && $type) {
+                $links[] = ['rel' => 'item', 'href' => $url, 'type' => $type];
+                $files++;
+            }
+        }
+
+        foreach ($links as $link) {
+            $view->headLink($link);
+        }
     }
 
     /**
@@ -438,11 +622,19 @@ class HeadMetadata
         return rtrim($cut, " ,.;:") . '…';
     }
 
-    private function locale(PhpRenderer $view): string
+    /**
+     * og:locale is language_TERRITORY ("en_US"). The page language comes from
+     * ViewLocale — `lang` is a view helper, so a method_exists() guard never
+     * finds it, which is how every page used to say "en".
+     */
+    private function ogLocale(PhpRenderer $view): string
     {
-        $lang = method_exists($view, 'lang') ? (string) $view->lang() : 'en';
-        // BCP-47 (en-US) → Open Graph locale (en_US).
-        return str_replace('-', '_', $lang) ?: 'en_US';
+        $lang = str_replace('-', '_', ViewLocale::resolve($view));
+        if (str_contains($lang, '_')) {
+            [$language, $territory] = explode('_', $lang, 2);
+            return strtolower($language) . '_' . strtoupper($territory);
+        }
+        return self::OG_LOCALES[strtolower($lang)] ?? strtolower($lang);
     }
 
     private function jsonLdEnabled(): bool
@@ -450,10 +642,14 @@ class HeadMetadata
         return $this->boolSetting('dre_seo_jsonld_enabled', true);
     }
 
+    private function citationsEnabled(): bool
+    {
+        return $this->boolSetting('dre_seo_citation_meta', true);
+    }
+
     private function boolSetting(string $key, bool $default = false): bool
     {
-        $value = $this->settings->get($key, $default ? '1' : '0');
-        return $value === '1' || $value === 1 || $value === true;
+        return SettingFlag::isOn($this->settings, $key, $default);
     }
 
     private function stringSetting(string $key): string
