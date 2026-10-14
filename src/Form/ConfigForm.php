@@ -108,7 +108,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Emit schema.org JSON-LD', // @translate
-                'info'  => 'Adds structured data (Person, Place, Organization, CreativeWork/Dataset, scholarly types …) to resource pages for richer search results and Google Dataset Search. Recommended.', // @translate
+                'info'  => 'Adds structured data (Person, Place, Organization, CreativeWork/Dataset, scholarly types …) to resource pages for richer search results and Google Dataset Search. With DRE Linked Data installed, each record is identified by its permanent /resource/{id} URI. Recommended. Omeka embeds a second JSON-LD block of its own that contradicts this one; switch it off in the site’s settings (“Disable JSON-LD embed”).', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_jsonld_enabled'],
         ]);

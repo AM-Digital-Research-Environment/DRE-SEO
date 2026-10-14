@@ -26,6 +26,11 @@ use Omeka\Api\Representation\ValueRepresentation;
  * Google renders only a few of these types as rich results (Article, Video,
  * Dataset in Dataset Search, Breadcrumb); the rest still state what each page
  * is about for any consumer that reads schema.org.
+ *
+ * With DRE Linked Data installed, the record and every linked record it names
+ * (authors, containers, affiliations, subjects, places …) carry their permanent
+ * resource URI as `@id`, so a harvester reading the page and a Linked Data
+ * client dereferencing the URI see one identity. `url` stays the record page.
  */
 class StructuredData
 {
@@ -45,6 +50,7 @@ class StructuredData
         private readonly array $templateTypes,
         private readonly string $defaultType = 'CreativeWork',
         private readonly ?CitationKindMap $kinds = null,
+        private readonly ?LinkedDataIdentity $identity = null,
     ) {
     }
 
@@ -65,11 +71,12 @@ class StructuredData
     ): array {
         $type = $this->typeFor($resource);
 
-        $data = [
+        $data = array_filter([
             '@context' => 'https://schema.org',
+            '@id'      => $this->identity?->uri($resource),
             '@type'    => $type,
             'name'     => (string) $resource->displayTitle(),
-        ];
+        ], static fn ($value) => $value !== null);
         if ($canonical) {
             $data['url'] = $canonical;
         }
@@ -321,13 +328,19 @@ class StructuredData
         if ($subjects) {
             $data['keywords'] = implode(', ', $subjects);
         }
+        // keywords is text; the subject headings that are records of their own
+        // are also named as nodes, by their resource URI.
+        $about = array_values(array_filter(
+            $this->nodes($resource, 'dcterms:subject', 'DefinedTerm'),
+            static fn (array $node) => isset($node['@id'])
+        ));
+        if ($about) {
+            $data['about'] = $about;
+        }
 
-        $places = $this->labels($resource, 'dcterms:spatial');
+        $places = $this->nodes($resource, 'dcterms:spatial', 'Place');
         if ($places) {
-            $data['spatialCoverage'] = array_map(
-                static fn (string $name) => ['@type' => 'Place', 'name' => $name],
-                $places
-            );
+            $data['spatialCoverage'] = $places;
         }
 
         $doi = $this->doi($resource);
@@ -406,7 +419,7 @@ class StructuredData
      * episode's series; any other work just isPartOf a CreativeWork.
      *
      * @param array<mixed> $data
-     * @param array{name:string,url:?string} $partOf
+     * @param array{'@id':?string,name:string,url:?string} $partOf
      */
     private function containment(
         array &$data,
@@ -415,8 +428,9 @@ class StructuredData
         AbstractResourceEntityRepresentation $resource,
         ?string $isbn
     ): void {
-        $node = static fn (string $nodeType, array $extra = []): array
-            => array_filter(['@type' => $nodeType, 'name' => $partOf['name'], 'url' => $partOf['url']] + $extra);
+        $node = static fn (string $nodeType, array $extra = []): array => array_filter(
+            ['@type' => $nodeType, '@id' => $partOf['@id'], 'name' => $partOf['name'], 'url' => $partOf['url']] + $extra
+        );
 
         if (in_array($type, self::PERIODICAL_PARTS, true)) {
             $periodical = $node('Periodical', array_filter(['issn' => $this->firstString($resource, ['bibo:issn'])]));
@@ -571,6 +585,7 @@ class StructuredData
                 $isOrganization = $type === 'Organization' || ($this->kinds?->isOrganization($linked) ?? false);
                 $node = $this->agent($label, $isOrganization ? 'Organization' : $type);
                 if ($linked) {
+                    $node = $this->identified($node, $linked);
                     try {
                         $node['url'] = $linked->siteUrl($site->slug(), true);
                     } catch (\Throwable $e) {
@@ -584,6 +599,46 @@ class StructuredData
             }
         }
         return array_values($out);
+    }
+
+    /**
+     * One node per distinct value of $term: a linked record by its title and
+     * resource URI, a literal by its text.
+     *
+     * @return array<int,array<string,string>>
+     */
+    private function nodes(AbstractResourceEntityRepresentation $resource, string $term, string $type): array
+    {
+        $out = [];
+        foreach ($resource->value($term, ['all' => true]) as $value) {
+            if (!$value instanceof ValueRepresentation) {
+                continue;
+            }
+            $linked = $value->valueResource();
+            $label = $linked ? trim((string) $linked->displayTitle()) : trim(strip_tags((string) $value));
+            if ($label === '' || isset($out[$label])) {
+                continue;
+            }
+            $node = ['@type' => $type, 'name' => $label];
+            $out[$label] = $linked ? $this->identified($node, $linked) : $node;
+        }
+        return array_values($out);
+    }
+
+    /**
+     * $node with the linked record's resource URI as its `@id`, right after
+     * its `@type`, when DRE Linked Data publishes one.
+     *
+     * @param array<string,string> $node
+     * @return array<string,string>
+     */
+    private function identified(array $node, AbstractResourceEntityRepresentation $linked): array
+    {
+        $uri = $this->identity?->uri($linked);
+        if ($uri === null) {
+            return $node;
+        }
+        return ['@type' => $node['@type'], '@id' => $uri] + $node;
     }
 
     /** @return array<string,string> */
@@ -604,7 +659,7 @@ class StructuredData
         ];
     }
 
-    /** @return array{name:string,url:?string}|null */
+    /** @return array{'@id':?string,name:string,url:?string}|null */
     private function firstLink(
         AbstractResourceEntityRepresentation $resource,
         string $term,
@@ -622,10 +677,14 @@ class StructuredData
             } catch (\Throwable $e) {
                 // ignore
             }
-            return ['name' => (string) $linked->displayTitle(), 'url' => $url];
+            return [
+                '@id'  => $this->identity?->uri($linked),
+                'name' => (string) $linked->displayTitle(),
+                'url'  => $url,
+            ];
         }
         $name = trim(strip_tags((string) $value));
-        return $name !== '' ? ['name' => $name, 'url' => null] : null;
+        return $name !== '' ? ['@id' => null, 'name' => $name, 'url' => null] : null;
     }
 
     private function homeUrl(PhpRenderer $view, SiteRepresentation $site): string

@@ -43,15 +43,11 @@ class HeadMetadata
         'es' => 'es_ES', 'sw' => 'sw_KE', 'ar' => 'ar_AR',
     ];
 
-    /** The serialisations offered at /cite, as the media types Signposting announces. */
-    private const DESCRIBED_BY = [
-        'csljson' => 'application/vnd.citationstyles.csl+json',
-        'bibtex'  => 'application/x-bibtex',
-        'ris'     => 'application/x-research-info-systems',
-    ];
-
     /** @var array<string,bool> Signals already emitted this request. */
     private array $applied = [];
+
+    /** @var array<int,array{rel:string,href:string,type?:string}> The page's Signposting links. */
+    private array $signposts = [];
 
     private ?string $description = null;
     private ?string $defaultImageUrl = null;
@@ -63,6 +59,7 @@ class HeadMetadata
         private readonly CitationMeta $citationMeta,
         private readonly CitationKindMap $kinds,
         private readonly ResourceSummary $summary,
+        private readonly Signposting $signposting,
     ) {
     }
 
@@ -117,13 +114,32 @@ class HeadMetadata
 
         // Highwire Press + Dublin Core <meta> so Zotero / Google Scholar capture
         // the page as a reference, and FAIR Signposting links that point
-        // machines at the same record in citation formats.
+        // machines at the same record in citation and RDF formats.
         if ($this->citationsEnabled()) {
             $this->citationMeta->apply($view, $resource, $canonical);
         }
         if ($canonical !== null && $resource instanceof ItemRepresentation) {
-            $this->signposting($view, $resource, $canonical);
+            $this->signposts = $this->signposting->links(
+                $resource,
+                $canonical,
+                $view->serverUrl(),
+                $this->citationsEnabled()
+            );
+            foreach ($this->signposts as $link) {
+                $view->headLink($link);
+            }
         }
+    }
+
+    /**
+     * The Signposting links the resource page emitted, for the Module to
+     * repeat as an HTTP `Link` header. Empty on any other page.
+     *
+     * @return array<int,array{rel:string,href:string,type?:string}>
+     */
+    public function signposts(): array
+    {
+        return $this->signposts;
     }
 
     // ─── Phase 1: static site pages ─────────────────────────────────────────
@@ -486,58 +502,6 @@ class HeadMetadata
             }
         }
         return null;
-    }
-
-    /**
-     * FAIR Signposting (signposting.org/FAIR, level 1) as HTML <link> elements:
-     * the identifier to cite, the machine-readable descriptions of the record,
-     * what kind of thing the page is about, its licence and its public files.
-     * F-UJI and other FAIR assessors read these; search engines ignore them.
-     */
-    private function signposting(PhpRenderer $view, ItemRepresentation $item, string $canonical): void
-    {
-        $doi = $this->doi($item);
-        $links = [['rel' => 'cite-as', 'href' => $doi !== null ? 'https://doi.org/' . $doi : $canonical]];
-
-        if ($this->citationsEnabled()) {
-            foreach (self::DESCRIBED_BY as $format => $mediaType) {
-                $links[] = [
-                    'rel'  => 'describedby',
-                    'href' => $view->serverUrl('/cite/' . $item->id() . '/' . $format),
-                    'type' => $mediaType,
-                ];
-            }
-        }
-        try {
-            $links[] = ['rel' => 'describedby', 'href' => $item->apiUrl(), 'type' => 'application/ld+json'];
-        } catch (\Throwable $e) {
-            // no API URL
-        }
-
-        $links[] = ['rel' => 'type', 'href' => 'https://schema.org/' . $this->structuredData->typeFor($item)];
-        $links[] = ['rel' => 'type', 'href' => 'https://schema.org/AboutPage'];
-
-        $license = $this->uris($item, 'dcterms:license')[0] ?? null;
-        if ($license !== null) {
-            $links[] = ['rel' => 'license', 'href' => $license];
-        }
-
-        $files = 0;
-        foreach ($item->media() as $media) {
-            if ($files >= 10 || (method_exists($media, 'isPublic') && !$media->isPublic())) {
-                continue;
-            }
-            $url = method_exists($media, 'originalUrl') ? $media->originalUrl() : null;
-            $type = method_exists($media, 'mediaType') ? $media->mediaType() : null;
-            if ($url && $type) {
-                $links[] = ['rel' => 'item', 'href' => $url, 'type' => $type];
-                $files++;
-            }
-        }
-
-        foreach ($links as $link) {
-            $view->headLink($link);
-        }
     }
 
     /**

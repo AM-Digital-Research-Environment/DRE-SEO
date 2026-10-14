@@ -16,6 +16,7 @@ final class HeadMetadataFactory implements FactoryInterface
             $container->get(CitationMeta::class),
             $container->get(CitationKindMap::class),
             $container->get(ResourceSummary::class),
+            $container->get(Signposting::class),
         );
     }
 }

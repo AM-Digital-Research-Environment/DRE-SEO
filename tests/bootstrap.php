@@ -263,6 +263,11 @@ namespace Omeka\Api\Representation {
             {
                 return $this->publicUrl ?? 'https://example.test/s/' . $siteSlug . '/item/1';
             }
+
+            public function apiUrl(): string
+            {
+                return 'https://example.test/api/items/' . $this->idValue;
+            }
         }
     }
 

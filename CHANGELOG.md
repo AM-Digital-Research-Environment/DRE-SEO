@@ -9,6 +9,29 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-14
+
+### Added
+
+- One identity per record with [DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData)
+  ([#2](https://github.com/AM-Digital-Research-Environment/DRE-SEO/issues/2)). When that
+  module is installed, the schema.org JSON-LD gives the record its permanent
+  `/resource/{id}` URI as `@id`, and `url` stays the record page. Every linked record it
+  names (authors, editors, containers, affiliations, funders, members, places) gets its own
+  resource URI as `@id` too. Subject headings that are records are listed under `about` as
+  `DefinedTerm` nodes; `keywords` is unchanged. The lookup is guarded on the
+  `dreLinkedData` helper, so without the module nothing changes.
+- Signposting `describedby` points at DRE Linked Data's Turtle, N-Triples and JSON-LD
+  documents instead of Omeka's `/api/items/{id}`, when the module is installed. The
+  CSL-JSON, BibTeX and RIS entries stay.
+- The Signposting set (`cite-as`, `describedby`, `type`, `license`, `item`) is also sent as
+  an HTTP `Link` header on item pages (FAIR Signposting level 1). It is sent as a
+  multi-header, so another module's `Link` header is kept.
+- The configuration page warns while Omeka's own JSON-LD embed is on for the site. That
+  block repeats the record under its API URL, with every value (a thesis's full text
+  too), and contradicts the schema.org block. Public pages read the site setting
+  (**Sites → site → Settings → Disable JSON-LD embed**), not the global one.
+
 ## [0.11.0] — 2026-10-09
 
 ### Added
@@ -298,7 +321,8 @@ GitHub release and shipped no installable asset.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.9.0...v0.10.0

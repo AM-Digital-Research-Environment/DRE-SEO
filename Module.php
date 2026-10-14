@@ -27,8 +27,11 @@ use DRESeo\Service\HeadMetadata;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\PingQueue;
+use DRESeo\Service\Signposting;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
+use Laminas\Http\Header\GenericMultiHeader;
+use Laminas\Http\Response as HttpResponse;
 use Laminas\Mvc\Controller\AbstractController;
 use Laminas\Mvc\MvcEvent;
 use Laminas\ServiceManager\ServiceLocatorInterface;
@@ -168,7 +171,9 @@ class Module extends AbstractModule
         if (!$site || !$resource instanceof AbstractResourceEntityRepresentation) {
             return;
         }
-        $this->headMetadata()->applyResource($view, $resource, $site);
+        $headMetadata = $this->headMetadata();
+        $headMetadata->applyResource($view, $resource, $site);
+        $this->addLinkHeader($headMetadata->signposts());
     }
 
     public function handleBrowse(EventInterface $event): void
@@ -284,7 +289,7 @@ class Module extends AbstractModule
         }
         $form->setData($data);
 
-        return $renderer->formCollection($form, false);
+        return $this->omekaJsonLdWarning($renderer) . $renderer->formCollection($form, false);
     }
 
     public function handleConfigForm(AbstractController $controller)
@@ -316,6 +321,67 @@ class Module extends AbstractModule
     private function headMetadata(): HeadMetadata
     {
         return $this->getServiceLocator()->get(HeadMetadata::class);
+    }
+
+    /**
+     * Repeat the page's Signposting links as an HTTP `Link` header (FAIR
+     * Signposting level 1), for harvesters that read headers only. A
+     * multi-header, so another module's `Link` header is joined, not replaced.
+     *
+     * @param array<int,array{rel:string,href:string,type?:string}> $links
+     */
+    private function addLinkHeader(array $links): void
+    {
+        if (!$links) {
+            return;
+        }
+        try {
+            $response = $this->getServiceLocator()->get('Application')->getResponse();
+            if ($response instanceof HttpResponse) {
+                $response->getHeaders()->addHeader(new GenericMultiHeader('Link', Signposting::header($links)));
+            }
+        } catch (\Throwable $e) {
+            // The head <link> elements carry the same set; the header is extra.
+            $this->getServiceLocator()->get('Omeka\Logger')->warn('DRESeo: could not add the Signposting Link header.', [
+                'exception' => $e,
+            ]);
+        }
+    }
+
+    /**
+     * Omeka embeds its own JSON-LD in every public resource page: the API
+     * representation, under another identity, with every value of the record
+     * (a thesis's full text included). It duplicates and contradicts the
+     * schema.org block, and is most of the page weight. Public pages read the
+     * site's setting, not the global one.
+     */
+    private function omekaJsonLdWarning(PhpRenderer $renderer): string
+    {
+        $services = $this->getServiceLocator();
+        if (!Service\SettingFlag::isOn($services->get('Omeka\Settings'), 'dre_seo_jsonld_enabled', true)) {
+            return '';
+        }
+        try {
+            $site = $services->get(DefaultSite::class)->get();
+            if ($site === null) {
+                return '';
+            }
+            $siteSettings = $services->get('Omeka\Settings\Site');
+            $siteSettings->setTargetId($site->id());
+            // The truthiness test Omeka itself applies to this setting.
+            if ($siteSettings->get('disable_jsonld_embed')) {
+                return '';
+            }
+        } catch (\Throwable $e) {
+            return '';
+        }
+
+        $message = sprintf(
+            $renderer->translate('Omeka still embeds its own JSON-LD in every record page of “%s”. It describes the record under a different identity (the API URL), includes every value (a thesis’s full text too), and contradicts the schema.org block this module emits. Turn it off under Sites → %s → Settings → “Disable JSON-LD embed”.'), // @translate
+            $site->title(),
+            $site->title()
+        );
+        return '<ul class="messages"><li class="warning">' . $renderer->escapeHtml($message) . '</li></ul>';
     }
 
     private function view(EventInterface $event): ?PhpRenderer

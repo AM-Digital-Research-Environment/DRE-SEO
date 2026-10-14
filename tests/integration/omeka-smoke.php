@@ -215,6 +215,8 @@ try {
         DRESeo\Service\PingQueue::class,
         DRESeo\Service\DefaultSite::class,
         DRESeo\Service\ResourceSummary::class,
+        DRESeo\Service\Signposting::class,
+        DRESeo\Service\LinkedDataIdentity::class,
     ];
     foreach ($serviceTypes as $type) {
         smokeAssert($services->get($type) instanceof $type, sprintf('Factory failed for %s.', $type));
@@ -371,8 +373,49 @@ try {
         'The dreCitation view helper did not resolve through the module config.'
     );
 
+    // DRE Linked Data is optional: without its helper there is no identity;
+    // with it, the helper is reached through the view helper manager.
+    $item = reflected(Omeka\Api\Representation\ItemRepresentation::class);
+    smokeAssert(
+        $services->get(DRESeo\Service\LinkedDataIdentity::class)->uri($item) === null,
+        'A resource URI was claimed without DRE Linked Data.'
+    );
+    $withLinkedData = new Laminas\ServiceManager\ServiceManager();
+    $withLinkedData->setService('ViewHelperManager', new Laminas\View\HelperPluginManager($withLinkedData, [
+        'factories' => [
+            'dreLinkedData' => static fn () => static fn ($resource): array => [
+                'uri' => 'https://example.test/resource/7',
+                'downloads' => [['label' => 'Turtle', 'type' => 'text/turtle', 'url' => 'https://example.test/resource/7.ttl']],
+            ],
+        ],
+    ]));
+    $identity = (new DRESeo\Service\LinkedDataIdentityFactory())($withLinkedData, DRESeo\Service\LinkedDataIdentity::class);
+    smokeAssert(
+        $identity->uri($item) === 'https://example.test/resource/7' && count($identity->documents($item)) === 1,
+        'The dreLinkedData helper was not reached through the view helper manager.'
+    );
+
+    // The Signposting Link header must pass Laminas' header validation and be
+    // sent as a multi-header, so another module's Link header survives.
+    $linkHeader = new Laminas\Http\Header\GenericMultiHeader('Link', DRESeo\Service\Signposting::header([
+        ['rel' => 'cite-as', 'href' => 'https://example.test/s/amira/item/7'],
+        ['rel' => 'item', 'href' => 'https://example.test/files/original/Ü 1.pdf', 'type' => 'application/pdf'],
+    ]));
+    $response = new Laminas\Http\Response();
+    $response->getHeaders()->addHeader($linkHeader);
+    $sentHeaders = $response->getHeaders()->toString();
+    smokeAssert(
+        str_contains($sentHeaders, 'Link: <https://example.test/s/amira/item/7>; rel="cite-as", '
+            . '<https://example.test/files/original/%C3%9C%201.pdf>; rel="item"; type="application/pdf"'),
+        "The Signposting Link header did not serialise:\n" . $sentHeaders
+    );
+    smokeAssert(
+        $linkHeader instanceof Laminas\Http\Header\MultipleHeaderInterface,
+        'The Link header would replace other Link headers.'
+    );
+
     printf(
-        "PASS  Omeka S %s integration smoke (%d factories, listeners, forms, head helpers, citations, DBAL sitemap)\n",
+        "PASS  Omeka S %s integration smoke (%d factories, listeners, forms, head helpers, citations, DBAL sitemap, Linked Data identity, Link header)\n",
         Omeka\Module::VERSION,
         count($serviceTypes) + 3
     );

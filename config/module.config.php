@@ -29,6 +29,9 @@ return [
             Service\PingQueue::class        => Service\PingQueueFactory::class,
             Service\DefaultSite::class      => Service\DefaultSiteFactory::class,
             Service\ResourceSummary::class  => Service\ResourceSummaryFactory::class,
+            Service\Signposting::class      => Service\SignpostingFactory::class,
+            // The DRE Linked Data module's resource URIs, when it is installed.
+            Service\LinkedDataIdentity::class => Service\LinkedDataIdentityFactory::class,
         ],
         'invokables' => [
             // Stateless serialisers: no config, no dependencies.

@@ -27,9 +27,9 @@ tables, no theme edits.
 |---|---|
 | **Meta tags** | `<title>`, `<meta name="description">`, canonical link on every public page. |
 | **Open Graph / Twitter** | `og:title/description/image/type/url/site_name/locale` + `twitter:card/title/description/image/site` so shared links render a rich preview. |
-| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with authority URIs as `sameAs`; `WebSite` on the home page, `CollectionPage` on item-set pages and `BreadcrumbList` on resource pages. |
+| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with authority URIs as `sameAs`; `WebSite` on the home page, `CollectionPage` on item-set pages and `BreadcrumbList` on resource pages. With [DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData), every record node takes its permanent `/resource/{id}` URI as `@id`. |
 | **Citations** | "Cite this record" on every record page — Chicago, APA, MLA and BibTeX/RIS/CSL-JSON downloads for works, and an entry citation ("Person record. AMIRA. Last modified …") for authority records. |
-| **FAIR Signposting** | `cite-as`, `describedby`, `type`, `license` and `item` links on item pages, for FAIR assessors such as F-UJI. |
+| **FAIR Signposting** | `cite-as`, `describedby`, `type`, `license` and `item` links on item pages, as `<link>` elements and as an HTTP `Link` header, for FAIR assessors such as F-UJI. |
 | **Citation metadata (Zotero)** | Highwire Press `citation_*` + Dublin Core `DC.*` `<meta>` tags so the **Zotero Connector**, Google Scholar, Mendeley and other reference managers capture each item/publication as a properly-typed reference (with authors, date, container, DOI, PDF …). |
 | **og:image** | The first image attached to an item; falls back to a site-wide default share image. |
 | **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, each with its real `<lastmod>`; the index dates each child by its latest change. No `<changefreq>`/`<priority>` by default — Google and Bing ignore them. Cached. |
@@ -82,7 +82,7 @@ install.
 | **Twitter / X @handle** | Emitted as `twitter:site`. |
 | **Discourage indexing (whole site)** | Staging switch: every page becomes `noindex,nofollow` and robots.txt disallows everything. **Off in production.** |
 | **Noindex filtered/paginated browse** | Keeps facet/pagination URLs out of the index while still following links to resources. On by default. |
-| **Emit schema.org JSON-LD** | Toggle structured data. On by default. |
+| **Emit schema.org JSON-LD** | Toggle structured data. On by default. While it is on, the configuration page warns if Omeka's own JSON-LD embed is still enabled for the site (see [One identity per record](#one-identity-per-record)). |
 | **Serve /sitemap.xml & /robots.txt** | Toggle the sitemap/robots endpoints. On by default. |
 | **Sitemap cache lifetime** | Seconds before the cached sitemap is rebuilt. Default 86400 (24h). |
 | **Ping IndexNow when content changes** | Off by default. See the caveat below. |
@@ -123,6 +123,36 @@ The head signals are written into Omeka's request-global head placeholder helper
 * **Every page** (`view.layout`): site-wide constants (`og:site_name`, `og:locale`,
   `twitter:card`, verification tags) and gap-fills for anything not already set. Resource
   values always win because the resource listeners run before the layout listener.
+
+### One identity per record
+
+[DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData) gives
+every public resource a permanent URI, `https://HOST/resource/{id}`, that content-negotiates
+to RDF. When that module is installed, DRE SEO points machines at it, and nowhere else:
+
+* **schema.org JSON-LD.** The record's `@id` is its resource URI; `url` stays the record
+  page. Linked records it names (authors, editors, containers, affiliations, funders,
+  members, places) carry their own resource URIs as `@id`, and subject headings that are
+  records of their own are listed under `about` as `DefinedTerm` nodes. `keywords` keeps
+  every subject as text.
+* **Signposting.** `describedby` points at the module's Turtle, N-Triples and JSON-LD
+  documents instead of Omeka's `/api/items/{id}`. The CSL-JSON, BibTeX and RIS entries stay.
+* **HTTP `Link` header.** The same Signposting set (`cite-as`, `describedby`, `type`,
+  `license`, `item`) is sent as a `Link` header too, per FAIR Signposting level 1, because
+  many harvesters read headers only. It is sent with or without DRE Linked Data.
+
+The lookup goes through the `dreLinkedData` view helper, guarded on its existence, like the
+theme's `dreCitation`. Without DRE Linked Data, or for a record it does not publish, nothing
+changes: no `@id`, and `describedby` keeps the Omeka API URL.
+
+**Turn off Omeka's own JSON-LD embed.** Omeka core prints a second JSON-LD block into every
+public resource page (and one per resource on browse pages). It is the API representation,
+identified by `/api/items/{id}`, with every value of the record, including a thesis's full
+text. It duplicates and contradicts the schema.org block. On a thesis page it is about 95% of
+the HTML. Public pages read the **site** setting: **Admin → Sites → (site) → Settings →
+General → Disable JSON-LD embed**. The global setting of the same name under **Admin →
+Settings** governs the admin pages only. The module's configuration page warns while the
+site setting is off.
 
 ### schema.org `@type` map
 
@@ -284,6 +314,8 @@ DRESeo/
 │   └── Service/
 │       ├── HeadMetadata.php          # computes + injects all <head> SEO
 │       ├── StructuredData.php        # schema.org JSON-LD
+│       ├── Signposting.php           # FAIR Signposting links + Link header
+│       ├── LinkedDataIdentity.php    # resource URIs from DRE Linked Data, when installed
 │       ├── SitemapGenerator.php      # lean queries + XML + cache
 │       ├── PageSeoStore.php          # per-page overrides (site setting)
 │       ├── Pinger.php                # IndexNow submit
@@ -328,7 +360,9 @@ OMEKA_PATH=/path/to/omeka-s composer integration
 2. `curl -s https://HOST/robots.txt` → `Disallow: /admin/` and a `Sitemap:` line.
 3. View-source an item page (`/s/amira/item/100`): confirm `<title>`, `description`, `og:*`,
    `twitter:*`, `<link rel="canonical">` and a `application/ld+json` block. Validate the JSON-LD
-   with the [Rich Results Test](https://search.google.com/test/rich-results).
+   with the [Rich Results Test](https://search.google.com/test/rich-results). With DRE Linked
+   Data installed, its `@id` is `https://HOST/resource/{id}`, and
+   `curl -sI https://HOST/s/amira/item/100` shows the Signposting `Link` header.
 4. Home page: `og:site_name`, a `WebSite` JSON-LD block, and a `<link rel="canonical">`
    pointing at the **bare domain** (`https://host/`); the GSC tag once a token is set.
 5. **Admin → SEO → Static pages**: set a title/description on a page → confirm it appears in
