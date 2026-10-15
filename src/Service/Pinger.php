@@ -22,15 +22,19 @@ class Pinger
     {
     }
 
+    /** The submission could not be sent (no response, or nothing to send). */
+    public const NOT_SENT = 0;
+
     /**
      * @param string[] $urls
-     * @return bool true when the engine accepted the submission
+     * @return int the HTTP status IndexNow answered (200/202 accepted), or
+     *             {@see NOT_SENT}
      */
-    public function submitIndexNow(string $host, string $key, string $keyLocation, array $urls): bool
+    public function submitIndexNow(string $host, string $key, string $keyLocation, array $urls): int
     {
         $urls = array_values(array_unique(array_filter($urls)));
         if (!IndexNowKey::isValid($key) || $urls === []) {
-            return false;
+            return self::NOT_SENT;
         }
         $urls = array_slice($urls, 0, self::MAX_URLS);
 
@@ -41,7 +45,7 @@ class Pinger
             'urlList'     => $urls,
         ]);
         if ($payload === false) {
-            return false;
+            return self::NOT_SENT;
         }
 
         try {
@@ -53,9 +57,24 @@ class Pinger
             $client->setHeaders(['Content-Type' => 'application/json; charset=utf-8']);
             $client->setRawBody($payload);
             $response = $client->send();
-            return $response->getStatusCode() < 400;
+            return (int) $response->getStatusCode();
         } catch (\Throwable $e) {
-            return false;
+            return self::NOT_SENT;
         }
+    }
+
+    public static function accepted(int $status): bool
+    {
+        return $status >= 200 && $status < 300;
+    }
+
+    /**
+     * Whether a failed submission is worth retrying: no answer, a server
+     * error, a timeout or rate limiting. Any other 4xx (400 bad request, 403
+     * key not valid, 422 URLs not of this host) will fail the same way again.
+     */
+    public static function retryable(int $status): bool
+    {
+        return $status === self::NOT_SENT || $status === 408 || $status === 429 || $status >= 500;
     }
 }

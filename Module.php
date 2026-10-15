@@ -152,10 +152,18 @@ class Module extends AbstractModule
         // Every public page — site-wide constants + verification + gap-fill.
         $sharedEventManager->attach('*', 'view.layout', [$this, 'handleLayout']);
 
-        // Auto-ping on public content changes (no-op unless ping is enabled).
-        foreach (['Omeka\Api\Adapter\ItemAdapter', 'Omeka\Api\Adapter\SitePageAdapter'] as $adapter) {
+        // Auto-ping on public content changes (no-op unless ping is enabled):
+        // a public record created, edited, made private or deleted. The
+        // visibility a record had before an update is noted at hydrate.pre.
+        foreach ([
+            'Omeka\Api\Adapter\ItemAdapter',
+            'Omeka\Api\Adapter\ItemSetAdapter',
+            'Omeka\Api\Adapter\SitePageAdapter',
+        ] as $adapter) {
+            $sharedEventManager->attach($adapter, 'api.hydrate.pre', [$this, 'noteVisibility']);
             $sharedEventManager->attach($adapter, 'api.create.post', [$this, 'handleContentChange']);
             $sharedEventManager->attach($adapter, 'api.update.post', [$this, 'handleContentChange']);
+            $sharedEventManager->attach($adapter, 'api.delete.pre', [$this, 'handleContentDelete']);
         }
     }
 
@@ -257,30 +265,109 @@ class Module extends AbstractModule
 
     // ─── API listener: queue IndexNow pings ─────────────────────────────────
 
+    /** @var array<string,bool> whether each record being updated was public before */
+    private array $wasPublic = [];
+
+    /** Note whether a record was public before an update changes it. */
+    public function noteVisibility(EventInterface $event): void
+    {
+        $entity = $event->getParam('entity');
+        $request = $event->getParam('request');
+        if (!is_object($entity) || !method_exists($entity, 'getId') || !method_exists($entity, 'isPublic')
+            || !$request || $request->getOperation() !== 'update'
+        ) {
+            return;
+        }
+        $this->wasPublic[get_class($entity) . ':' . $entity->getId()] = (bool) $entity->isPublic();
+    }
+
+    /**
+     * Queue a created or updated record: when it is public, so engines crawl
+     * the change, and when it has just been made private, so they recrawl
+     * the page and drop it.
+     */
     public function handleContentChange(EventInterface $event): void
     {
-        $services = $this->getServiceLocator();
-        $settings = $services->get('Omeka\Settings');
-
-        if (!Service\SettingFlag::isOn($settings, 'dre_seo_ping_enabled')) {
+        if (!$this->pingEnabled()) {
             return;
         }
-        $indexNowKey = trim((string) $settings->get('dre_seo_indexnow_key', ''));
-        if (!IndexNowKey::isValid($indexNowKey)) {
-            return;
-        }
-
         $response = $event->getParam('response');
-        $resource = $response ? $response->getContent() : null;
-        if (!$resource || (method_exists($resource, 'isPublic') && !$resource->isPublic())) {
+        $entity = $response ? $response->getContent() : null;
+        if (!is_object($entity)) {
             return;
         }
+        $key = method_exists($entity, 'getId') ? get_class($entity) . ':' . $entity->getId() : null;
+        $wasPublic = $key !== null && ($this->wasPublic[$key] ?? false);
+        if ($key !== null) {
+            unset($this->wasPublic[$key]);
+        }
+        $isPublic = !method_exists($entity, 'isPublic') || $entity->isPublic();
+        if (!$isPublic && !$wasPublic) {
+            return;
+        }
+        $this->queuePing($this->representation($event->getTarget(), $entity));
+    }
 
-        $url = $this->resourcePublicUrl($resource);
+    /**
+     * Queue a public record about to be deleted, so engines recrawl its URL
+     * and find it gone. Read before the deletion: after it, Doctrine has
+     * cleared the record's id and its URL can no longer be built.
+     */
+    public function handleContentDelete(EventInterface $event): void
+    {
+        if (!$this->pingEnabled()) {
+            return;
+        }
+        $adapter = $event->getTarget();
+        $request = $event->getParam('request');
+        if (!$request || !is_object($adapter) || !method_exists($adapter, 'findEntity')) {
+            return;
+        }
+        try {
+            $entity = $adapter->findEntity($request->getId(), $request);
+        } catch (\Throwable $e) {
+            return;
+        }
+        if (!is_object($entity) || (method_exists($entity, 'isPublic') && !$entity->isPublic())) {
+            return;
+        }
+        $this->queuePing($this->representation($adapter, $entity));
+    }
+
+    private function pingEnabled(): bool
+    {
+        $settings = $this->getServiceLocator()->get('Omeka\Settings');
+        return Service\SettingFlag::isOn($settings, 'dre_seo_ping_enabled')
+            && IndexNowKey::isValid(trim((string) $settings->get('dre_seo_indexnow_key', '')));
+    }
+
+    /**
+     * The API representation of an entity. The api.*.post events carry the
+     * entity itself — the response is turned into a representation only
+     * after they run — so it is built from the adapter.
+     */
+    private function representation(mixed $adapter, object $entity): ?object
+    {
+        if ($entity instanceof AbstractResourceEntityRepresentation || $entity instanceof SitePageRepresentation) {
+            return $entity;
+        }
+        if (!is_object($adapter) || !method_exists($adapter, 'getRepresentation')) {
+            return null;
+        }
+        try {
+            return $adapter->getRepresentation($entity);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function queuePing(?object $resource): void
+    {
+        $url = $resource ? $this->resourcePublicUrl($resource) : null;
         if ($url === null) {
             return;
         }
-
+        $services = $this->getServiceLocator();
         try {
             $services->get(PingQueue::class)->enqueue($url);
         } catch (\Throwable $e) {
@@ -432,6 +519,11 @@ class Module extends AbstractModule
         }
     }
 
+    /**
+     * The URL a record is pinged at: its canonical page on the default site.
+     * A site page is pinged only when it belongs to the default site, at its
+     * own page URL — the home page included, which is canonical there too.
+     */
     private function resourcePublicUrl(object $resource): ?string
     {
         $site = $this->getServiceLocator()->get(DefaultSite::class)->get();
@@ -439,6 +531,9 @@ class Module extends AbstractModule
             return null;
         }
         try {
+            if ($resource instanceof SitePageRepresentation) {
+                return $resource->site()->id() === $site->id() ? $resource->siteUrl($site->slug(), true) : null;
+            }
             return $resource->siteUrl($site->slug(), true);
         } catch (\Throwable $e) {
             return null;

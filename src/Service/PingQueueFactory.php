@@ -14,6 +14,8 @@ final class PingQueueFactory implements FactoryInterface
             $container->get('Omeka\Settings'),
             $container->get('Omeka\Job\Dispatcher'),
             $container->get('Omeka\Logger'),
+            null,
+            $container->get('Omeka\Connection'),
         );
     }
 }
