@@ -5,6 +5,7 @@ namespace DRESeo\Service\Concern;
 
 use DRESeo\Service\Citation\CitationRecord;
 use DRESeo\Service\Citation\IssuedDate;
+use DRESeo\Service\LanguageCode;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
@@ -255,6 +256,99 @@ trait ResourceValueReader
             if (is_string($iri) && preg_match('~^https://orcid\.org/[0-9X-]{19}$~', $iri)) {
                 return $iri;
             }
+        }
+        return null;
+    }
+
+    /**
+     * The record's languages as BCP 47 tags ("de", "pcm"), in document order:
+     * a linked language record by the ISO 639 code it keeps in
+     * dcterms:alternative, a literal when it is itself a code. A language
+     * known only by its name yields no tag.
+     *
+     * @return string[]
+     */
+    private function languageCodes(AbstractResourceEntityRepresentation $resource): array
+    {
+        $out = [];
+        foreach ($resource->value('dcterms:language', ['all' => true]) as $value) {
+            if (!$value instanceof ValueRepresentation) {
+                continue;
+            }
+            $linked = $value->valueResource();
+            $candidates = $linked
+                ? array_map(
+                    static fn ($alternative): string => trim(strip_tags((string) $alternative)),
+                    $linked->value('dcterms:alternative', ['all' => true])
+                )
+                : [trim(strip_tags((string) $value))];
+            foreach ($candidates as $candidate) {
+                $tag = LanguageCode::toBcp47($candidate);
+                if ($tag !== null) {
+                    $out[$tag] = $tag;
+                    break;
+                }
+            }
+        }
+        return array_values($out);
+    }
+
+    /**
+     * Whether an item is a research item: one of its dcterms:isPartOf values
+     * links to a record of class foaf:Project. The rule DRE-theme's
+     * RecordAccess applies, by resource class rather than template id, so the
+     * theme's access notice and the structured data agree on which records
+     * AMIRA describes but does not hold.
+     */
+    private function isResearchItem(AbstractResourceEntityRepresentation $resource): bool
+    {
+        if (!$resource instanceof ItemRepresentation) {
+            return false;
+        }
+        foreach ($resource->value('dcterms:isPartOf', ['all' => true]) as $value) {
+            $linked = $value instanceof ValueRepresentation ? $value->valueResource() : null;
+            $class = $linked ? $linked->resourceClass() : null;
+            if ($class && $class->term() === 'foaf:Project') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The first of $terms as an ISO 8601 date, as precise as stored
+     * ("2018", "2018-12", "2018-12-07"). The raw stored value is read, so a
+     * NumericDataTypes timestamp keeps its month and day; a value that names
+     * no year yields null rather than free text.
+     *
+     * @param string[] $terms
+     */
+    private function isoDate(AbstractResourceEntityRepresentation $resource, array $terms): ?string
+    {
+        foreach ($terms as $term) {
+            $value = $resource->value($term);
+            if (!$value instanceof ValueRepresentation) {
+                continue;
+            }
+            $raw = trim((string) $value->value());
+            if ($raw === '') {
+                $raw = trim(strip_tags((string) $value));
+            }
+            if ($raw === '') {
+                continue;
+            }
+            $date = IssuedDate::parse($raw);
+            if ($date->year === null) {
+                return null;
+            }
+            $out = sprintf('%04d', $date->year);
+            if ($date->month !== null && $date->month >= 1 && $date->month <= 12) {
+                $out .= sprintf('-%02d', $date->month);
+                if ($date->day !== null && checkdate($date->month, $date->day, $date->year)) {
+                    $out .= sprintf('-%02d', $date->day);
+                }
+            }
+            return $out;
         }
         return null;
     }

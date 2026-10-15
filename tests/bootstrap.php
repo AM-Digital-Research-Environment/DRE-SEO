@@ -513,6 +513,16 @@ namespace Laminas\View\Renderer {
 }
 
 namespace {
+    // The module's own classes, as Omeka's PSR-4 autoloader would find them.
+    spl_autoload_register(static function (string $class): void {
+        if (str_starts_with($class, 'DRESeo\\')) {
+            $file = dirname(__DIR__) . '/src/' . str_replace('\\', '/', substr($class, strlen('DRESeo\\'))) . '.php';
+            if (is_file($file)) {
+                require_once $file;
+            }
+        }
+    });
+
     final class MemoryLogger implements \Laminas\Log\LoggerInterface
     {
         /** @var array<string,array<int,array{message:string,extra:mixed}>> */

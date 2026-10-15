@@ -118,7 +118,8 @@ class CitationMeta
             $add('citation_editor', $editor->literal);
         }
         $add('citation_publication_date', $this->scholarDate($record->issued));
-        $add('citation_language', $record->language);
+        // A BCP 47 tag ("de"), as Scholar expects, never the label ("German").
+        $add('citation_language', $this->languageCodes($item)[0] ?? null);
         $add('citation_doi', $record->doi);
         if ($record->keywords !== []) {
             $add('citation_keywords', implode('; ', $record->keywords));
@@ -220,7 +221,7 @@ class CitationMeta
         // video or a dataset is saved as one. Anything else gives its class.
         $add('DC.type', $workKind?->zoteroType()
             ?? ($resource->resourceClass() ? $resource->resourceClass()->label() : null));
-        $add('DC.language', $this->firstLabel($resource, 'dcterms:language'));
+        $add('DC.language', $this->languageCodes($resource)[0] ?? $this->firstLabel($resource, 'dcterms:language'));
 
         // DC.identifier is the record's persistent identifier: its Linked Data
         // URI, else its page. The DOI is conveyed solely through citation_doi

@@ -188,3 +188,20 @@ test('scholarly kinds need an author, and journal issues and series are no paper
     assertSameValue(['A chapter'], tagValues($tags, 'citation_title'));
     assertSameValue(['Example, Ada'], tagValues($tags, 'citation_author'));
 });
+
+test('the language is a BCP 47 tag for Scholar and Dublin Core', function (): void {
+    $german = new ItemRepresentation('German', 6, null, ['dcterms:alternative' => [new ValueRepresentation('deu')]]);
+    $dholuo = new ItemRepresentation('Dholuo', 6, null, ['dcterms:alternative' => [new ValueRepresentation('dholuo')]]);
+    $book = static fn (ItemRepresentation $language): ItemRepresentation => new ItemRepresentation('A book', 15, 'Book', [
+        'dcterms:title' => [new ValueRepresentation('A book')],
+        'dcterms:creator' => [new ValueRepresentation('Example, Ada')],
+        'dcterms:language' => [new ValueRepresentation('', $language)],
+    ]);
+
+    $tags = citationMetaService()->tags($book($german), null);
+    assertSameValue(['de'], tagValues($tags, 'citation_language'));
+    assertSameValue(['de'], tagValues($tags, 'DC.language'));
+    $tags = citationMetaService()->tags($book($dholuo), null);
+    assertSameValue([], tagValues($tags, 'citation_language'), 'no code, no tag');
+    assertSameValue(['Dholuo'], tagValues($tags, 'DC.language'), 'Dublin Core keeps the name');
+});

@@ -203,8 +203,16 @@ class HeadMetadata
             $this->setRobots($view, (string) $overrides['robots']);
         }
 
-        if ($isHomepage && $this->jsonLdEnabled()) {
+        // An editor can switch a page's JSON-LD off (the per-page override).
+        if ($isHomepage && $this->jsonLdEnabled() && ($overrides['jsonld'] ?? true) !== false) {
             $this->addJsonLd($view, $this->structuredData->webSite($view, $site));
+            // The catalogue as a Dataset, for Google Dataset Search, when DRE
+            // Linked Data describes it.
+            $dataset = $this->identity?->dataset() ?? [];
+            $node = $dataset ? $this->structuredData->dataset($view, $site, $dataset) : null;
+            if ($node !== null) {
+                $this->addJsonLd($view, $node);
+            }
         }
     }
 
@@ -382,9 +390,11 @@ class HeadMetadata
     /** @param array<mixed> $data A JSON-LD document. */
     public function addJsonLd(PhpRenderer $view, array $data): void
     {
+        // Compact: nobody reads the inline block, and on a record with a long
+        // abstract the indentation is a measurable share of the page.
         $json = json_encode(
             $data,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_PRETTY_PRINT
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
         );
         if ($json === false) {
             return;

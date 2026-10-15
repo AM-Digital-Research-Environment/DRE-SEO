@@ -114,6 +114,16 @@ class ConfigForm extends Form
         ]);
 
         $this->add([
+            'name'    => 'dre_seo_access_statement',
+            'type'    => Element\Textarea::class,
+            'options' => [
+                'label' => 'Access statement for research items', // @translate
+                'info'  => 'Closes the schema.org conditionsOfAccess of every research item (an item that is part of a project), after its recorded access rights. Leave blank for the default, translated into the page language: “AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record.”', // @translate
+            ],
+            'attributes' => ['id' => 'dre_seo_access_statement', 'rows' => 3],
+        ]);
+
+        $this->add([
             'name'    => 'dre_seo_citation_meta',
             'type'    => Element\Checkbox::class,
             'options' => [
@@ -176,6 +186,7 @@ class ConfigForm extends Form
             'dre_seo_noindex_site',
             'dre_seo_noindex_browse',
             'dre_seo_jsonld_enabled',
+            'dre_seo_access_statement',
             'dre_seo_citation_meta',
             'dre_seo_sitemap_enabled',
             'dre_seo_sitemap_ttl',

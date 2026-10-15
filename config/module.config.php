@@ -207,6 +207,19 @@ return [
             // MongoDB2OmekaS/config/profiles/amira.json; tests/amira-templates.php
             // fails the suite when a site template is missing here).
             'default_type'   => 'CreativeWork',
+            // The site search, relative to the site root, named as the home
+            // page WebSite's SearchAction. Core's index/search runs the site's
+            // configured search (it redirects to the item browse when the site
+            // searches items only). null: no SearchAction.
+            'search_path'    => 'index/search?fulltext_search={search_term_string}',
+            // dcterms:accessRights label => whether that access is free, for a
+            // research item's isAccessibleForFree. A label not listed (AMIRA's
+            // "No Raw Data") decides nothing, and the property is left out.
+            'access_free'    => [
+                'Public'     => true,
+                'Group'      => false,
+                'Individual' => false,
+            ],
             'template_types' => [
                 2  => 'Organization',     // organisation (foaf:Organization)
                 3  => 'Place',            // location

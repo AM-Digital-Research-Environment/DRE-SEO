@@ -9,7 +9,8 @@ use Omeka\Settings\SiteSettings;
  * Per-site-page SEO overrides — the manual values an editor sets for static
  * pages. Stored as one JSON map under the site setting `dre_seo_pages`
  * ({pageId: {title, description, image, robots, jsonld}}), so there is no
- * custom database table and uninstall is a single delete.
+ * custom database table and uninstall is a single delete. `jsonld` is stored
+ * only as `false`, for a page whose JSON-LD the editor switched off.
  *
  * Reads in the public page listener rely on Omeka having already pointed the
  * SiteSettings service at the current site; the admin controller calls
@@ -73,7 +74,7 @@ class PageSeoStore
         $this->siteSettings->set(self::KEY, $clean);
     }
 
-    /** @return array{title?:string,description?:string,image?:int,robots?:string} */
+    /** @return array{title?:string,description?:string,image?:int,robots?:string,jsonld?:false} */
     private function normalize(array $overrides): array
     {
         $clean = [];
@@ -99,6 +100,12 @@ class PageSeoStore
         $robots = $overrides['robots'] ?? null;
         if (is_string($robots) && in_array($robots, self::ROBOTS_VALUES, true)) {
             $clean['robots'] = $robots;
+        }
+
+        // JSON-LD is on unless switched off; only the exception is stored.
+        $jsonLd = $overrides['jsonld'] ?? null;
+        if ($jsonLd === false || $jsonLd === 0 || $jsonLd === '0' || $jsonLd === 'off') {
+            $clean['jsonld'] = false;
         }
 
         return $clean;

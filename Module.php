@@ -55,6 +55,7 @@ class Module extends AbstractModule
         'dre_seo_noindex_site',
         'dre_seo_noindex_browse',
         'dre_seo_jsonld_enabled',
+        'dre_seo_access_statement',
         'dre_seo_citation_meta',
         'dre_seo_sitemap_enabled',
         'dre_seo_sitemap_ttl',

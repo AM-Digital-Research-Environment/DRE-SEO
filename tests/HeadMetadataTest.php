@@ -56,6 +56,7 @@ function headMetadataService(array $settings = [], ?LinkedDataIdentity $identity
         $kinds,
         new ResourceSummary($kinds),
         new Signposting($structuredData, $identity),
+        $identity,
     );
 }
 
@@ -98,4 +99,37 @@ test('an ordinary page keeps its own title and canonical', function (): void {
     assertSameValue('https://example.test/s/amira/page/team', $view->links('canonical')[0]['href']);
     assertSameValue(['Team'], $view->meta('og:title'));
     assertSameValue([], $view->jsonLd(), 'no WebSite node off the home page');
+});
+
+test('the home page carries the catalogue Dataset when DRE Linked Data describes it', function (): void {
+    $helper = new class {
+        public function __invoke($resource): array
+        {
+            return [];
+        }
+
+        public function dataset(): array
+        {
+            return [
+                'uri' => 'https://example.test/linked-data/void#dataset',
+                'title' => 'AMIRA',
+                'description' => 'Every public record of the Africa Multiple Interactive Research Atlas, as Linked Open Data.',
+            ];
+        }
+    };
+    $site = amiraSite();
+
+    $view = new PhpRenderer();
+    headMetadataService([], new LinkedDataIdentity(static fn () => $helper))->applyPage($view, $site->homepage(), $site, [], true);
+    $types = array_column($view->jsonLd(), '@type');
+    assertSameValue(['WebSite', 'Dataset'], $types);
+    assertTrue(!str_contains($view->head['script'][0], "\n"), 'compact JSON');
+
+    $off = new PhpRenderer();
+    headMetadataService([], new LinkedDataIdentity(static fn () => $helper))->applyPage($off, $site->homepage(), $site, ['jsonld' => false], true);
+    assertSameValue([], $off->jsonLd(), 'the page override switches JSON-LD off');
+
+    $old = new PhpRenderer();
+    headMetadataService([], new LinkedDataIdentity(static fn () => static fn ($r): array => []))->applyPage($old, $site->homepage(), $site, [], true);
+    assertSameValue(['WebSite'], array_column($old->jsonLd(), '@type'), 'DRE Linked Data 0.2.0: no dataset()');
 });
