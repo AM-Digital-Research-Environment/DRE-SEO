@@ -119,16 +119,36 @@ class HeadMetadata
         if ($this->citationsEnabled()) {
             $this->citationMeta->apply($view, $resource, $canonical, $this->identity?->uri($resource) ?? $canonical);
         }
-        if ($canonical !== null && $resource instanceof ItemRepresentation) {
-            $this->signposts = $this->signposting->links(
-                $resource,
-                $canonical,
-                $view->serverUrl(),
-                $this->citationsEnabled()
-            );
-            foreach ($this->signposts as $link) {
-                $view->headLink($link);
+        if ($canonical !== null) {
+            // A file's page points back at the record it belongs to.
+            $collection = null;
+            if ($resource instanceof MediaRepresentation) {
+                try {
+                    $collection = $this->absoluteResourceUrl($resource->item(), $site);
+                } catch (\Throwable $e) {
+                    $collection = null;
+                }
             }
+            $this->signpost($view, $resource, $canonical, $collection);
+        }
+    }
+
+    /** Emit the record's Signposting links, and keep them for the HTTP Link header. */
+    private function signpost(
+        PhpRenderer $view,
+        AbstractResourceEntityRepresentation $resource,
+        string $canonical,
+        ?string $collection = null
+    ): void {
+        $this->signposts = $this->signposting->links(
+            $resource,
+            $canonical,
+            $view->serverUrl(),
+            $this->citationsEnabled(),
+            $collection
+        );
+        foreach ($this->signposts as $link) {
+            $view->headLink($link);
         }
     }
 
@@ -259,6 +279,11 @@ class HeadMetadata
         }
         if (!$hasQuery && $this->jsonLdEnabled()) {
             $this->addJsonLd($view, $this->structuredData->collectionPage($view, $itemSet, $site, $current, $description));
+        }
+        // The landing page is the item set's page: it is signposted like a
+        // record (cite-as, the RDF descriptions), on its clean URL only.
+        if (!$hasQuery) {
+            $this->signpost($view, $itemSet, $current);
         }
     }
 

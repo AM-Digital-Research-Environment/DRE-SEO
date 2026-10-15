@@ -245,3 +245,56 @@ test('dataset() is read from a helper object that has it, and a failure is conta
     assertSameValue(LD_BASE . '/linked-data/void#dataset', (new LinkedDataIdentity(static fn () => $helper))->dataset()['uri']);
     assertSameValue([], (new LinkedDataIdentity(static fn () => $broken))->dataset());
 });
+
+test('Signposting links a work to its authors by ORCID iD, else by resource URI', function (): void {
+    $identity = linkedDataIdentity();
+    $signposting = new Signposting(new StructuredData([15 => 'Book', 4 => 'Person'], 'CreativeWork', null, $identity), $identity);
+    $book = new Item('A book', 15, 'Book', [
+        'bibo:authorList' => [
+            new Value(resource: new Resource('Madore, Frédérick', 4, 'Person', [
+                'dcterms:identifier' => [new Value(uriValue: 'https://orcid.org/0000-0003-0959-2092')],
+            ], idValue: 201)),
+            new Value(resource: new Resource('Example, Ada', 4, 'Person', [], idValue: 202)),
+            new Value('Name, Only'),
+        ],
+    ], idValue: 200);
+
+    $links = $signposting->links($book, 'https://example.test/s/amira/item/200', 'https://example.test', false);
+
+    assertSameValue(
+        ['https://orcid.org/0000-0003-0959-2092', LD_BASE . '/resource/202'],
+        array_column(array_values(array_filter($links, static fn (array $l) => $l['rel'] === 'author')), 'href')
+    );
+});
+
+test('Signposting links a licence only when it resolves to a URL', function (): void {
+    $signposting = new Signposting(new StructuredData([20 => 'Dataset']), new LinkedDataIdentity());
+    $licensed = static fn (Resource $licence): Item => new Item('Data', 20, null, [
+        'dcterms:license' => [new Value(resource: $licence)],
+    ], idValue: 300);
+
+    $cc = $signposting->links($licensed(new Resource('CC-BY-NC-SA-4.0', 6)), 'https://example.test/s/amira/item/300', 'https://example.test', false);
+    $custom = $signposting->links($licensed(new Resource('Custom terms', 6)), 'https://example.test/s/amira/item/300', 'https://example.test', false);
+
+    assertTrue(in_array(['rel' => 'license', 'href' => 'https://creativecommons.org/licenses/by-nc-sa/4.0/'], $cc, true));
+    assertSameValue([], array_values(array_filter($custom, static fn (array $l) => $l['rel'] === 'license')));
+});
+
+test('item-set and media pages are signposted too, and a file points at its record', function (): void {
+    $identity = linkedDataIdentity();
+    $signposting = new Signposting(new StructuredData([]), $identity);
+    $itemSet = new Omeka\Api\Representation\ItemSetRepresentation('Publications', idValue: 29918);
+    $media = new Omeka\Api\Representation\MediaRepresentation('scan.pdf', idValue: 500);
+    $media->originalUrlValue = 'https://example.test/files/original/scan.pdf';
+    $media->mediaTypeValue = 'application/pdf';
+
+    $setLinks = $signposting->links($itemSet, 'https://example.test/s/amira/item-set/29918', 'https://example.test', true);
+    $mediaLinks = $signposting->links($media, 'https://example.test/s/amira/media/500', 'https://example.test', true, 'https://example.test/s/amira/item/41980');
+
+    assertSameValue(['rel' => 'cite-as', 'href' => LD_BASE . '/resource/29918'], $setLinks[0]);
+    assertTrue(in_array(['rel' => 'describedby', 'href' => LD_BASE . '/resource/29918.ttl', 'type' => 'text/turtle'], $setLinks, true));
+    assertTrue(in_array(['rel' => 'type', 'href' => 'https://schema.org/Collection'], $setLinks, true));
+    assertTrue(!str_contains((string) json_encode($setLinks), '/cite/'), 'no citation downloads for a set');
+    assertTrue(in_array(['rel' => 'collection', 'href' => 'https://example.test/s/amira/item/41980'], $mediaLinks, true));
+    assertTrue(in_array(['rel' => 'item', 'href' => 'https://example.test/files/original/scan.pdf', 'type' => 'application/pdf'], $mediaLinks, true));
+});

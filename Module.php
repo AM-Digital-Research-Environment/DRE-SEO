@@ -188,11 +188,13 @@ class Module extends AbstractModule
             // An item set's landing page is a browse of its items; Omeka hands
             // the set to the view, and its metadata describes the page.
             $itemSet = $view->itemSet ?? null;
-            $this->headMetadata()->applyBrowse(
+            $headMetadata = $this->headMetadata();
+            $headMetadata->applyBrowse(
                 $view,
                 $site,
                 $itemSet instanceof ItemSetRepresentation ? $itemSet : null
             );
+            $this->addLinkHeader($headMetadata->signposts());
         }
     }
 

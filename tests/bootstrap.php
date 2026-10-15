@@ -277,6 +277,54 @@ namespace Omeka\Api\Representation {
         }
     }
 
+    if (!class_exists(ItemSetRepresentation::class)) {
+        class ItemSetRepresentation extends AbstractResourceEntityRepresentation
+        {
+        }
+    }
+
+    if (!class_exists(MediaRepresentation::class)) {
+        /** A media record: its file, and the item it belongs to. */
+        class MediaRepresentation extends AbstractResourceEntityRepresentation
+        {
+            public ?ItemRepresentation $parent = null;
+            public ?string $originalUrlValue = null;
+            public ?string $mediaTypeValue = null;
+            public bool $publicValue = true;
+            public ?string $largeThumbnail = null;
+
+            public function item(): ItemRepresentation
+            {
+                return $this->parent ?? new ItemRepresentation('Parent item');
+            }
+
+            public function originalUrl(): ?string
+            {
+                return $this->originalUrlValue;
+            }
+
+            public function mediaType(): ?string
+            {
+                return $this->mediaTypeValue;
+            }
+
+            public function isPublic(): bool
+            {
+                return $this->publicValue;
+            }
+
+            public function hasThumbnails(): bool
+            {
+                return $this->largeThumbnail !== null;
+            }
+
+            public function thumbnailUrl(string $type = 'square'): ?string
+            {
+                return $this->largeThumbnail;
+            }
+        }
+    }
+
     if (!class_exists(SiteRepresentation::class)) {
         class SiteRepresentation
         {
