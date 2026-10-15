@@ -325,6 +325,16 @@ class HeadMetadata
         }
         if (!$hasQuery && $this->jsonLdEnabled()) {
             $this->addJsonLd($view, $this->structuredData->collectionPage($view, $itemSet, $site, $current, $description));
+            // The trail the theme shows above the item set (dreBreadcrumb()),
+            // ending at the item set's own page URL as the helper's does.
+            try {
+                $breadcrumb = $this->structuredData->breadcrumb($view, $itemSet, $site, $itemSet->siteUrl($site->slug(), true));
+            } catch (\Throwable $e) {
+                $breadcrumb = null;
+            }
+            if ($breadcrumb !== null) {
+                $this->addJsonLd($view, $breadcrumb);
+            }
         }
         // The landing page is the item set's page: it is signposted like a
         // record (cite-as, the RDF descriptions), on its clean URL only.

@@ -74,6 +74,8 @@ class StructuredData
         private readonly ?CitationKindMap $kinds = null,
         private readonly ?LinkedDataIdentity $identity = null,
         private readonly array $options = [],
+        private readonly ?LandingPages $landingPages = null,
+        private readonly ?ProjectResolver $projects = null,
     ) {
     }
 
@@ -203,14 +205,22 @@ class StructuredData
      * `BreadcrumbList` states and the theme shows, through `dreBreadcrumb()`, so
      * the two cannot disagree.
      *
-     *     item    Home › its item set › the item
-     *             (a research item's project, "Publications", "Institutions" …)
-     *     media   Home › its item › the media
-     *     other   Home › the record
+     *     research item   Home › Research projects › its project › the item
+     *     other item      Home › its kind's landing page › the item
+     *                     (Research projects, Publications, People …)
+     *                     else Home › its item set › the item
+     *     media           Home › … › its item › the media (the item's trail)
+     *     item set        Home › its landing page › the item set
+     *     other           Home › the record
      *
-     * An item in several item sets is placed in the first one the site uses,
-     * else in its first. Every URL is absolute. Null when the record has no
-     * page in the site.
+     * A research item is one whose `dcterms:isPartOf` links to a public
+     * project ({@see ProjectResolver}); the project is placed as any item is.
+     * An item's landing page is that of the first of its item sets with one
+     * ({@see LandingPages}), the sets the site uses first. Without one, an item
+     * is placed in its item set — the first the site uses, else its first —
+     * or, when that item set's page redirects to its project, under the
+     * project. Every URL is absolute. Null when the record has no page in the
+     * site.
      *
      * @return array<int,array{name:string,url:string}>|null
      */
@@ -223,32 +233,92 @@ class StructuredData
         if (!$canonical) {
             return null;
         }
-        $trail = [['name' => $site->title(), 'url' => $this->homeUrl($view, $site)]];
-        $parent = $this->trailParent($resource, $site);
-        if ($parent !== null) {
-            $trail[] = $parent;
+        $home = $this->homeUrl($view, $site);
+        $trail = [['name' => $site->title(), 'url' => $home]];
+        $seen = [$home => true, $canonical => true];
+        foreach ($this->trailParents($resource, $site, 0) as $crumb) {
+            // A crumb names a page once, and never the record's own page.
+            if (!isset($seen[$crumb['url']])) {
+                $seen[$crumb['url']] = true;
+                $trail[] = $crumb;
+            }
         }
         $trail[] = ['name' => (string) $resource->displayTitle(), 'url' => $canonical];
 
         return $trail;
     }
 
-    /** @return array{name:string,url:string}|null */
-    private function trailParent(AbstractResourceEntityRepresentation $resource, SiteRepresentation $site): ?array
+    /** How deep a record's parents are followed: media › item › project › landing. */
+    private const TRAIL_DEPTH = 3;
+
+    /**
+     * The crumbs between the home page and a record.
+     *
+     * @return array<int,array{name:string,url:string}>
+     */
+    private function trailParents(AbstractResourceEntityRepresentation $resource, SiteRepresentation $site, int $depth): array
     {
+        if ($depth > self::TRAIL_DEPTH) {
+            return [];
+        }
         try {
             if ($resource instanceof MediaRepresentation) {
-                $parent = $resource->item();
-            } elseif ($resource instanceof ItemRepresentation) {
-                $parent = $this->collectionOf($resource, $site);
-            } else {
-                return null;
+                return $this->under($resource->item(), $site, $depth);
             }
-            if ($parent === null) {
-                return null;
+            if ($resource instanceof ItemSetRepresentation) {
+                $landing = $this->landingPages?->forItemSets([$resource], $site);
+                return $landing !== null ? [$landing] : [];
             }
-            $name = trim((string) $parent->displayTitle());
-            $url = (string) $parent->siteUrl($site->slug(), true);
+            if (!$resource instanceof ItemRepresentation) {
+                return [];
+            }
+            $project = $this->projects?->projectOf($resource);
+            if ($project !== null) {
+                return $this->under($project, $site, $depth);
+            }
+            $itemSets = $this->itemSetsInOrder($resource, $site);
+            $landing = $this->landingPages?->forItemSets($itemSets, $site);
+            if ($landing !== null) {
+                return [$landing];
+            }
+            $collection = $itemSets[0] ?? null;
+            if ($collection === null) {
+                return [];
+            }
+            // An item set whose page redirects to its project is named by
+            // the project, so the crumb is not a redirect.
+            $project = $this->projects?->redirectTarget($collection, $site);
+            if ($project !== null && $project->id() !== $resource->id()) {
+                return $this->under($project, $site, $depth);
+            }
+            $crumb = $this->crumb($collection, $site);
+            return $crumb !== null ? [$crumb] : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * The crumbs of a record placed under $parent: the parent's own trail,
+     * then the parent.
+     *
+     * @return array<int,array{name:string,url:string}>
+     */
+    private function under(AbstractResourceEntityRepresentation $parent, SiteRepresentation $site, int $depth): array
+    {
+        $crumb = $this->crumb($parent, $site);
+        if ($crumb === null) {
+            return [];
+        }
+        return [...$this->trailParents($parent, $site, $depth + 1), $crumb];
+    }
+
+    /** @return array{name:string,url:string}|null */
+    private function crumb(AbstractResourceEntityRepresentation $resource, SiteRepresentation $site): ?array
+    {
+        try {
+            $name = trim((string) $resource->displayTitle());
+            $url = (string) $resource->siteUrl($site->slug(), true);
         } catch (\Throwable $e) {
             return null;
         }
@@ -256,23 +326,31 @@ class StructuredData
         return $name !== '' && $url !== '' ? ['name' => $name, 'url' => $url] : null;
     }
 
-    private function collectionOf(ItemRepresentation $item, SiteRepresentation $site): ?ItemSetRepresentation
+    /**
+     * An item's item sets, those the site uses first.
+     *
+     * @return ItemSetRepresentation[]
+     */
+    private function itemSetsInOrder(ItemRepresentation $item, SiteRepresentation $site): array
     {
         $itemSets = array_values($item->itemSets());
         if ($itemSets === []) {
-            return null;
+            return [];
         }
         $inSite = [];
         foreach ($site->siteItemSets() as $siteItemSet) {
             $inSite[$siteItemSet->itemSet()->id()] = true;
         }
+        $used = $unused = [];
         foreach ($itemSets as $itemSet) {
             if (isset($inSite[$itemSet->id()])) {
-                return $itemSet;
+                $used[] = $itemSet;
+            } else {
+                $unused[] = $itemSet;
             }
         }
 
-        return $itemSets[0];
+        return [...$used, ...$unused];
     }
 
     /**

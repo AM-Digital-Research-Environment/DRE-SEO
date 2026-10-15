@@ -6,6 +6,7 @@ namespace DRESeo\Controller\Admin;
 use DRESeo\Form\PageSeoForm;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -26,6 +27,7 @@ class SeoController extends AbstractActionController
         private readonly ApiManager $api,
         private readonly Settings $settings,
         private readonly DefaultSite $defaultSite,
+        private readonly ?ProjectResolver $projects = null,
     ) {
     }
 
@@ -45,7 +47,10 @@ class SeoController extends AbstractActionController
             'indexNowKey'    => trim((string) $this->settings->get('dre_seo_indexnow_key', '')),
             'sitemapUrl'     => $hostUrl ? $hostUrl . '/sitemap.xml' : '',
             'robotsUrl'      => $hostUrl ? $hostUrl . '/robots.txt' : '',
-            'counts'         => $site ? $this->generator->counts($site->id()) : ['items' => 0, 'itemSets' => 0, 'pages' => 0],
+            // The item sets the sitemap lists: less those redirecting to their project.
+            'counts'         => $site
+                ? $this->generator->counts($site->id(), $this->projects?->redirectsEnabled((int) $site->id()) ?? false)
+                : ['items' => 0, 'itemSets' => 0, 'pages' => 0],
             'confirmForm'    => $this->getForm(\Omeka\Form\ConfirmForm::class)
                 ->setAttribute('action', $this->url()->fromRoute('admin/dre-seo/regenerate')),
         ]);

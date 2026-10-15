@@ -10,11 +10,16 @@ use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 
 /**
- * dreBreadcrumb($resource) — the trail the theme shows above a record:
+ * dreBreadcrumb($resource) — the trail the theme shows above a record or an
+ * item set:
  *
  *   [['name' => 'AMIRA', 'url' => 'https://…/s/amira/page/home'],
- *    ['name' => 'Publications', 'url' => 'https://…/s/amira/item-set/29918'],
+ *    ['name' => 'Publications', 'url' => 'https://…/s/amira/page/publications'],
  *    ['name' => 'Das Archiv als Heimat …', 'url' => 'https://…/s/amira/item/41980']]
+ *
+ * A research item is placed under its project, which is placed under its own
+ * landing page (Home › Research projects › project › item); see
+ * StructuredData::trail() for the rules.
  *
  * It is the trail the page's `BreadcrumbList` states (StructuredData::trail()),
  * so the visible breadcrumb and the structured data cannot disagree. The theme

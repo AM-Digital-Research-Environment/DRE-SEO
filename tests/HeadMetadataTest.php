@@ -229,6 +229,24 @@ test('a browse canonical keeps its facets but not its tracking parameters', func
     assertSameValue(['noindex, follow'], $view->meta('robots'));
 });
 
+test('an item set page states its breadcrumb on its clean URL only', function (): void {
+    $itemSet = new Omeka\Api\Representation\ItemSetRepresentation('Publications', publicUrl: 'https://example.test/s/amira/item-set/29918', idValue: 29918);
+
+    $clean = new PhpRenderer('https://example.test/s/amira/item-set/29918');
+    headMetadataService()->applyBrowse($clean, amiraSite(), $itemSet);
+    [$page, $breadcrumb] = $clean->jsonLd();
+    assertSameValue('CollectionPage', $page['@type']);
+    assertSameValue('BreadcrumbList', $breadcrumb['@type']);
+    assertSameValue(
+        ['https://example.test/s/amira/page/home', 'https://example.test/s/amira/item-set/29918'],
+        array_column($breadcrumb['itemListElement'], 'item')
+    );
+
+    $paged = new PhpRenderer('https://example.test/s/amira/item-set/29918?page=2');
+    headMetadataService()->applyBrowse($paged, amiraSite(), $itemSet);
+    assertSameValue([], $paged->jsonLd());
+});
+
 test('search pages are recognised by their route', function (): void {
     assertTrue(DRESeo\Service\SearchPage::matches('site/resource', 'Omeka\Controller\Site\Index', 'search'));
     assertTrue(DRESeo\Service\SearchPage::matches('site/resource', 'Omeka\Controller\Site\Item', 'search'));

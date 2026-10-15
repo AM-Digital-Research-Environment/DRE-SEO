@@ -9,6 +9,40 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+The research project's item becomes its one public page: its item set redirects there, and
+every record is placed in the site through the landing page of its kind.
+
+### Added
+
+- A research project's item-set page (`/s/{site}/item-set/{id}`) answers a permanent
+  redirect (301) to the project item in the same site, so search engines and readers land on
+  one page per project. An item set stands for a project when its own `dcterms:isPartOf`
+  links to a public `foaf:Project` item — the link the sync now writes — or, until then, when
+  a public `foaf:Project` item has the same `dre:id`. GET and HEAD requests on that route
+  only: `/item?item_set_id=…`, the admin and the API are untouched, and an item set with no
+  public project keeps its page. The redirect is issued before the theme renders. Site
+  setting **Redirect a project's item set page to the project** (Sites → *site* → Settings →
+  SEO), on by default.
+- Site setting **Breadcrumb landing pages**: the page that presents each item set's records,
+  one `item set id = page slug` per line over the shipped defaults (AMIRA's: Projects →
+  *Research projects*, Research Sections → *Research sections*, Persons → *People*,
+  Institutions → *Organisations*, Publications, Podcasts, YouTube videos, Subjects →
+  *Subjects & tags*, Locations, Languages, Genres; Journals and Series have none). A page
+  that does not exist or is private is skipped.
+- Item-set pages state their `BreadcrumbList` too, the trail `dreBreadcrumb()` now returns for
+  an item set, so DRE-theme can show it there.
+
+### Changed
+
+- The breadcrumb (visible and `BreadcrumbList`) places a research item under its project and
+  the project under its landing page: *Home › Research projects › project › record*. Other
+  records go under the landing page of their item set (*Home › Publications › record*,
+  *Home › People › person*), and fall back to the item set as before when there is none. A
+  media's trail is its item's, then the item; an item set's is *Home › landing page › item
+  set*. An item set whose page redirects is named by its project, so no crumb is a redirect.
+- The item-set sitemap leaves out the item sets that redirect to their project (in the same
+  single query), and the admin dashboard counts the item sets it lists.
+
 ## [0.14.0] — 2026-10-15
 
 ### Added

@@ -174,6 +174,21 @@ try {
         'INSERT INTO site_item_set VALUES (3, 1)',
         "INSERT INTO site_page VALUES (10, 1, 'home', 1, '2026-01-03 00:00:00')",
         "INSERT INTO site_page VALUES (11, 1, 'private', 0, NULL)",
+        // Research projects: item set 20 links to project 30 (dcterms:isPartOf),
+        // item set 21 shares project 31's dre:id, item set 22 links to the
+        // private project 32 and stays a page of its own.
+        'ALTER TABLE resource ADD COLUMN resource_class_id INTEGER',
+        'CREATE TABLE vocabulary (id INTEGER PRIMARY KEY, prefix VARCHAR(255))',
+        'CREATE TABLE property (id INTEGER PRIMARY KEY, vocabulary_id INTEGER, local_name VARCHAR(255))',
+        'CREATE TABLE resource_class (id INTEGER PRIMARY KEY, vocabulary_id INTEGER, local_name VARCHAR(255))',
+        'CREATE TABLE value (id INTEGER PRIMARY KEY, resource_id INTEGER, property_id INTEGER, value_resource_id INTEGER, value TEXT, is_public INTEGER)',
+        "INSERT INTO vocabulary VALUES (1, 'dcterms'), (2, 'foaf'), (3, 'dre')",
+        "INSERT INTO property VALUES (10, 1, 'isPartOf'), (11, 3, 'id')",
+        "INSERT INTO resource_class VALUES (5, 2, 'Project')",
+        "INSERT INTO resource (id, resource_type, is_public, modified) VALUES (20, 'Omeka\\Entity\\ItemSet', 1, NULL), (21, 'Omeka\\Entity\\ItemSet', 1, NULL), (22, 'Omeka\\Entity\\ItemSet', 1, NULL)",
+        "INSERT INTO resource (id, resource_type, is_public, modified, resource_class_id) VALUES (30, 'Omeka\\Entity\\Item', 1, NULL, 5), (31, 'Omeka\\Entity\\Item', 1, NULL, 5), (32, 'Omeka\\Entity\\Item', 0, NULL, 5)",
+        'INSERT INTO site_item_set VALUES (20, 1), (21, 1), (22, 1)',
+        "INSERT INTO value VALUES (1, 20, 10, 30, NULL, 1), (2, 21, 11, NULL, 'P-1', 1), (3, 31, 11, NULL, 'P-1', 1), (4, 22, 10, 32, NULL, 1)",
     ] as $sql) {
         $connection->exec($sql);
     }
@@ -218,6 +233,8 @@ try {
         DRESeo\Service\Signposting::class,
         DRESeo\Service\LinkedDataIdentity::class,
         DRESeo\Service\ImageDimensions::class,
+        DRESeo\Service\LandingPages::class,
+        DRESeo\Service\ProjectResolver::class,
     ];
     foreach ($serviceTypes as $type) {
         smokeAssert($services->get($type) instanceof $type, sprintf('Factory failed for %s.', $type));
@@ -295,6 +312,134 @@ try {
             sprintf('IndexNow delete listener was not attached to %s.', $adapterClass)
         );
     }
+
+    // Site settings: the module's fields join core's site settings form, the
+    // redirect is on until switched off, and a malformed line is refused.
+    $siteSettingsForm = new Omeka\Form\SiteSettingsForm();
+    $formEvents = new Laminas\EventManager\EventManager($sharedEvents, [Omeka\Form\SiteSettingsForm::class]);
+    $formEvents->triggerEvent(new Laminas\EventManager\Event('form.add_elements', $siteSettingsForm));
+    smokeAssert(
+        $siteSettingsForm->has('dre_seo_landing_pages') && $siteSettingsForm->has('dre_seo_project_redirect'),
+        'The site settings fields were not added.'
+    );
+    smokeAssert($siteSettingsForm->get('dre_seo_project_redirect')->isChecked(), 'The project redirect must default to on.');
+    smokeAssert(
+        str_contains((string) $siteSettingsForm->get('dre_seo_landing_pages')->getAttribute('placeholder'), '29918 = publications'),
+        'The landing pages placeholder does not show the defaults.'
+    );
+    $formEvents->triggerEvent(new Laminas\EventManager\Event(
+        'form.add_input_filters',
+        $siteSettingsForm,
+        ['inputFilter' => $siteSettingsForm->getInputFilter()]
+    ));
+    $siteSettingsForm->setData(['dre_seo_project_redirect' => '0', 'dre_seo_landing_pages' => "20 = research-projects\nnot a line"]);
+    smokeAssert(!$siteSettingsForm->isValid(), 'A malformed landing-page line was accepted.');
+    $siteSettingsForm->setData(['dre_seo_project_redirect' => '0', 'dre_seo_landing_pages' => "20 = research\n29918 =\n"]);
+    smokeAssert($siteSettingsForm->isValid(), 'Valid site settings were refused: ' . json_encode($siteSettingsForm->getMessages()));
+
+    // The project item-set redirect, through a real MvcEvent: a project's
+    // item-set page answers 301 with the project's page; nothing else does.
+    $smokeProject = new class extends Omeka\Api\Representation\ItemRepresentation {
+        public function __construct()
+        {
+        }
+
+        public function id()
+        {
+            return 30;
+        }
+
+        public function isPublic()
+        {
+            return true;
+        }
+
+        public function resourceClass()
+        {
+            return new class {
+                public function term(): string
+                {
+                    return 'foaf:Project';
+                }
+            };
+        }
+
+        public function siteUrl($siteSlug = null, $canonical = false)
+        {
+            return 'https://example.test/s/' . $siteSlug . '/item/30';
+        }
+    };
+    $smokeLink = new class ($smokeProject) extends Omeka\Api\Representation\ValueRepresentation {
+        public function __construct(private readonly object $target)
+        {
+        }
+
+        public function valueResource()
+        {
+            return $this->target;
+        }
+    };
+    $smokeSet = static fn (int $id, array $partOf): object => new class ($id, $partOf) extends Omeka\Api\Representation\ItemSetRepresentation {
+        public function __construct(private readonly int $setId, private readonly array $partOf)
+        {
+        }
+
+        public function id()
+        {
+            return $this->setId;
+        }
+
+        public function value($term, array $options = [])
+        {
+            $values = $term === 'dcterms:isPartOf' ? $this->partOf : [];
+            return empty($options['all']) ? ($values[0] ?? null) : $values;
+        }
+    };
+    $smokeApi = new class ([20 => $smokeSet(20, [$smokeLink]), 3 => $smokeSet(3, [])]) extends Omeka\Api\Manager {
+        public function __construct(private readonly array $itemSets)
+        {
+        }
+
+        public function read($resource, $id, array $data = [], array $options = [])
+        {
+            if ($resource !== 'item_sets' || !isset($this->itemSets[$id])) {
+                throw new Omeka\Api\Exception\NotFoundException('Not found');
+            }
+            return new Omeka\Api\Response($this->itemSets[$id]);
+        }
+    };
+    $redirectServices = new Laminas\ServiceManager\ServiceManager($config['service_manager']);
+    $redirectServices->setService('Config', $config);
+    $redirectServices->setService('Omeka\\ApiManager', $smokeApi);
+    $redirectServices->setService('Omeka\\Settings\\Site', $siteSettings);
+    $redirect = static function (string $method, string $route, int $itemSetId) use ($module, $redirectServices): ?Laminas\Http\Response {
+        $request = new Laminas\Http\Request();
+        $request->setMethod($method);
+        $response = new Laminas\Http\Response();
+        $routeMatch = new Laminas\Router\Http\RouteMatch(['item-set-id' => (string) $itemSetId]);
+        $routeMatch->setMatchedRouteName($route);
+        $event = new Laminas\Mvc\MvcEvent();
+        $event->setApplication(new Laminas\Mvc\Application($redirectServices, new Laminas\EventManager\EventManager(), $request, $response));
+        $event->setRequest($request);
+        $event->setResponse($response);
+        $event->setRouteMatch($routeMatch);
+        $event->setViewModel(new Laminas\View\Model\ViewModel(['site' => new SmokeSiteRepresentation()]));
+        return $module->redirectProjectItemSet($event);
+    };
+    $moved = $redirect('GET', 'site/item-set', 20);
+    smokeAssert(
+        $moved !== null && $moved->getStatusCode() === 301
+            && $moved->getHeaders()->get('Location')->getFieldValue() === 'https://example.test/s/amira/item/30',
+        'A project item-set page did not redirect to the project.'
+    );
+    smokeAssert($redirect('HEAD', 'site/item-set', 20)?->getStatusCode() === 301, 'A HEAD request was not redirected.');
+    smokeAssert($redirect('POST', 'site/item-set', 20) === null, 'A POST was redirected.');
+    smokeAssert($redirect('GET', 'site/resource', 20) === null, 'Another route was redirected.');
+    smokeAssert($redirect('GET', 'site/item-set', 3) === null, 'An item set with no project was redirected.');
+    smokeAssert($redirect('GET', 'site/item-set', 404) === null, 'An unreadable item set was redirected.');
+    $siteSettings->set('dre_seo_project_redirect', '0', 1);
+    smokeAssert($redirect('GET', 'site/item-set', 20) === null, 'The redirect ignored the site setting.');
+    $siteSettings->delete('dre_seo_project_redirect', 1);
 
     // IndexNow: the api.*.post events carry the entity, not its
     // representation; a public record, one just made private and one about to
@@ -438,8 +583,21 @@ try {
     /** @var DRESeo\Service\SitemapGenerator $generator */
     $generator = $services->get(DRESeo\Service\SitemapGenerator::class);
     smokeAssert(
-        $generator->counts(1) === ['items' => 2, 'itemSets' => 1, 'pages' => 1],
+        $generator->counts(1) === ['items' => 2, 'itemSets' => 4, 'pages' => 1],
         'Sitemap factory did not query the real DBAL connection correctly.'
+    );
+    // The project item sets redirect, so the sitemap leaves them out, in SQL.
+    $itemSetsXml = $generator->buildItemSets('https://example.test/s/amira', 1, 0, true);
+    smokeAssert(
+        str_contains($itemSetsXml, '/item-set/3<') && str_contains($itemSetsXml, '/item-set/22<')
+            && !str_contains($itemSetsXml, '/item-set/20<') && !str_contains($itemSetsXml, '/item-set/21<'),
+        "The item-set sitemap did not leave out the project item sets:\n" . $itemSetsXml
+    );
+    smokeAssert($generator->counts(1, true)['itemSets'] === 2, 'The project item sets were counted.');
+    $generator->buildIndex('https://example.test', 1, 0, true);
+    smokeAssert(
+        array_filter($logWriter->events, static fn (array $e): bool => str_contains((string) $e['message'], 'sitemap')) === [],
+        'A sitemap query failed: ' . json_encode(array_column($logWriter->events, 'message'))
     );
     $indexXml = $generator->buildIndex('https://example.test', 1, 60);
     $itemsXml = $generator->buildItems('https://example.test/s/amira', 1, 1, 60);
@@ -503,7 +661,7 @@ try {
     );
 
     printf(
-        "PASS  Omeka S %s integration smoke (%d factories, listeners, forms, head helpers, citations, DBAL sitemap, Linked Data identity, Link header)\n",
+        "PASS  Omeka S %s integration smoke (%d factories, listeners, forms, site settings, project redirect, head helpers, citations, DBAL sitemap, Linked Data identity, Link header)\n",
         Omeka\Module::VERSION,
         count($serviceTypes) + 3
     );

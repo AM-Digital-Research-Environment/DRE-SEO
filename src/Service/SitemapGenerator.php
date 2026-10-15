@@ -24,6 +24,40 @@ class SitemapGenerator
     private const MAX_URLS_PER_FILE = 50000;
 
     /**
+     * Keeps an item set (`r`) only when it stands for no public research
+     * project: none of its public `dcterms:isPartOf` values links to a public
+     * `foaf:Project` item, and no public `foaf:Project` item carries its
+     * `dre:id` — the rule {@see ProjectResolver::projectOfItemSet()} applies,
+     * as two correlated subqueries of the one query. Binds :item.
+     */
+    private const NOT_A_PROJECT_SET = "
+        AND NOT EXISTS (
+            SELECT 1 FROM value v
+            JOIN property p ON p.id = v.property_id
+            JOIN vocabulary pv ON pv.id = p.vocabulary_id
+            JOIN resource pr ON pr.id = v.value_resource_id
+            JOIN resource_class c ON c.id = pr.resource_class_id
+            JOIN vocabulary cv ON cv.id = c.vocabulary_id
+            WHERE v.resource_id = r.id AND v.is_public = 1
+              AND pv.prefix = 'dcterms' AND p.local_name = 'isPartOf'
+              AND pr.resource_type = :item AND pr.is_public = 1
+              AND cv.prefix = 'foaf' AND c.local_name = 'Project'
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM value sv
+            JOIN property sp ON sp.id = sv.property_id
+            JOIN vocabulary spv ON spv.id = sp.vocabulary_id
+            JOIN value iv ON iv.property_id = sv.property_id AND iv.value = sv.value AND iv.is_public = 1
+            JOIN resource ir ON ir.id = iv.resource_id
+            JOIN resource_class ic ON ic.id = ir.resource_class_id
+            JOIN vocabulary icv ON icv.id = ic.vocabulary_id
+            WHERE sv.resource_id = r.id AND sv.is_public = 1
+              AND spv.prefix = 'dre' AND sp.local_name = 'id'
+              AND ir.resource_type = :item AND ir.is_public = 1
+              AND icv.prefix = 'foaf' AND ic.local_name = 'Project'
+        )";
+
+    /**
      * @param array<string,mixed> $config the 'dre_seo.sitemap' config block
      */
     public function __construct(
@@ -42,16 +76,20 @@ class SitemapGenerator
 
     // ─── Index ──────────────────────────────────────────────────────────────
 
-    public function buildIndex(string $hostUrl, int $siteId, int $ttl): string
+    /**
+     * @param bool $excludeProjectSets leave out the item sets whose page
+     *        redirects to their project ({@see buildItemSets()})
+     */
+    public function buildIndex(string $hostUrl, int $siteId, int $ttl, bool $excludeProjectSets = false): string
     {
-        $cacheKey = $this->cacheKey($siteId, 'index', $hostUrl, (string) $this->chunkSize());
-        return $this->cached($cacheKey, $ttl, function () use ($hostUrl, $siteId) {
+        $cacheKey = $this->cacheKey($siteId, 'index', $hostUrl, (string) $this->chunkSize(), $excludeProjectSets ? 'projects-out' : '');
+        return $this->cached($cacheKey, $ttl, function () use ($hostUrl, $siteId, $excludeProjectSets) {
             // Each child's lastmod is the latest change among the URLs it
             // lists. The generation time would change on every rebuild, and
             // Google and Bing both stop trusting a lastmod that does.
             $children = [
                 'sitemap-pages.xml' => $this->latestPageChange($siteId),
-                'sitemap-item-sets.xml' => $this->latestItemSetChange($siteId),
+                'sitemap-item-sets.xml' => $this->latestItemSetChange($siteId, $excludeProjectSets),
             ];
             $size = $this->chunkSize();
             $chunks = max(1, (int) ceil($this->countItems($siteId) / $size));
@@ -175,12 +213,17 @@ class SitemapGenerator
         return $acc;
     }
 
-    public function buildItemSets(string $siteUrl, int $siteId, int $ttl): string
+    /**
+     * Item-set pages. With $excludeProjectSets, an item set that stands for a
+     * public research project is left out: its page redirects (301) to the
+     * project item, which the items sitemap lists ({@see ProjectResolver}).
+     */
+    public function buildItemSets(string $siteUrl, int $siteId, int $ttl, bool $excludeProjectSets = false): string
     {
-        $cacheKey = $this->cacheKey($siteId, 'item-sets', $siteUrl);
-        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId) {
+        $cacheKey = $this->cacheKey($siteId, 'item-sets', $siteUrl, $excludeProjectSets ? 'projects-out' : '');
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId, $excludeProjectSets) {
             $urls = [];
-            foreach ($this->fetchItemSets($siteId) as $row) {
+            foreach ($this->fetchItemSets($siteId, $excludeProjectSets) as $row) {
                 $urls[] = [
                     'loc'        => $siteUrl . '/item-set/' . (int) $row['id'],
                     'lastmod'    => $this->w3c($row['modified'] ?? null),
@@ -244,11 +287,11 @@ class SitemapGenerator
     }
 
     /** @return array{items:int,itemSets:int,pages:int} */
-    public function counts(int $siteId): array
+    public function counts(int $siteId, bool $excludeProjectSets = false): array
     {
         return [
             'items'    => $this->countItems($siteId),
-            'itemSets' => count($this->fetchItemSets($siteId)),
+            'itemSets' => count($this->fetchItemSets($siteId, $excludeProjectSets)),
             'pages'    => count($this->fetchPages($siteId)), // home is one of these
         ];
     }
@@ -283,13 +326,14 @@ class SitemapGenerator
         );
     }
 
-    private function latestItemSetChange(int $siteId): ?string
+    private function latestItemSetChange(int $siteId, bool $excludeProjectSets = false): ?string
     {
         return $this->latest(
             'SELECT MAX(r.modified) FROM resource r
              JOIN site_item_set sis ON sis.item_set_id = r.id
-             WHERE r.resource_type = :t AND r.is_public = 1 AND sis.site_id = :s',
-            ['t' => 'Omeka\\Entity\\ItemSet', 's' => $siteId],
+             WHERE r.resource_type = :t AND r.is_public = 1 AND sis.site_id = :s'
+             . ($excludeProjectSets ? self::NOT_A_PROJECT_SET : ''),
+            $this->itemSetParams($siteId, $excludeProjectSets),
             $siteId
         );
     }
@@ -336,16 +380,27 @@ class SitemapGenerator
         }
     }
 
+    /** @return array<string,mixed> */
+    private function itemSetParams(int $siteId, bool $excludeProjectSets): array
+    {
+        $params = ['t' => 'Omeka\\Entity\\ItemSet', 's' => $siteId];
+        if ($excludeProjectSets) {
+            $params['item'] = 'Omeka\\Entity\\Item';
+        }
+        return $params;
+    }
+
     /** @return array<array{id:int,modified:?string}> */
-    private function fetchItemSets(int $siteId): array
+    private function fetchItemSets(int $siteId, bool $excludeProjectSets = false): array
     {
         try {
             return $this->connection->fetchAllAssociative(
                 'SELECT r.id, r.modified FROM resource r
                  JOIN site_item_set sis ON sis.item_set_id = r.id
-                 WHERE r.resource_type = :t AND r.is_public = 1 AND sis.site_id = :s
-                 ORDER BY r.id',
-                ['t' => 'Omeka\\Entity\\ItemSet', 's' => $siteId]
+                 WHERE r.resource_type = :t AND r.is_public = 1 AND sis.site_id = :s'
+                 . ($excludeProjectSets ? self::NOT_A_PROJECT_SET : '')
+                 . ' ORDER BY r.id',
+                $this->itemSetParams($siteId, $excludeProjectSets)
             );
         } catch (\Throwable $e) {
             $this->logDatabaseFailure('fetch public item sets', $siteId, $e);

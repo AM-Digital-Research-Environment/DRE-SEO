@@ -6,6 +6,7 @@ namespace DRESeo\Controller;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SiteHome;
 use DRESeo\Service\SitemapGenerator;
@@ -32,6 +33,7 @@ class SitemapController extends AbstractActionController
         private readonly Settings $settings,
         private readonly DefaultSite $defaultSite,
         private readonly ?PageSeoStore $pageSeoStore = null,
+        private readonly ?ProjectResolver $projects = null,
     ) {
     }
 
@@ -44,7 +46,12 @@ class SitemapController extends AbstractActionController
         if (!$site) {
             return $this->notFound();
         }
-        return $this->xml($this->generator->buildIndex($this->hostUrl($site), $site->id(), $this->ttl()));
+        return $this->xml($this->generator->buildIndex(
+            $this->hostUrl($site),
+            $site->id(),
+            $this->ttl(),
+            $this->projectSetsRedirect($site)
+        ));
     }
 
     public function pagesAction(): Response
@@ -88,7 +95,12 @@ class SitemapController extends AbstractActionController
         if (!$site) {
             return $this->notFound();
         }
-        return $this->xml($this->generator->buildItemSets($this->siteUrl($site), $site->id(), $this->ttl()));
+        return $this->xml($this->generator->buildItemSets(
+            $this->siteUrl($site),
+            $site->id(),
+            $this->ttl(),
+            $this->projectSetsRedirect($site)
+        ));
     }
 
     public function itemsAction(): Response
@@ -161,6 +173,15 @@ class SitemapController extends AbstractActionController
             $host .= ':' . $parts['port'];
         }
         return $host;
+    }
+
+    /**
+     * Whether the site redirects a project's item-set page to the project,
+     * so the sitemap lists the project item and not the redirecting page.
+     */
+    private function projectSetsRedirect(SiteRepresentation $site): bool
+    {
+        return $this->projects?->redirectsEnabled((int) $site->id()) ?? false;
     }
 
     private function ttl(): int

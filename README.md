@@ -27,7 +27,7 @@ tables, no theme edits.
 |---|---|
 | **Meta tags** | `<title>`, `<meta name="description">`, canonical link on every public page. |
 | **Open Graph / Twitter** | `og:title/description/image/type/url/site_name/locale` + `twitter:card/title/description/image/site` so shared links render a rich preview. |
-| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with allowlisted authority IRIs as `sameAs`; every linked record typed as its own page types it. `WebSite` on the home page, the catalogue as a `Dataset` on its landing page (the *Linked open data* page), `CollectionPage` on item-set pages and `BreadcrumbList` on resource pages (home › item set › item, or home › item › media; the theme shows the same trail through the `dreBreadcrumb()` view helper). With [DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData), every record node takes its permanent `/resource/{id}` URI as `@id`. |
+| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with allowlisted authority IRIs as `sameAs`; every linked record typed as its own page types it. `WebSite` on the home page, the catalogue as a `Dataset` on its landing page (the *Linked open data* page), `CollectionPage` on item-set pages and `BreadcrumbList` on resource and item-set pages (home › landing page › record, a research item under its project; the theme shows the same trail through the `dreBreadcrumb()` view helper — see [Breadcrumb and project pages](#breadcrumb-and-project-pages)). With [DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData), every record node takes its permanent `/resource/{id}` URI as `@id`. |
 | **Citations** | "Cite this record" on every record page — Chicago, APA, MLA and BibTeX/RIS/CSL-JSON/plain-text downloads for works, and an entry citation ("Person record. AMIRA. Last modified …") for authority records. |
 | **FAIR Signposting** | `cite-as`, `describedby`, `type`, `author`, `license`, `item` and `collection` links on item, item-set and media pages, as `<link>` elements and as an HTTP `Link` header, for FAIR assessors such as F-UJI. |
 | **Citation metadata (Zotero)** | Highwire Press `citation_*` tags for scholarly papers (articles, chapters, books, theses, reports … with an author) and Dublin Core `DC.*` for every record, so the **Zotero Connector**, Google Scholar, Mendeley and other reference managers capture each record as a properly-typed reference, and Scholar indexes only papers. |
@@ -35,6 +35,7 @@ tables, no theme edits.
 | **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, each with its real `<lastmod>`; the index dates each child by its latest change; pages set to noindex are left out. No `<changefreq>`/`<priority>` by default — Google and Bing ignore them. Cached. |
 | **robots.txt** | `/robots.txt` disallowing `/admin` and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site (and then serves no sitemap). |
 | **Google Search Console** | Paste the verification snippet in the module config; the `<meta name="google-site-verification">` tag is injected site-wide. |
+| **Project pages** | A research project's item-set page redirects (301) to the project item, its one public page; the sitemap lists the project item only. |
 | **IndexNow ping** | Optionally notifies Bing/Yandex when public items, item sets or pages are created, edited, made private or deleted. Concurrent edits coalesce into one background batch under a database lock; transient failures are retained for a later retry. |
 
 Static-page SEO is **set by hand** (a central admin table); resource-page SEO is **derived
@@ -88,6 +89,15 @@ install.
 | **Sitemap cache lifetime** | Seconds before the cached sitemap is rebuilt. Default 86400 (24h). |
 | **Ping IndexNow when content changes** | Off by default. See the caveat below. |
 | **IndexNow key** | A hex key you choose (`openssl rand -hex 16`); served at `/{key}.txt`. |
+
+### Site settings
+
+**Sites → *site* → Settings → SEO.**
+
+| Setting | Purpose |
+|---|---|
+| **Redirect a project's item set page to the project** | On by default. See [Breadcrumb and project pages](#breadcrumb-and-project-pages). |
+| **Breadcrumb landing pages** | One `item set id = page slug` per line, each over the shipped default for that item set; `id =` with no slug removes a default. Blank: the defaults, shown as the placeholder. |
 
 ### Per-page SEO
 
@@ -237,6 +247,42 @@ which records it applies to. A research item's JSON-LD carries:
 `citation_pdf_url` and a Dataset's `distribution` already name public media files only, so
 an access right does not suppress them: a file that is attached and public is public.
 
+### Breadcrumb and project pages
+
+AMIRA describes each research project twice: as an item (template *Projects*, class
+`foaf:Project`, in the Projects item set) and as the item set of the project's collection.
+The **project item** is the project's public page.
+
+**Which item set is a project's.** Its own `dcterms:isPartOf` value links to a public
+`foaf:Project` item (the link MongoDB2OmekaS writes); until the sync has written it, the
+public `foaf:Project` item with the same `dre:id`. A project that is private, or that the
+visitor cannot see, does not count.
+
+**Redirect.** A GET or HEAD of that item set's page, `/s/{site}/item-set/{id}`, answers
+`301 Moved Permanently` with the project item's page in the same site. The listener runs on
+the MVC route event, after core has read the site and before dispatch, so the theme never
+renders the item-set page and no session is touched. The item set's items stay browsable at
+`/s/{site}/item?item_set_id={id}`; the admin and the API are never redirected. Switch it off
+per site with **Redirect a project's item set page to the project**. While it is on, the
+item-set sitemap leaves those item sets out (one query, two correlated subqueries).
+
+**Breadcrumb.** `StructuredData::trail()` gives the trail the `BreadcrumbList` states and
+`dreBreadcrumb($resource)` returns to the theme, so the two always agree:
+
+| Page | Trail |
+|---|---|
+| Research item (its `dcterms:isPartOf` links to a public project) | Home › Research projects › *project* › record |
+| Any other item | Home › *landing page of its item set* › record (*Publications*, *People* …) |
+| Item without a landing page | Home › *its item set* › record — or, when that item set redirects, Home › … › *project* › record |
+| Media | the item's trail › *item* › media |
+| Item set | Home › *its landing page* › item set |
+
+A landing page is the site page mapped to one of the item's item sets (those the site uses
+first) — `dre_seo.breadcrumb.landing_pages` in `config/module.config.php` for AMIRA, the
+site setting **Breadcrumb landing pages** over it. The crumb is the page's title and URL,
+and counts only when the page exists in the site and is public. A project is placed as any
+item is: the Projects item set maps to *Research projects*.
+
 ---
 
 ## Citation metadata (Zotero, Google Scholar, …)
@@ -331,7 +377,8 @@ back as one). The helper's `citeAs` key (`'work'` or `'entry'`) tells the theme 
 * `/sitemap.xml` — sitemap **index** listing the children below.
 * `/sitemap-pages.xml` — the home page (first, at its own page URL, matching its
   canonical) + all public site pages, less those an editor set to noindex.
-* `/sitemap-item-sets.xml` — public item-set browse pages.
+* `/sitemap-item-sets.xml` — public item-set browse pages, less those that redirect to their
+  research project ([Breadcrumb and project pages](#breadcrumb-and-project-pages)).
 * `/sitemap-items-{n}.xml` — public items, chunked at 50,000 URLs per file.
 
 Resource ids + modified timestamps are read with one lean DBAL query per type (public
@@ -393,6 +440,8 @@ DRESeo/
 │       ├── Signposting.php           # FAIR Signposting links + Link header
 │       ├── LinkedDataIdentity.php    # resource URIs, sameAs, dataset from DRE Linked Data
 │       ├── SiteHome.php              # the one home-page URL
+│       ├── LandingPages.php          # item set -> landing page, for the breadcrumb
+│       ├── ProjectResolver.php       # a record's project; the project item-set redirect
 │       ├── Licence.php               # licence → URL resolver (JSON-LD + Signposting)
 │       ├── LanguageCode.php          # ISO 639-2/3 → BCP 47
 │       ├── SearchPage.php            # search results routes (noindex)
@@ -450,7 +499,11 @@ OMEKA_PATH=/path/to/omeka-s composer integration
    token is set.
 5. **Admin → SEO → Static pages**: set a title/description on a page → confirm it appears in
    that page's `<head>`.
-6. In Search Console: add the property, verify via the meta tag, submit `/sitemap.xml`.
+6. A project's item set: `curl -sI https://HOST/s/amira/item-set/6259` → `301` with a
+   `Location` at the project item (`/s/amira/item/{id}`); `/sitemap-item-sets.xml` no longer
+   lists it. A research item's `BreadcrumbList` reads Home › Research projects › project ›
+   record.
+7. In Search Console: add the property, verify via the meta tag, submit `/sitemap.xml`.
 
 ---
 

@@ -198,9 +198,12 @@ namespace Omeka\Api\Representation {
                 return $this->title !== '' ? $this->title : (string) $default;
             }
 
+            /** Whether the record is public; a test makes one private. */
+            public bool $publicValue = true;
+
             public function isPublic(): bool
             {
-                return true;
+                return $this->publicValue;
             }
 
             /** @return array<int,object> the media the stub was given. */
@@ -392,6 +395,15 @@ namespace Omeka\Api\Representation {
                     $this->siteItemSetIds
                 );
             }
+
+            /** @var SitePageRepresentation[] the site's pages, public or not */
+            public array $pagesList = [];
+
+            /** @return SitePageRepresentation[] */
+            public function pages(): array
+            {
+                return $this->pagesList;
+            }
         }
     }
 
@@ -402,12 +414,18 @@ namespace Omeka\Api\Representation {
                 private readonly string $slugValue = 'home',
                 private readonly string $titleValue = 'Home',
                 private readonly int $idValue = 10,
+                private readonly bool $publicValue = true,
             ) {
             }
 
             public function id(): int
             {
                 return $this->idValue;
+            }
+
+            public function isPublic(): bool
+            {
+                return $this->publicValue;
             }
 
             public function slug(): string

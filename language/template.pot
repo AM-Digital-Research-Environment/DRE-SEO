@@ -119,3 +119,18 @@ msgstr ""
 
 msgid "Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead)."
 msgstr ""
+
+msgid "Redirect a project’s item set page to the project"
+msgstr ""
+
+msgid "A research project is both an item and the item set of its collection. When on, the item set’s page answers with a permanent redirect (301) to the project item, which is then the project’s one page in search engines and the sitemap. An item set is a project’s when its “Is Part Of” links to the public project item, or the public project item has the same dre:id."
+msgstr ""
+
+msgid "Breadcrumb landing pages"
+msgstr ""
+
+msgid "The page that presents each item set’s records, named in the breadcrumb between the home page and the record: one “item set id = page slug” per line. A line replaces the module’s default for that item set, and “id =” with no slug removes it. A page that does not exist or is private is skipped. Blank: the defaults shown."
+msgstr ""
+
+msgid "Write one “item set id = page slug” per line, for example “29918 = publications”."
+msgstr ""
