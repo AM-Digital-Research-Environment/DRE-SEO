@@ -8,6 +8,8 @@ use DRESeo\Service\Concern\ResourceValueReader;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemRepresentation;
+use Omeka\Api\Representation\ItemSetRepresentation;
+use Omeka\Api\Representation\MediaRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
 
@@ -176,27 +178,101 @@ class StructuredData
         SiteRepresentation $site,
         ?string $canonical
     ): ?array {
-        if (!$canonical) {
+        $trail = $this->trail($view, $resource, $site, $canonical);
+        if ($trail === null) {
             return null;
+        }
+        $elements = [];
+        foreach ($trail as $index => $crumb) {
+            $elements[] = [
+                '@type'    => 'ListItem',
+                'position' => $index + 1,
+                'name'     => $crumb['name'],
+                'item'     => $crumb['url'],
+            ];
         }
         return [
             '@context'        => 'https://schema.org',
             '@type'           => 'BreadcrumbList',
-            'itemListElement' => [
-                [
-                    '@type'    => 'ListItem',
-                    'position' => 1,
-                    'name'     => $site->title(),
-                    'item'     => $this->homeUrl($view, $site),
-                ],
-                [
-                    '@type'    => 'ListItem',
-                    'position' => 2,
-                    'name'     => (string) $resource->displayTitle(),
-                    'item'     => $canonical,
-                ],
-            ],
+            'itemListElement' => $elements,
         ];
+    }
+
+    /**
+     * A record's place in the site, from its home page: the trail the
+     * `BreadcrumbList` states and the theme shows, through `dreBreadcrumb()`, so
+     * the two cannot disagree.
+     *
+     *     item    Home › its item set › the item
+     *             (a research item's project, "Publications", "Institutions" …)
+     *     media   Home › its item › the media
+     *     other   Home › the record
+     *
+     * An item in several item sets is placed in the first one the site uses,
+     * else in its first. Every URL is absolute. Null when the record has no
+     * page in the site.
+     *
+     * @return array<int,array{name:string,url:string}>|null
+     */
+    public function trail(
+        PhpRenderer $view,
+        AbstractResourceEntityRepresentation $resource,
+        SiteRepresentation $site,
+        ?string $canonical
+    ): ?array {
+        if (!$canonical) {
+            return null;
+        }
+        $trail = [['name' => $site->title(), 'url' => $this->homeUrl($view, $site)]];
+        $parent = $this->trailParent($resource, $site);
+        if ($parent !== null) {
+            $trail[] = $parent;
+        }
+        $trail[] = ['name' => (string) $resource->displayTitle(), 'url' => $canonical];
+
+        return $trail;
+    }
+
+    /** @return array{name:string,url:string}|null */
+    private function trailParent(AbstractResourceEntityRepresentation $resource, SiteRepresentation $site): ?array
+    {
+        try {
+            if ($resource instanceof MediaRepresentation) {
+                $parent = $resource->item();
+            } elseif ($resource instanceof ItemRepresentation) {
+                $parent = $this->collectionOf($resource, $site);
+            } else {
+                return null;
+            }
+            if ($parent === null) {
+                return null;
+            }
+            $name = trim((string) $parent->displayTitle());
+            $url = (string) $parent->siteUrl($site->slug(), true);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return $name !== '' && $url !== '' ? ['name' => $name, 'url' => $url] : null;
+    }
+
+    private function collectionOf(ItemRepresentation $item, SiteRepresentation $site): ?ItemSetRepresentation
+    {
+        $itemSets = array_values($item->itemSets());
+        if ($itemSets === []) {
+            return null;
+        }
+        $inSite = [];
+        foreach ($site->siteItemSets() as $siteItemSet) {
+            $inSite[$siteItemSet->itemSet()->id()] = true;
+        }
+        foreach ($itemSets as $itemSet) {
+            if (isset($inSite[$itemSet->id()])) {
+                return $itemSet;
+            }
+        }
+
+        return $itemSets[0];
     }
 
     /**

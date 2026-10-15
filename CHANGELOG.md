@@ -9,6 +9,14 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Added
+
+- `dreBreadcrumb($resource)`, a view helper that returns a record's trail as `[['name' => …, 'url' => …], …]`, for the breadcrumb DRE-theme now shows above a record. It is the trail the `BreadcrumbList` states, so the visible breadcrumb and the structured data agree.
+
+### Changed
+
+- The `BreadcrumbList` places a record in the site: an item under its item set (a research item's project, *Publications*, *Institutions* …), preferring one the site uses; a media under its item. It used to go straight from the home page to the record. Item sets and other records keep the two-step trail.
+
 ## [0.13.1] — 2026-10-15
 
 ### Changed
