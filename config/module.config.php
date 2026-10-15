@@ -244,6 +244,12 @@ return [
             // kinds (person/place/organization/project/section) emit Dublin Core
             // only; the rest emit kind-specific citation_* tags for Zotero.
             'default_kind'   => 'item',
+            // Templates whose kind is scholarly but whose items are not papers:
+            // they carry Dublin Core only, no Highwire citation_* tags.
+            'highwire_excluded_templates' => [
+                17, // journal issue: the issue, not an article in it
+                29, // series editorship: a book series or a journal
+            ],
             // Who publishes the database, named in the entry citation of an
             // authority record ("Aas, Norbert." Person record. AMIRA. <publisher>.).
             'publisher'      => 'Africa Multiple Cluster of Excellence, University of Bayreuth',

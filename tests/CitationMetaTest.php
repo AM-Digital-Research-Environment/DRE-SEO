@@ -23,7 +23,7 @@ function citationMetaService(): CitationMeta
     $citation = $config['dre_seo']['citation'];
     $kinds = new CitationKindMap($citation['template_kinds'], $citation['default_kind']);
 
-    return new CitationMeta($kinds, new CitationData($kinds));
+    return new CitationMeta($kinds, new CitationData($kinds), $citation['highwire_excluded_templates']);
 }
 
 /**
@@ -58,6 +58,7 @@ test('a thesis tells Zotero and Scholar what it is and who awarded it', function
 
 test('Scholar dates are slash-separated and as precise as the record', function (): void {
     $article = new ItemRepresentation('An article', 11, 'Journal Article', [
+        'dcterms:creator' => [new ValueRepresentation('Example, Ada')],
         'dcterms:date' => [new ValueRepresentation('2025-03-20', null, null, '2025-03-20')],
         'dcterms:isPartOf' => [new ValueRepresentation('Pambazuka News')],
         'bibo:isbn13' => [new ValueRepresentation('978-3-96091-668-0')],
@@ -99,7 +100,7 @@ test('item-set and media pages carry no Highwire tags', function (): void {
     assertSameValue(['Publications'], tagValues($tags, 'DC.title'));
 });
 
-test('a podcast credits its host as its author and names its Zotero type', function (): void {
+test('a podcast is no paper: Dublin Core credits its host and names its Zotero type', function (): void {
     $podcast = new ItemRepresentation('Episode', 21, 'Audio document', [
         'dcterms:title' => [new ValueRepresentation('Episode')],
         'marcrel:hst' => [new ValueRepresentation('Akese, Grace Abena')],
@@ -108,7 +109,8 @@ test('a podcast credits its host as its author and names its Zotero type', funct
 
     $tags = citationMetaService()->tags($podcast, null);
 
-    assertSameValue(['Akese, Grace Abena'], tagValues($tags, 'citation_author'), 'the host, as on the record page');
+    assertSameValue([], highwireNames($tags));
+    assertSameValue(['Akese, Grace Abena'], tagValues($tags, 'DC.creator'), 'the host, as on the record page');
     assertSameValue(['podcast'], tagValues($tags, 'DC.type'));
 });
 
@@ -127,4 +129,62 @@ test('DC.identifier is the persistent identifier when there is one, else the pag
     assertSameValue([$page], tagValues($withUri, 'citation_public_url'), 'the landing page stays the page');
     assertSameValue([$page], tagValues($withoutUri, 'DC.identifier'));
     assertSameValue(['10.1234/abcd'], tagValues($withUri, 'citation_doi'));
+});
+
+/**
+ * @param array<int,array{0:string,1:string}> $tags
+ * @return string[] the Highwire tag names emitted
+ */
+function highwireNames(array $tags): array
+{
+    return array_values(array_unique(array_filter(
+        array_column($tags, 0),
+        static fn (string $name): bool => str_starts_with($name, 'citation_')
+    )));
+}
+
+test('a research item with no author is described in Dublin Core only', function (): void {
+    // /s/amira/item/8698: a research item video, credited to an artist and a
+    // curator, with no author — it carried citation_title and a date.
+    $video = new ItemRepresentation('Alles was irgendwie nützt', 10, null, [
+        'dcterms:title' => [new ValueRepresentation('Alles was irgendwie nützt')],
+        'dcterms:created' => [new ValueRepresentation('1905-07-08', null, null, '1905-07-08', 'numeric:timestamp')],
+        'marcrel:art' => [new ValueRepresentation('', new ItemRepresentation('Zwier, Pim', 4))],
+    ], null, 8698);
+
+    $tags = citationMetaService()->tags($video, 'https://example.test/s/amira/item/8698');
+
+    assertSameValue([], highwireNames($tags));
+    assertSameValue(['Alles was irgendwie nützt'], tagValues($tags, 'DC.title'));
+    assertSameValue(['1905-07-08'], tagValues($tags, 'DC.date'));
+});
+
+test('scholarly kinds need an author, and journal issues and series are no papers', function (): void {
+    $withoutAuthor = new ItemRepresentation('Anonymous report', 12, 'Report', [
+        'dcterms:title' => [new ValueRepresentation('Anonymous report')],
+    ]);
+    $issue = new ItemRepresentation('Issue 3', 17, 'Journal issue', [
+        'dcterms:title' => [new ValueRepresentation('Issue 3')],
+        'dcterms:creator' => [new ValueRepresentation('Editor, Ed')],
+    ]);
+    $series = new ItemRepresentation('A series', 29, 'Series', [
+        'dcterms:title' => [new ValueRepresentation('A series')],
+        'dcterms:creator' => [new ValueRepresentation('Editor, Ed')],
+    ]);
+    $dataset = new ItemRepresentation('Data', 20, 'Dataset', [
+        'dcterms:title' => [new ValueRepresentation('Data')],
+        'dcterms:creator' => [new ValueRepresentation('Example, Ada')],
+    ]);
+    $chapter = new ItemRepresentation('A chapter', 14, 'Book chapter', [
+        'dcterms:title' => [new ValueRepresentation('A chapter')],
+        'bibo:authorList' => [new ValueRepresentation('Example, Ada')],
+    ]);
+
+    foreach (['report' => $withoutAuthor, 'issue' => $issue, 'series' => $series, 'dataset' => $dataset] as $label => $item) {
+        assertSameValue([], highwireNames(citationMetaService()->tags($item, null)), $label);
+    }
+    assertSameValue(['dataset'], tagValues(citationMetaService()->tags($dataset, null), 'DC.type'));
+    $tags = citationMetaService()->tags($chapter, null);
+    assertSameValue(['A chapter'], tagValues($tags, 'citation_title'));
+    assertSameValue(['Example, Ada'], tagValues($tags, 'citation_author'));
 });

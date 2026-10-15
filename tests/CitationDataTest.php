@@ -376,3 +376,16 @@ test('a bare DOI and a doi: prefix both normalise', function (): void {
     ]);
     assertSameValue('10.1234/abcd', $data->build($uriItem)->doi);
 });
+
+test('one item is built once per request, whichever representation asks', function (): void {
+    $data = citationDataService();
+    // Two representations of the same stored item, as the meta tags and the
+    // theme's panel each hold their own.
+    $first = new ItemRepresentation('A book', 15, 'Book', [], null, 41980, null, '2026-10-01 12:00:00');
+    $second = new ItemRepresentation('A book', 15, 'Book', [], null, 41980, null, '2026-10-01 12:00:00');
+    $edited = new ItemRepresentation('A book, edited', 15, 'Book', [], null, 41980, null, '2026-10-02 09:00:00');
+
+    assertTrue($data->build($first, 'u') === $data->build($second, 'u'), 'memoised by id');
+    assertTrue($data->build($first, 'u') !== $data->build($first, 'other'), 'per URL');
+    assertSameValue('A book, edited', $data->build($edited, 'u')->title, 'a later change is a new record');
+});
