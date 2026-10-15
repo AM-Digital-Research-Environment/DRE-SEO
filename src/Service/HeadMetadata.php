@@ -246,16 +246,39 @@ class HeadMetadata
         }
 
         // An editor can switch a page's JSON-LD off (the per-page override).
-        if ($isHomepage && $this->jsonLdEnabled() && ($overrides['jsonld'] ?? true) !== false) {
-            $this->addJsonLd($view, $this->structuredData->webSite($view, $site));
+        if ($this->jsonLdEnabled() && ($overrides['jsonld'] ?? true) !== false) {
+            if ($isHomepage) {
+                $this->addJsonLd($view, $this->structuredData->webSite($view, $site));
+            }
             // The catalogue as a Dataset, for Google Dataset Search, when DRE
-            // Linked Data describes it.
+            // Linked Data describes it: on the dataset's landing page (the
+            // page carrying the Linked open data block, DRE Linked Data
+            // 0.3.1+), else on the home page.
             $dataset = $this->identity?->dataset() ?? [];
-            $node = $dataset ? $this->structuredData->dataset($view, $site, $dataset) : null;
-            if ($node !== null) {
-                $this->addJsonLd($view, $node);
+            if ($dataset && self::isDatasetPage($dataset, $canonical, $isHomepage)) {
+                $node = $this->structuredData->dataset($view, $site, $dataset);
+                if ($node !== null) {
+                    $this->addJsonLd($view, $node);
+                }
             }
         }
+    }
+
+    /**
+     * Whether this page is where the dataset is described: its landing page
+     * when DRE Linked Data names one, the home page otherwise. Compared by
+     * path, so a base URI written with another host form still matches.
+     *
+     * @param array<string,mixed> $dataset
+     */
+    private static function isDatasetPage(array $dataset, string $canonical, bool $isHomepage): bool
+    {
+        $landing = is_string($dataset['landingPage'] ?? null) ? trim($dataset['landingPage']) : '';
+        if ($landing === '') {
+            return $isHomepage;
+        }
+        $path = static fn (string $url): string => rtrim((string) parse_url($url, PHP_URL_PATH), '/');
+        return $path($landing) !== '' && $path($landing) === $path($canonical);
     }
 
     // ─── Phase 1: browse / search listing pages ─────────────────────────────

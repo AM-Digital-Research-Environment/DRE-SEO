@@ -138,6 +138,41 @@ test('the home page carries the catalogue Dataset when DRE Linked Data describes
     assertSameValue(['WebSite'], array_column($old->jsonLd(), '@type'), 'DRE Linked Data 0.2.0: no dataset()');
 });
 
+test('with a landing page (DRE Linked Data 0.3.1), the Dataset moves to that page', function (): void {
+    $helper = new class {
+        public function __invoke($resource): array
+        {
+            return [];
+        }
+
+        public function dataset(): array
+        {
+            return [
+                'uri' => 'https://example.test/linked-data/void#dataset',
+                'landingPage' => 'https://example.test/s/amira/page/linked-open-data',
+                'title' => 'AMIRA',
+                'description' => 'Every public record of the Africa Multiple Interactive Research Atlas, as Linked Open Data.',
+            ];
+        }
+    };
+    $site = amiraSite();
+    $identity = static fn () => new LinkedDataIdentity(static fn () => $helper);
+
+    $home = new PhpRenderer();
+    headMetadataService([], $identity())->applyPage($home, $site->homepage(), $site, [], true);
+    assertSameValue(['WebSite'], array_column($home->jsonLd(), '@type'), 'the home page keeps only the WebSite');
+
+    $lod = new PhpRenderer('https://example.test/s/amira/page/linked-open-data');
+    headMetadataService([], $identity())->applyPage($lod, new SitePageRepresentation('linked-open-data', 'Linked open data', 12), $site, [], false);
+    $nodes = $lod->jsonLd();
+    assertSameValue(['Dataset'], array_column($nodes, '@type'));
+    assertSameValue('https://example.test/s/amira/page/linked-open-data', $nodes[0]['url']);
+
+    $team = new PhpRenderer('https://example.test/s/amira/page/team');
+    headMetadataService([], $identity())->applyPage($team, new SitePageRepresentation('team', 'Team', 11), $site, [], false);
+    assertSameValue([], $team->jsonLd(), 'any other page carries no Dataset');
+});
+
 test('search results and query-string variants are noindex, follow; canonicals drop the query', function (): void {
     $site = amiraSite();
     $settings = ['dre_seo_noindex_browse' => '1'];
