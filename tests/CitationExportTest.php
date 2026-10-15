@@ -292,3 +292,31 @@ test('a research item exports the archive that holds it', function (): void {
     assertSameValue('abn-99-009f', $csl['archive_location']);
     assertSameValue('Moving image', $csl['genre']);
 });
+
+test('the plain-text download is the default style, without markup', function (): void {
+    require_once __DIR__ . '/../src/Service/CitationFormatter.php';
+    $export = new CitationExport(new DRESeo\Service\CitationFormatter(), 'chicago');
+
+    $text = $export->serialize(exportFixture(), 'txt');
+
+    assertTrue(str_starts_with($text, 'Triaud, Jean-Louis.'), 'Chicago, author first: ' . $text);
+    assertTrue(!str_contains($text, '<') && !str_contains($text, '&'), 'no markup or entities');
+    assertTrue(str_contains($text, '“Muslim Politics.”'), 'typographic quotes survive as UTF-8');
+    assertTrue(str_ends_with($text, "https://doi.org/10.1234/ab_cd.\n"), 'one line, newline-terminated');
+    assertSameValue('abz-01-0000.txt', $export->filename(exportFixture(), 'txt'), 'deterministic filename');
+    assertSameValue('text/plain; charset=utf-8', CitationExport::FORMATS['txt'][1]);
+    assertSameValue($text, $export->serialize(exportFixture(), 'txt'), 'deterministic body');
+});
+
+test('citation downloads revalidate by ETag, then by Last-Modified', function (): void {
+    $etag = DRESeo\Service\HttpCache::etag('body');
+    $modified = new DateTimeImmutable('2026-10-01 12:00:00', new DateTimeZone('UTC'));
+
+    assertSameValue('Thu, 01 Oct 2026 12:00:00 GMT', DRESeo\Service\HttpCache::lastModified($modified));
+    assertTrue(DRESeo\Service\HttpCache::notModified($etag, $modified, $etag, null));
+    assertTrue(DRESeo\Service\HttpCache::notModified($etag, $modified, '"other", W/' . $etag, null));
+    assertTrue(!DRESeo\Service\HttpCache::notModified($etag, $modified, '"other"', 'Thu, 01 Oct 2026 13:00:00 GMT'), 'If-None-Match wins');
+    assertTrue(DRESeo\Service\HttpCache::notModified($etag, $modified, null, 'Thu, 01 Oct 2026 12:00:00 GMT'));
+    assertTrue(!DRESeo\Service\HttpCache::notModified($etag, $modified, null, 'Thu, 01 Oct 2026 11:59:59 GMT'));
+    assertTrue(!DRESeo\Service\HttpCache::notModified($etag, null, null, 'Thu, 01 Oct 2026 12:00:00 GMT'));
+});

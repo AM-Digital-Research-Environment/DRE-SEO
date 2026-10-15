@@ -60,6 +60,7 @@ class Citation extends AbstractHelper
         'bibtex'  => 'BibTeX',
         'ris'     => 'RIS',
         'csljson' => 'CSL JSON',
+        'txt'     => 'Plain text',
     ];
 
     /** The style id under which a hand-entered citation is offered. */

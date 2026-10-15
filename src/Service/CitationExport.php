@@ -8,8 +8,10 @@ use DRESeo\Service\Citation\Creator;
 use DRESeo\Service\Citation\IssuedDate;
 
 /**
- * Serialises a {@see CitationRecord} to the machine-readable citation formats
- * offered on the record page: **BibTeX**, **RIS** and **CSL-JSON**.
+ * Serialises a {@see CitationRecord} to the citation formats offered on the
+ * record page: **BibTeX**, **RIS** and **CSL-JSON**, and the formatted
+ * citation in the default style as **plain text** (UTF-8), for a reader who
+ * wants the reference itself rather than a reference manager's format.
  *
  * All three are dependency-free string builders (the module carries no vendor/),
  * and all emit UTF-8 — BibTeX targets biber/biblatex, which reads UTF-8 directly.
@@ -27,7 +29,23 @@ final class CitationExport
         'bibtex'  => ['bib', 'application/x-bibtex; charset=utf-8'],
         'ris'     => ['ris', 'application/x-research-info-systems; charset=utf-8'],
         'csljson' => ['json', 'application/vnd.citationstyles.csl+json; charset=utf-8'],
+        'txt'     => ['txt', 'text/plain; charset=utf-8'],
     ];
+
+    /**
+     * @param CitationFormatter|null $formatter renders the plain-text citation
+     * @param string                 $style     the style it is rendered in
+     *                                          (`dre_seo.citation.default_style`)
+     * @param string                 $locale    the language it is rendered in;
+     *                                          a download is the same for every
+     *                                          reader, so it is fixed
+     */
+    public function __construct(
+        private readonly ?CitationFormatter $formatter = null,
+        private readonly string $style = 'chicago',
+        private readonly string $locale = 'en',
+    ) {
+    }
 
     /**
      * BibTeX entry type and `type` label per thesis degree. Classic BibTeX has
@@ -54,8 +72,20 @@ final class CitationExport
             'bibtex'  => $this->bibtex($record),
             'ris'     => $this->ris($record),
             'csljson' => $this->cslJson($record),
+            'txt'     => $this->plainText($record),
             default   => null,
         };
+    }
+
+    /**
+     * The formatted citation as plain text: the HTML the record page shows,
+     * without its markup or entities, on one line.
+     */
+    private function plainText(CitationRecord $record): string
+    {
+        $html = ($this->formatter ?? new CitationFormatter())->format($record, $this->style, $this->locale);
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return trim((string) preg_replace('/\s+/u', ' ', $text)) . "\n";
     }
 
     /** Download filename stem — the DRE id if present, else item-<id>. */

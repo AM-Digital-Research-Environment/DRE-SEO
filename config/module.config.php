@@ -32,11 +32,12 @@ return [
             Service\Signposting::class      => Service\SignpostingFactory::class,
             // The DRE Linked Data module's resource URIs, when it is installed.
             Service\LinkedDataIdentity::class => Service\LinkedDataIdentityFactory::class,
+            // The serialisers; the plain-text download renders the default style.
+            Service\CitationExport::class    => Service\CitationExportFactory::class,
         ],
         'invokables' => [
-            // Stateless serialisers: no config, no dependencies.
+            // Stateless formatter: no config, no dependencies.
             Service\CitationFormatter::class => Service\CitationFormatter::class,
-            Service\CitationExport::class    => Service\CitationExport::class,
         ],
     ],
 
@@ -312,8 +313,9 @@ return [
             ],
             'curated_label' => 'As catalogued',
 
-            // Download serialisations offered at /cite/{id}/{format}.
-            'formats' => ['bibtex', 'ris', 'csljson'],
+            // Download serialisations offered at /cite/{id}/{format}; `txt` is
+            // the default style's citation as plain text.
+            'formats' => ['bibtex', 'ris', 'csljson', 'txt'],
         ],
     ],
 ];
