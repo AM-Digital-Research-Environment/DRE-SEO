@@ -9,6 +9,8 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-10-15
+
 ### Added
 
 - `dreBreadcrumb($resource)`, a view helper that returns a record's trail as `[['name' => …, 'url' => …], …]`, for the breadcrumb DRE-theme now shows above a record. It is the trail the `BreadcrumbList` states, so the visible breadcrumb and the structured data agree.
@@ -417,7 +419,9 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.1...v0.14.0
+[0.13.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.1...v0.11.0
