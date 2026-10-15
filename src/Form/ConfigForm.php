@@ -97,7 +97,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Noindex filtered / paginated browse pages', // @translate
-                'info'  => 'Keeps faceted and paginated browse URLs out of the index (they add little and dilute crawl budget) while still letting crawlers follow links to the resource pages. Recommended.', // @translate
+                'info'  => 'Keeps faceted and paginated browse URLs, search results pages (Omeka’s site search and DRE Search) and any other URL with a query string out of the index — they add little and dilute crawl budget — while crawlers still follow their links to the resource pages. A record paging through its connection lists stays indexable. Recommended.', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_noindex_browse'],
         ]);
@@ -160,7 +160,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Ping IndexNow when content changes', // @translate
-                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item or page is added or edited, so it is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
+                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_ping_enabled'],
         ]);

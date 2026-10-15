@@ -92,3 +92,30 @@ msgstr ""
 
 msgid "Invalid form submission."
 msgstr ""
+
+msgid "JSON-LD"
+msgstr ""
+
+msgid "Override the title, description, share image, indexing and JSON-LD for individual static pages. Leave a field blank to fall back to the page’s own content and the site-wide defaults set in Configure. Resource (item) pages derive their SEO automatically and are not listed here."
+msgstr ""
+
+msgid "Access statement for research items"
+msgstr ""
+
+msgid "Closes the schema.org conditionsOfAccess of every research item (an item that is part of a project), after its recorded access rights. Leave blank for the default, translated into the page language: “AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record.”"
+msgstr ""
+
+msgid "AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record."
+msgstr ""
+
+msgid "Noindex filtered / paginated browse pages"
+msgstr ""
+
+msgid "Keeps faceted and paginated browse URLs, search results pages (Omeka’s site search and DRE Search) and any other URL with a query string out of the index — they add little and dilute crawl budget — while crawlers still follow their links to the resource pages. A record paging through its connection lists stays indexable. Recommended."
+msgstr ""
+
+msgid "Ping IndexNow when content changes"
+msgstr ""
+
+msgid "Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead)."
+msgstr ""
