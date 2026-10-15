@@ -9,6 +9,8 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-10-15
+
 The research project's item becomes its one public page: its item set redirects there, and
 every record is placed in the site through the landing page of its kind.
 
@@ -453,7 +455,8 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.12.0...v0.13.0
