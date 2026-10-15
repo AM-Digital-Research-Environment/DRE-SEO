@@ -83,20 +83,28 @@ class SitemapGenerator
      * @param string       $siteUrl    the site root, `https://host/s/{slug}`
      * @param array<mixed> $navTree    the site's o:navigation tree
      * @param int|null     $homepageId the page the site root redirects to ({@see SiteHome})
+     * @param int[]        $noindexIds pages an editor set to noindex, which a
+     *                                 sitemap must not list
      */
     public function buildPages(
         string $siteUrl,
         int $siteId,
         int $ttl,
         array $navTree = [],
-        ?int $homepageId = null
+        ?int $homepageId = null,
+        array $noindexIds = []
     ): string {
-        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, (string) $homepageId);
-        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId, $navTree, $homepageId) {
-            // All public pages, keyed by id.
+        $noindexIds = array_values(array_unique(array_map('intval', $noindexIds)));
+        sort($noindexIds);
+        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, (string) $homepageId, implode(',', $noindexIds));
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId, $navTree, $homepageId, $noindexIds) {
+            // All public pages, keyed by id, less those kept out of the index.
             $pagesById = [];
             foreach ($this->fetchPages($siteId) as $row) {
                 $pagesById[(int) $row['id']] = $row;
+            }
+            foreach ($noindexIds as $id) {
+                unset($pagesById[$id]);
             }
 
             $urls = [];
@@ -397,6 +405,12 @@ class SitemapGenerator
         return htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
     }
 
+    /**
+     * A database timestamp as a W3C datetime. Omeka stores `created` and
+     * `modified` as naive DATETIMEs written in UTC — its bootstrap sets PHP's
+     * default timezone to UTC before Doctrine formats them — so they are read
+     * back as UTC, never in the server's zone.
+     */
     private function w3c(?string $dbDatetime): ?string
     {
         if (!$dbDatetime) {

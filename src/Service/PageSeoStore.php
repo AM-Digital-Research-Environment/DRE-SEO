@@ -44,6 +44,22 @@ class PageSeoStore
         return isset($all[$pageId]) && is_array($all[$pageId]) ? $all[$pageId] : [];
     }
 
+    /**
+     * The pages whose indexing override is noindex.
+     *
+     * @return int[]
+     */
+    public function noindexPageIds(): array
+    {
+        $ids = [];
+        foreach ($this->all() as $pageId => $overrides) {
+            if (is_array($overrides) && ($overrides['robots'] ?? null) === 'noindex, follow') {
+                $ids[] = (int) $pageId;
+            }
+        }
+        return $ids;
+    }
+
     /** @param array<string,mixed> $overrides */
     public function set(int $pageId, array $overrides): void
     {

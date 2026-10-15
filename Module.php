@@ -230,7 +230,29 @@ class Module extends AbstractModule
         if (!$site) {
             return;
         }
-        $this->headMetadata()->applyGlobals($view, $site);
+        $this->headMetadata()->applyGlobals($view, $site, $this->isSearchPage());
+    }
+
+    /**
+     * Whether the request is a search results page: core's site search
+     * (`/s/{slug}/index/search`) and advanced-search forms (`…/item/search`),
+     * or DRE Search's results page (`/s/{slug}/dre-search`).
+     */
+    private function isSearchPage(): bool
+    {
+        try {
+            $routeMatch = $this->getServiceLocator()->get('Application')->getMvcEvent()->getRouteMatch();
+        } catch (\Throwable $e) {
+            return false;
+        }
+        if ($routeMatch === null) {
+            return false;
+        }
+        return Service\SearchPage::matches(
+            (string) $routeMatch->getMatchedRouteName(),
+            (string) $routeMatch->getParam('controller', ''),
+            (string) $routeMatch->getParam('action', '')
+        );
     }
 
     // ─── API listener: queue IndexNow pings ─────────────────────────────────

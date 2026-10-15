@@ -37,6 +37,23 @@ class HeadMetadata
 
     private const DESCRIPTION_MAX = 160;
 
+    /**
+     * Query parameters that only track a visit and never change the page:
+     * dropped from canonicals and ignored when deciding whether a URL is a
+     * variant to keep out of the index.
+     */
+    private const TRACKING_PARAMS = [
+        'fbclid', 'gclid', 'dclid', 'gbraid', 'wbraid', 'msclkid', 'yclid', 'igshid',
+        'mc_cid', 'mc_eid', '_ga', '_gl', '_hsenc', '_hsmi', 'mkt_tok',
+    ];
+
+    /**
+     * The only parameters a record page keeps indexable: paging through its
+     * connection lists (DRE-theme's ConnectionQuery). The canonical still
+     * names the record itself.
+     */
+    private const RECORD_PAGING_PARAMS = ['page', 'lr_page', 'lr_property'];
+
     /** Open Graph locales for the languages a site is likely to be set to. */
     private const OG_LOCALES = [
         'en' => 'en_US', 'fr' => 'fr_FR', 'de' => 'de_DE', 'pt' => 'pt_BR',
@@ -50,6 +67,9 @@ class HeadMetadata
     private array $signposts = [];
 
     private ?string $description = null;
+
+    /** Whether phase 1 described a record page (item, item set or media). */
+    private bool $recordPage = false;
     private ?string $defaultImageUrl = null;
     private bool $defaultImageResolved = false;
 
@@ -71,6 +91,7 @@ class HeadMetadata
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site
     ): void {
+        $this->recordPage = true;
         $title = $this->resourceTitle($resource);
         $fullDescription = $this->summary->describe($resource, $site->title());
         $description = $this->truncate($fullDescription);
@@ -246,10 +267,11 @@ class HeadMetadata
      */
     public function applyBrowse(PhpRenderer $view, SiteRepresentation $site, ?ItemSetRepresentation $itemSet = null): void
     {
-        // Self-referential canonical (full current URL) keeps facet/sort
-        // variants from looking like duplicate content while staying safe for
-        // paginated pages (no collapsing page 2 onto page 1).
-        $current = $view->serverUrl(true);
+        // Self-referential canonical (the current URL, less tracking
+        // parameters) keeps facet/sort variants from looking like duplicate
+        // content while staying safe for paginated pages (no collapsing page
+        // 2 onto page 1).
+        $current = self::withoutTracking($view->serverUrl(true));
         $this->setCanonical($view, $current);
 
         // Only noindex faceted / paginated / sorted variants (which carry a
@@ -289,13 +311,27 @@ class HeadMetadata
 
     // ─── Phase 2: site-wide constants + gap-fill (view.layout) ──────────────
 
-    public function applyGlobals(PhpRenderer $view, ?SiteRepresentation $site): void
+    /**
+     * @param bool $isSearch whether the page is a search results page (core's
+     *                       index/search and advanced search, DRE Search's
+     *                       results page), which is never worth indexing
+     */
+    public function applyGlobals(PhpRenderer $view, ?SiteRepresentation $site, bool $isSearch = false): void
     {
         $headMeta = $view->headMeta();
 
         // Master noindex (staging) overrides everything.
         if ($this->boolSetting('dre_seo_noindex_site')) {
             $this->setRobots($view, 'noindex, nofollow', true);
+        }
+        // Search results and query-string variants of any page stay out of
+        // the index; crawlers still follow their links to the records. A
+        // record paging through its connection lists, or a URL that only
+        // carries tracking parameters, is not a variant.
+        if ($this->boolSetting('dre_seo_noindex_browse')
+            && ($isSearch || $this->isQueryVariant($view->serverUrl(true)))
+        ) {
+            $this->setRobots($view, 'noindex, follow');
         }
         // An indexable page lets Google show its image at full width in Search
         // and Discover, where the default is a small thumbnail.
@@ -335,8 +371,10 @@ class HeadMetadata
                 $this->setImage($view, $img, $site ? $site->title() : null);
             }
         }
+        // A page nothing else described (a search page, another module's page)
+        // is canonical without its query string.
         if (!$this->isApplied('canonical')) {
-            $this->setCanonical($view, $view->serverUrl(true));
+            $this->setCanonical($view, self::withoutQuery($view->serverUrl(true)));
         }
         if (!$this->isApplied('og:title')) {
             // Mirror the rendered <title>'s leading segment as og/twitter title.
@@ -351,7 +389,7 @@ class HeadMetadata
             $this->setOpenGraph($view, ['og:description' => $this->description]);
         }
         if (!$this->isApplied('og:url')) {
-            $headMeta->setProperty('og:url', $view->serverUrl(true));
+            $headMeta->setProperty('og:url', self::withoutQuery($view->serverUrl(true)));
         }
     }
 
@@ -434,6 +472,44 @@ class HeadMetadata
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * Whether a URL is a query-string variant of a page: it carries a
+     * parameter that is neither tracking nor, on a record page, paging
+     * through the record's connection lists.
+     */
+    private function isQueryVariant(string $url): bool
+    {
+        $query = (string) (parse_url(self::withoutTracking($url), PHP_URL_QUERY) ?? '');
+        if ($query === '') {
+            return false;
+        }
+        if (!$this->recordPage) {
+            return true;
+        }
+        parse_str($query, $params);
+        return array_diff(array_keys($params), self::RECORD_PAGING_PARAMS) !== [];
+    }
+
+    /** $url without its query string (and fragment). */
+    private static function withoutQuery(string $url): string
+    {
+        return (string) preg_replace('/[?#].*\z/s', '', $url);
+    }
+
+    /** $url without utm_* and the other tracking parameters, its other parameters untouched. */
+    private static function withoutTracking(string $url): string
+    {
+        $parts = explode('?', (string) preg_replace('/#.*\z/s', '', $url), 2);
+        if (!isset($parts[1]) || $parts[1] === '') {
+            return $parts[0];
+        }
+        $kept = array_filter(explode('&', $parts[1]), static function (string $pair): bool {
+            $name = strtolower(urldecode(explode('=', $pair, 2)[0]));
+            return $name !== '' && !str_starts_with($name, 'utm_') && !in_array($name, self::TRACKING_PARAMS, true);
+        });
+        return $kept ? $parts[0] . '?' . implode('&', $kept) : $parts[0];
+    }
 
     /**
      * The page title. A media record is often titled with its source URL

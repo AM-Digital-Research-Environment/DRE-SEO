@@ -133,3 +133,67 @@ test('the home page carries the catalogue Dataset when DRE Linked Data describes
     headMetadataService([], new LinkedDataIdentity(static fn () => static fn ($r): array => []))->applyPage($old, $site->homepage(), $site, [], true);
     assertSameValue(['WebSite'], array_column($old->jsonLd(), '@type'), 'DRE Linked Data 0.2.0: no dataset()');
 });
+
+test('search results and query-string variants are noindex, follow; canonicals drop the query', function (): void {
+    $site = amiraSite();
+    $settings = ['dre_seo_noindex_browse' => '1'];
+
+    // DRE Search's results page: noindex even without a query.
+    $search = new PhpRenderer('https://example.test/s/amira/dre-search');
+    headMetadataService($settings)->applyGlobals($search, $site, true);
+    assertSameValue(['noindex, follow'], $search->meta('robots'));
+    assertSameValue('https://example.test/s/amira/dre-search', $search->links('canonical')[0]['href']);
+
+    // Any other page with a query string: noindex, canonical without it.
+    $variant = new PhpRenderer('https://example.test/s/amira/some-module?sort=title&utm_source=newsletter');
+    headMetadataService($settings)->applyGlobals($variant, $site);
+    assertSameValue(['noindex, follow'], $variant->meta('robots'));
+    assertSameValue('https://example.test/s/amira/some-module', $variant->links('canonical')[0]['href']);
+    assertSameValue(['https://example.test/s/amira/some-module'], $variant->meta('og:url'));
+
+    // Tracking parameters alone make no variant.
+    $tracked = new PhpRenderer('https://example.test/s/amira/some-module?utm_source=x&fbclid=y');
+    headMetadataService($settings)->applyGlobals($tracked, $site);
+    assertSameValue(['max-image-preview:large'], $tracked->meta('robots'));
+
+    // The switch off: nothing is noindexed.
+    $off = new PhpRenderer('https://example.test/s/amira/some-module?sort=title');
+    headMetadataService([])->applyGlobals($off, $site, true);
+    assertSameValue(['max-image-preview:large'], $off->meta('robots'));
+});
+
+test('a record paging through its connection lists stays indexable', function (): void {
+    $site = amiraSite();
+    $settings = ['dre_seo_noindex_browse' => '1'];
+    $person = new Omeka\Api\Representation\ItemRepresentation('Example, Ada', 4, 'Person', [], 'https://example.test/s/amira/item/42', 42);
+
+    $paged = new PhpRenderer('https://example.test/s/amira/item/42?lr_property=items:12&lr_page=3');
+    $head = headMetadataService($settings);
+    $head->applyResource($paged, $person, $site);
+    $head->applyGlobals($paged, $site);
+    assertSameValue(['max-image-preview:large'], $paged->meta('robots'));
+    assertSameValue('https://example.test/s/amira/item/42', $paged->links('canonical')[0]['href']);
+
+    $searched = new PhpRenderer('https://example.test/s/amira/item/42?lr_q=karakul');
+    $head = headMetadataService($settings);
+    $head->applyResource($searched, $person, $site);
+    $head->applyGlobals($searched, $site);
+    assertSameValue(['noindex, follow'], $searched->meta('robots'));
+});
+
+test('a browse canonical keeps its facets but not its tracking parameters', function (): void {
+    $view = new PhpRenderer('https://example.test/s/amira/item?fulltext_search=gender&utm_campaign=x');
+
+    headMetadataService(['dre_seo_noindex_browse' => '1'])->applyBrowse($view, amiraSite());
+
+    assertSameValue('https://example.test/s/amira/item?fulltext_search=gender', $view->links('canonical')[0]['href']);
+    assertSameValue(['noindex, follow'], $view->meta('robots'));
+});
+
+test('search pages are recognised by their route', function (): void {
+    assertTrue(DRESeo\Service\SearchPage::matches('site/resource', 'Omeka\Controller\Site\Index', 'search'));
+    assertTrue(DRESeo\Service\SearchPage::matches('site/resource', 'Omeka\Controller\Site\Item', 'search'));
+    assertTrue(DRESeo\Service\SearchPage::matches('site/dre-search', 'DRESearch\Controller\SearchController', 'results'));
+    assertTrue(!DRESeo\Service\SearchPage::matches('site/resource', 'Omeka\Controller\Site\Item', 'browse'));
+    assertTrue(!DRESeo\Service\SearchPage::matches('admin/default', 'Omeka\Controller\Admin\Item', 'search'));
+});

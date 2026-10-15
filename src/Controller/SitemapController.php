@@ -5,6 +5,7 @@ namespace DRESeo\Controller;
 
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
+use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SiteHome;
 use DRESeo\Service\SitemapGenerator;
@@ -30,6 +31,7 @@ class SitemapController extends AbstractActionController
         private readonly SitemapGenerator $generator,
         private readonly Settings $settings,
         private readonly DefaultSite $defaultSite,
+        private readonly ?PageSeoStore $pageSeoStore = null,
     ) {
     }
 
@@ -72,7 +74,8 @@ class SitemapController extends AbstractActionController
             $site->id(),
             $this->ttl(),
             $navTree,
-            SiteHome::pageId($site)
+            SiteHome::pageId($site),
+            $this->noindexPageIds($site)
         ));
     }
 
@@ -165,9 +168,33 @@ class SitemapController extends AbstractActionController
         return (int) $this->settings->get('dre_seo_sitemap_ttl', 86400);
     }
 
+    /**
+     * Sitemaps are served when switched on and the site is not kept out of
+     * the index as a whole: a sitemap listing pages that all say noindex is
+     * what Search Console reports as an error.
+     */
     private function sitemapEnabled(): bool
     {
-        return SettingFlag::isOn($this->settings, 'dre_seo_sitemap_enabled', true);
+        return SettingFlag::isOn($this->settings, 'dre_seo_sitemap_enabled', true)
+            && !SettingFlag::isOn($this->settings, 'dre_seo_noindex_site');
+    }
+
+    /**
+     * The pages an editor set to noindex (Admin → SEO → Static pages).
+     *
+     * @return int[]
+     */
+    private function noindexPageIds(SiteRepresentation $site): array
+    {
+        if ($this->pageSeoStore === null) {
+            return [];
+        }
+        try {
+            $this->pageSeoStore->setSite($site->id());
+            return $this->pageSeoStore->noindexPageIds();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     private function xml(string $body): Response
