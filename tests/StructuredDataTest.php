@@ -363,3 +363,54 @@ test('an item set page is a CollectionPage about the item set', function (): voi
     assertSameValue('https://example.test/s/amira/item-set/29918', $data['@id']);
     assertSameValue(['@type' => 'Collection', '@id' => 'https://example.test/resource/29918', 'name' => 'Publications'], $data['mainEntity']);
 });
+
+test('the breadcrumb places an item in its item set, preferring one the site uses', function (): void {
+    $builder = new StructuredData([]);
+    $view = new Laminas\View\Renderer\PhpRenderer();
+    $site = new SiteRepresentation('amira', 'AMIRA', new Omeka\Api\Representation\SitePageRepresentation());
+    $thesis = new Omeka\Api\Representation\ItemRepresentation('Das Archiv als Heimat', idValue: 41980);
+    $thesis->itemSetList = [
+        7 => new Omeka\Api\Representation\ItemSetRepresentation('Unused set', publicUrl: 'https://example.test/s/amira/item-set/7', idValue: 7),
+        29918 => new Omeka\Api\Representation\ItemSetRepresentation('Publications', publicUrl: 'https://example.test/s/amira/item-set/29918', idValue: 29918),
+    ];
+    $site->siteItemSetIds = [29918];
+    $canonical = 'https://example.test/s/amira/item/41980';
+
+    assertSameValue([
+        ['name' => 'AMIRA', 'url' => 'https://example.test/s/amira/page/home'],
+        ['name' => 'Publications', 'url' => 'https://example.test/s/amira/item-set/29918'],
+        ['name' => 'Das Archiv als Heimat', 'url' => $canonical],
+    ], $builder->trail($view, $thesis, $site, $canonical));
+
+    $list = $builder->breadcrumb($view, $thesis, $site, $canonical);
+    assertSameValue('BreadcrumbList', $list['@type']);
+    assertSameValue([1, 2, 3], array_column($list['itemListElement'], 'position'));
+    assertSameValue('https://example.test/s/amira/item-set/29918', $list['itemListElement'][1]['item']);
+
+    // No item set the site uses: the item's first.
+    $site->siteItemSetIds = [];
+    assertSameValue('Unused set', $builder->trail($view, $thesis, $site, $canonical)[1]['name']);
+});
+
+test('the breadcrumb places a media in its item, and stops at the record otherwise', function (): void {
+    $builder = new StructuredData([]);
+    $view = new Laminas\View\Renderer\PhpRenderer();
+    $site = new SiteRepresentation('amira', 'AMIRA', new Omeka\Api\Representation\SitePageRepresentation());
+
+    $media = new Omeka\Api\Representation\MediaRepresentation('Scan 1', idValue: 5);
+    $media->parent = new Omeka\Api\Representation\ItemRepresentation('A letter', publicUrl: 'https://example.test/s/amira/item/4', idValue: 4);
+    assertSameValue(
+        ['AMIRA', 'A letter', 'Scan 1'],
+        array_column($builder->trail($view, $media, $site, 'https://example.test/s/amira/media/5'), 'name')
+    );
+
+    $unsorted = new Omeka\Api\Representation\ItemRepresentation('Unsorted', idValue: 9);
+    assertSameValue(
+        ['AMIRA', 'Unsorted'],
+        array_column($builder->trail($view, $unsorted, $site, 'https://example.test/s/amira/item/9'), 'name'),
+        'an item in no item set'
+    );
+    $itemSet = new Omeka\Api\Representation\ItemSetRepresentation('Publications', idValue: 29918);
+    assertSameValue(2, count($builder->trail($view, $itemSet, $site, 'https://example.test/s/amira/item-set/29918')));
+    assertSameValue(null, $builder->trail($view, $unsorted, $site, null), 'no page in the site');
+});

@@ -51,11 +51,13 @@ return [
     ],
 
     // dreCitation($item) — the citation view-model the theme's record rail
-    // renders. The theme guards on the helper's existence, so the module stays
-    // optional.
+    // renders; dreBreadcrumb($resource) — the trail the theme shows above a
+    // record, which is the one the BreadcrumbList states. The theme guards on
+    // each helper's existence, so the module stays optional.
     'view_helpers' => [
         'factories' => [
-            'dreCitation' => Service\ViewHelper\CitationFactory::class,
+            'dreCitation'   => Service\ViewHelper\CitationFactory::class,
+            'dreBreadcrumb' => Service\ViewHelper\BreadcrumbFactory::class,
         ],
     ],
 

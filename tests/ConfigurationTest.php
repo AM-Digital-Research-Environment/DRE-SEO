@@ -54,6 +54,12 @@ test('the citation stack is wired end to end', function (): void {
         isset($config['view_helpers']['factories']['dreCitation']),
         'the dreCitation view helper must be registered'
     );
+    // The theme's visible breadcrumb reads dreBreadcrumb(); without it the
+    // theme falls back to Home › record while the BreadcrumbList says more.
+    assertTrue(
+        isset($config['view_helpers']['factories']['dreBreadcrumb']),
+        'the dreBreadcrumb view helper must be registered'
+    );
     assertTrue(
         isset($config['controllers']['factories'][DRESeo\Controller\CitationController::class]),
         'the citation controller must be registered'

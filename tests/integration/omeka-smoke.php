@@ -456,6 +456,10 @@ try {
         $citationHelper instanceof DRESeo\View\Helper\Citation,
         'The dreCitation view helper did not resolve through the module config.'
     );
+    smokeAssert(
+        $viewHelpers->get('dreBreadcrumb') instanceof DRESeo\View\Helper\Breadcrumb,
+        'The dreBreadcrumb view helper did not resolve through the module config.'
+    );
 
     // DRE Linked Data is optional: without its helper there is no identity;
     // with it, the helper is reached through the view helper manager.

@@ -274,6 +274,14 @@ namespace Omeka\Api\Representation {
     if (!class_exists(ItemRepresentation::class)) {
         class ItemRepresentation extends AbstractResourceEntityRepresentation
         {
+            /** @var array<int,ItemSetRepresentation> keyed by id, as Omeka keys them */
+            public array $itemSetList = [];
+
+            /** @return array<int,ItemSetRepresentation> */
+            public function itemSets(): array
+            {
+                return $this->itemSetList;
+            }
         }
     }
 
@@ -362,6 +370,27 @@ namespace Omeka\Api\Representation {
             public function linkedPages(): array
             {
                 return $this->linkedPagesValue;
+            }
+
+            /** @var int[] ids of the item sets assigned to the site */
+            public array $siteItemSetIds = [];
+
+            /** @return object[] SiteItemSetRepresentation stand-ins */
+            public function siteItemSets(): array
+            {
+                return array_map(
+                    static fn (int $id): object => new class ($id) {
+                        public function __construct(private readonly int $id)
+                        {
+                        }
+
+                        public function itemSet(): ItemSetRepresentation
+                        {
+                            return new ItemSetRepresentation('Item set ' . $this->id, idValue: $this->id);
+                        }
+                    },
+                    $this->siteItemSetIds
+                );
             }
         }
     }
