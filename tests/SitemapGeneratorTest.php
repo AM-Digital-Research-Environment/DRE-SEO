@@ -20,6 +20,9 @@ final class FakeConnection extends Connection
     /** @var array<int,array<int,array{id:int,slug:string,modified:?string}>> */
     public array $pages = [];
 
+    /** @var int[] item sets that stand for a public research project */
+    public array $projectSetIds = [];
+
     /** @var string[] */
     public array $queries = [];
 
@@ -52,7 +55,17 @@ final class FakeConnection extends Connection
             );
         }
         if (str_contains($query, 'JOIN site_item_set')) {
-            return $this->itemSets[$siteId] ?? [];
+            $rows = $this->itemSets[$siteId] ?? [];
+            if (str_contains($query, 'NOT EXISTS')) {
+                // The item sets that stand for a public project, as the real
+                // query would find them.
+                assertSameValue('Omeka\Entity\Item', $params['item'] ?? null, 'the exclusion binds :item');
+                $rows = array_values(array_filter(
+                    $rows,
+                    fn (array $row): bool => !in_array((int) $row['id'], $this->projectSetIds, true)
+                ));
+            }
+            return $rows;
         }
         if (str_contains($query, 'FROM site_page')) {
             return $this->pages[$siteId] ?? [];
@@ -240,4 +253,32 @@ test('page overrides name the noindex pages the sitemap leaves out', function ()
     $store->replaceAll([2 => ['robots' => 'noindex, follow'], 3 => ['robots' => 'index, follow'], 4 => ['title' => 'x']]);
 
     assertSameValue([2], $store->noindexPageIds());
+});
+
+test('item sets whose page redirects to their project leave the sitemap', function (): void {
+    $connection = new FakeConnection();
+    $connection->itemSets[1] = [
+        ['id' => 20, 'modified' => null],
+        ['id' => 6259, 'modified' => null],
+        ['id' => 29918, 'modified' => null],
+    ];
+    $connection->projectSetIds = [6259];
+    $generator = new SitemapGenerator($connection, sitemapConfig(), null, new MemoryLogger());
+
+    assertSameValue([
+        'https://example.test/s/amira/item-set/20',
+        'https://example.test/s/amira/item-set/29918',
+    ], xmlLocations($generator->buildItemSets('https://example.test/s/amira', 1, 0, true), 'url'));
+    assertSameValue(2, $generator->counts(1, true)['itemSets']);
+
+    // The site keeps its item-set pages: every public item set is listed.
+    assertSameValue(3, count(xmlLocations($generator->buildItemSets('https://example.test/s/amira', 1, 0), 'url')));
+    assertSameValue(3, $generator->counts(1)['itemSets']);
+
+    // One query per sitemap, the exclusion inside it.
+    $exclusions = array_filter($connection->queries, static fn (string $q): bool => str_contains($q, 'NOT EXISTS'));
+    assertSameValue(2, count($exclusions));
+    foreach ($exclusions as $query) {
+        assertTrue(str_contains($query, "c.local_name = 'Project'") && str_contains($query, "sp.local_name = 'id'"));
+    }
 });

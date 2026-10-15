@@ -29,6 +29,8 @@ final class StructuredDataFactory implements FactoryInterface
                         : StructuredData::ACCESS_STATEMENT;
                 },
             ],
+            $container->get(LandingPages::class),
+            $container->get(ProjectResolver::class),
         );
     }
 }

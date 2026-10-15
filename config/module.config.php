@@ -35,6 +35,10 @@ return [
             // The serialisers; the plain-text download renders the default style.
             Service\CitationExport::class    => Service\CitationExportFactory::class,
             Service\ImageDimensions::class   => Service\ImageDimensionsFactory::class,
+            // The breadcrumb's landing pages and research projects; the
+            // resolver also decides the project item-set redirect.
+            Service\LandingPages::class      => Service\LandingPagesFactory::class,
+            Service\ProjectResolver::class   => Service\ProjectResolverFactory::class,
         ],
         'invokables' => [
             // Stateless formatter: no config, no dependencies.
@@ -205,6 +209,30 @@ return [
             // these from config/local.config.php for a consumer that wants them.
             'priority'   => [],
             'changefreq' => [],
+        ],
+        'breadcrumb' => [
+            // The site page that presents each item set's kind of record,
+            // named in the breadcrumb between the home page and the record:
+            // item set id => page slug (AMIRA's sets, pinned in
+            // MongoDB2OmekaS/config/profiles/amira.json). A page that does not
+            // exist or is private in the site is skipped, and the breadcrumb
+            // names the item set instead. A site overrides this, line by line,
+            // in its settings (SEO → Breadcrumb landing pages).
+            'landing_pages' => [
+                20    => 'research-projects', // Projects
+                17    => 'research-sections', // Research Sections
+                18    => 'people',            // Persons
+                110   => 'organisations',     // Institutions
+                29918 => 'publications',      // Publications
+                39095 => 'podcasts',          // Podcasts
+                39192 => 'youtube-videos',    // YouTube videos
+                1852  => 'subjects-tags',     // Subjects
+                1851  => 'locations',         // Locations
+                19    => 'languages',         // Languages
+                21    => 'genres',            // Genres
+                41268 => '',                  // Journals: no page of their own
+                45028 => '',                  // Series: no page of their own
+            ],
         ],
         'structured_data' => [
             // schema.org @type per Omeka resource template id (pinned in

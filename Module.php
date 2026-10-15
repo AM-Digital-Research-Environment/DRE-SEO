@@ -14,8 +14,13 @@ declare(strict_types=1);
  *   • Injects the Google Search Console verification tag from a pasted snippet.
  *   • Optionally pings IndexNow when public content changes.
  *
- * Settings-only: it owns a handful of `dre_seo_*` settings and one site setting
- * (dre_seo_pages); install/uninstall just create and drop those. No third-party
+ *   • Places every record in the site — the breadcrumb the theme shows and the
+ *     BreadcrumbList state — and 301-redirects a research project's item-set
+ *     page to the project item, the project's one public page.
+ *
+ * Settings-only: it owns a handful of `dre_seo_*` settings and three site
+ * settings (dre_seo_pages, dre_seo_landing_pages, dre_seo_project_redirect);
+ * install/uninstall just create and drop those. No third-party
  * Composer dependencies, so there is no bundled vendor/ — Omeka autoloads the
  * DRESeo\ namespace from src/.
  */
@@ -26,11 +31,14 @@ use DRESeo\Service\DefaultSite;
 use DRESeo\Service\HeadMetadata;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\LandingPages;
 use DRESeo\Service\PingQueue;
+use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\Signposting;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Http\Header\GenericMultiHeader;
+use Laminas\Http\Request as HttpRequest;
 use Laminas\Http\Response as HttpResponse;
 use Laminas\Mvc\Controller\AbstractController;
 use Laminas\Mvc\MvcEvent;
@@ -40,6 +48,7 @@ use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
+use Omeka\Form\SiteSettingsForm;
 use Omeka\Module\AbstractModule;
 use Omeka\Permissions\Acl;
 
@@ -96,13 +105,16 @@ class Module extends AbstractModule
         foreach (self::SETTINGS as $key) {
             $settings->delete($key);
         }
-        // Drop the per-site static-page overrides too.
+        // Drop the site settings too: the static-page overrides, the
+        // breadcrumb landing pages and the project redirect switch.
         try {
             $siteSettings = $services->get('Omeka\Settings\Site');
             $sites = $services->get('Omeka\ApiManager')->search('sites')->getContent();
             foreach ($sites as $site) {
                 $siteSettings->setTargetId($site->id());
-                $siteSettings->delete('dre_seo_pages');
+                foreach (['dre_seo_pages', LandingPages::SETTING, ProjectResolver::REDIRECT_SETTING] as $key) {
+                    $siteSettings->delete($key);
+                }
             }
         } catch (\Throwable $e) {
             // best-effort
@@ -129,6 +141,72 @@ class Module extends AbstractModule
             [Acl::ROLE_EDITOR, Acl::ROLE_SITE_ADMIN, Acl::ROLE_GLOBAL_ADMIN],
             [Controller\Admin\SeoController::class]
         );
+
+        // After core's route listeners (priority 1) have read the site, and
+        // before dispatch: the theme never renders a page that redirects.
+        $event->getApplication()->getEventManager()->attach(
+            MvcEvent::EVENT_ROUTE,
+            [$this, 'redirectProjectItemSet'],
+            -100
+        );
+    }
+
+    /**
+     * A research project's item-set page (`/s/{site}/item-set/{id}`, GET or
+     * HEAD) answers 301 with the project item's page in the same site, when
+     * the item set stands for a public project and the site has not switched
+     * the redirect off ({@see ProjectResolver}). Returning the response ends
+     * the route event, so neither the controller nor the theme runs. Nothing
+     * here touches the session, and any failure leaves the page as it was.
+     */
+    public function redirectProjectItemSet(MvcEvent $event): ?HttpResponse
+    {
+        try {
+            $routeMatch = $event->getRouteMatch();
+            $request = $event->getRequest();
+            if ($routeMatch === null || $routeMatch->getMatchedRouteName() !== 'site/item-set'
+                || !$request instanceof HttpRequest
+            ) {
+                return null;
+            }
+            // Core's preparePublicSite has put the site on the view model.
+            $site = $event->getViewModel()->getVariable('site');
+            if (!$site instanceof SiteRepresentation) {
+                return null;
+            }
+            $services = $event->getApplication()->getServiceManager();
+            $projects = $services->get(ProjectResolver::class);
+            // The cheap checks first: no item set is read for a POST, or when
+            // the site keeps its item-set pages.
+            if (!in_array($request->getMethod(), [HttpRequest::METHOD_GET, HttpRequest::METHOD_HEAD], true)
+                || !$projects->redirectsEnabled((int) $site->id())
+            ) {
+                return null;
+            }
+            try {
+                // As the current user: a private item set is not found.
+                $itemSet = $services->get('Omeka\ApiManager')
+                    ->read('item_sets', (int) $routeMatch->getParam('item-set-id'))
+                    ->getContent();
+            } catch (\Throwable $e) {
+                return null;
+            }
+            $url = $projects->itemSetRedirectUrl(
+                $request->getMethod(),
+                (string) $routeMatch->getMatchedRouteName(),
+                $itemSet instanceof ItemSetRepresentation ? $itemSet : null,
+                $site
+            );
+            $response = $event->getResponse();
+            if ($url === null || !$response instanceof HttpResponse) {
+                return null;
+            }
+            $response->setStatusCode(HttpResponse::STATUS_CODE_301);
+            $response->getHeaders()->addHeaderLine('Location', $url);
+            return $response;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
@@ -148,6 +226,11 @@ class Module extends AbstractModule
         // handler no-ops when no $page is in scope).
         $sharedEventManager->attach('Omeka\Controller\Site\Page', 'view.show.after', [$this, 'handlePageShow']);
         $sharedEventManager->attach('Omeka\Controller\Site\Index', 'view.show.after', [$this, 'handlePageShow']);
+
+        // The site's settings: the breadcrumb's landing pages and the project
+        // item-set redirect.
+        $sharedEventManager->attach(SiteSettingsForm::class, 'form.add_elements', [$this, 'addSiteSettings']);
+        $sharedEventManager->attach(SiteSettingsForm::class, 'form.add_input_filters', [$this, 'addSiteSettingsFilters']);
 
         // Every public page — site-wide constants + verification + gap-fill.
         $sharedEventManager->attach('*', 'view.layout', [$this, 'handleLayout']);
@@ -381,6 +464,78 @@ class Module extends AbstractModule
                 // The logger itself is best-effort at this boundary.
             }
         }
+    }
+
+    // ─── Site settings (Sites → {site} → Settings → SEO) ────────────────────
+
+    public function addSiteSettings(EventInterface $event): void
+    {
+        $form = $event->getTarget();
+        if (!$form instanceof SiteSettingsForm) {
+            return;
+        }
+        $services = $this->getServiceLocator();
+        // Core targets the site settings at the site being edited.
+        $siteSettings = $services->get('Omeka\Settings\Site');
+        $defaults = (array) ($services->get('Config')['dre_seo']['breadcrumb']['landing_pages'] ?? []);
+
+        $groups = (array) ($form->getOption('element_groups') ?? []);
+        $groups['dre_seo'] = 'SEO'; // @translate
+        $form->setOption('element_groups', $groups);
+
+        $redirect = $siteSettings->get(ProjectResolver::REDIRECT_SETTING);
+        $form->add([
+            'name'    => ProjectResolver::REDIRECT_SETTING,
+            'type'    => 'checkbox',
+            'options' => [
+                'element_group' => 'dre_seo',
+                'label' => 'Redirect a project’s item set page to the project', // @translate
+                'info'  => 'A research project is both an item and the item set of its collection. When on, the item set’s page answers with a permanent redirect (301) to the project item, which is then the project’s one page in search engines and the sitemap. An item set is a project’s when its “Is Part Of” links to the public project item, or the public project item has the same dre:id.', // @translate
+            ],
+            'attributes' => [
+                'id'    => ProjectResolver::REDIRECT_SETTING,
+                // On unless switched off.
+                'value' => in_array($redirect, [null, '', '1', 1, true], true) ? '1' : '0',
+            ],
+        ]);
+        $form->add([
+            'name'    => LandingPages::SETTING,
+            'type'    => 'textarea',
+            'options' => [
+                'element_group' => 'dre_seo',
+                'label' => 'Breadcrumb landing pages', // @translate
+                'info'  => 'The page that presents each item set’s records, named in the breadcrumb between the home page and the record: one “item set id = page slug” per line. A line replaces the module’s default for that item set, and “id =” with no slug removes it. A page that does not exist or is private is skipped. Blank: the defaults shown.', // @translate
+            ],
+            'attributes' => [
+                'id'          => LandingPages::SETTING,
+                'rows'        => 8,
+                'placeholder' => LandingPages::format($defaults),
+                'value'       => (string) ($siteSettings->get(LandingPages::SETTING) ?? ''),
+            ],
+        ]);
+    }
+
+    public function addSiteSettingsFilters(EventInterface $event): void
+    {
+        $inputFilter = $event->getParam('inputFilter');
+        if (!is_object($inputFilter) || !method_exists($inputFilter, 'add')) {
+            return;
+        }
+        $inputFilter->add(['name' => ProjectResolver::REDIRECT_SETTING, 'required' => false]);
+        $inputFilter->add([
+            'name'       => LandingPages::SETTING,
+            'required'   => false,
+            'filters'    => [['name' => 'StringTrim']],
+            'validators' => [[
+                'name'    => 'Callback',
+                'options' => [
+                    'callback' => static fn ($value): bool => LandingPages::invalidLines((string) $value) === [],
+                    'messages' => [
+                        'callbackValue' => 'Write one “item set id = page slug” per line, for example “29918 = publications”.', // @translate
+                    ],
+                ],
+            ]],
+        ]);
     }
 
     // ─── Module configuration form ──────────────────────────────────────────
