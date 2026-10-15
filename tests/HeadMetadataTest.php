@@ -32,8 +32,11 @@ require_once __DIR__ . '/../src/Service/ViewLocale.php';
 require_once __DIR__ . '/../src/Service/HeadMetadata.php';
 
 /** @param array<string,mixed> $settings */
-function headMetadataService(array $settings = [], ?LinkedDataIdentity $identity = null): HeadMetadata
-{
+function headMetadataService(
+    array $settings = [],
+    ?LinkedDataIdentity $identity = null,
+    ?DRESeo\Service\ImageDimensions $dimensions = null
+): HeadMetadata {
     $config = require __DIR__ . '/../config/module.config.php';
     $citation = $config['dre_seo']['citation'];
     $kinds = new CitationKindMap($citation['template_kinds'], $citation['default_kind']);
@@ -57,6 +60,7 @@ function headMetadataService(array $settings = [], ?LinkedDataIdentity $identity
         new ResourceSummary($kinds),
         new Signposting($structuredData, $identity),
         $identity,
+        $dimensions,
     );
 }
 
@@ -196,4 +200,34 @@ test('search pages are recognised by their route', function (): void {
     assertTrue(DRESeo\Service\SearchPage::matches('site/dre-search', 'DRESearch\Controller\SearchController', 'results'));
     assertTrue(!DRESeo\Service\SearchPage::matches('site/resource', 'Omeka\Controller\Site\Item', 'browse'));
     assertTrue(!DRESeo\Service\SearchPage::matches('admin/default', 'Omeka\Controller\Admin\Item', 'search'));
+});
+
+test('a local share image declares its size; a remote one does not', function (): void {
+    $files = sys_get_temp_dir() . '/dre-seo-files-' . bin2hex(random_bytes(6));
+    mkdir($files . '/large', 0777, true);
+    // A PNG header is all getimagesize() reads; no GD needed.
+    $ihdr = 'IHDR' . pack('NNCCCCC', 800, 450, 8, 2, 0, 0, 0);
+    file_put_contents(
+        $files . '/large/abc123.png',
+        "\x89PNG\r\n\x1a\n" . pack('N', 13) . $ihdr . pack('N', crc32($ihdr))
+    );
+    $dimensions = new DRESeo\Service\ImageDimensions($files);
+
+    try {
+        $local = new PhpRenderer();
+        $head = headMetadataService([], null, $dimensions);
+        $head->setImage($local, 'https://example.test/files/large/abc123.png', 'AMIRA');
+        assertSameValue(['800'], $local->meta('og:image:width'));
+        assertSameValue(['450'], $local->meta('og:image:height'));
+        assertSameValue(['AMIRA'], $local->meta('og:image:alt'));
+
+        $remote = new PhpRenderer();
+        $head->setImage($remote, 'https://i.ytimg.com/vi/abc/hqdefault.jpg');
+        assertSameValue([], $remote->meta('og:image:width'));
+        assertSameValue(null, $dimensions->of('https://example.test/files/large/..%2F..%2Fsecret.png'));
+    } finally {
+        @unlink($files . '/large/abc123.png');
+        @rmdir($files . '/large');
+        @rmdir($files);
+    }
 });

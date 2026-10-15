@@ -18,6 +18,7 @@ final class HeadMetadataFactory implements FactoryInterface
             $container->get(ResourceSummary::class),
             $container->get(Signposting::class),
             $container->get(LinkedDataIdentity::class),
+            $container->get(ImageDimensions::class),
         );
     }
 }

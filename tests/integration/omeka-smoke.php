@@ -217,6 +217,7 @@ try {
         DRESeo\Service\ResourceSummary::class,
         DRESeo\Service\Signposting::class,
         DRESeo\Service\LinkedDataIdentity::class,
+        DRESeo\Service\ImageDimensions::class,
     ];
     foreach ($serviceTypes as $type) {
         smokeAssert($services->get($type) instanceof $type, sprintf('Factory failed for %s.', $type));

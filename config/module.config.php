@@ -34,6 +34,7 @@ return [
             Service\LinkedDataIdentity::class => Service\LinkedDataIdentityFactory::class,
             // The serialisers; the plain-text download renders the default style.
             Service\CitationExport::class    => Service\CitationExportFactory::class,
+            Service\ImageDimensions::class   => Service\ImageDimensionsFactory::class,
         ],
         'invokables' => [
             // Stateless formatter: no config, no dependencies.

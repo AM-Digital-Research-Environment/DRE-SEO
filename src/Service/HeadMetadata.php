@@ -81,6 +81,7 @@ class HeadMetadata
         private readonly ResourceSummary $summary,
         private readonly Signposting $signposting,
         private readonly ?LinkedDataIdentity $identity = null,
+        private readonly ?ImageDimensions $imageDimensions = null,
     ) {
     }
 
@@ -416,6 +417,13 @@ class HeadMetadata
     public function setImage(PhpRenderer $view, string $url, ?string $alt = null): void
     {
         $this->setOpenGraph($view, ['og:image' => $url]);
+        // The size, when the image is a local file: a preview can then be laid
+        // out before it loads. Unknown sizes are left out, never guessed.
+        $size = $this->imageDimensions?->of($url);
+        if ($size !== null) {
+            $view->headMeta()->setProperty('og:image:width', (string) $size[0]);
+            $view->headMeta()->setProperty('og:image:height', (string) $size[1]);
+        }
         $view->headMeta()->setName('twitter:image', $url);
         if ($alt !== null && trim($alt) !== '') {
             $view->headMeta()->setProperty('og:image:alt', $alt);
