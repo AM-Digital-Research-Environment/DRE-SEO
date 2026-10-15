@@ -119,7 +119,7 @@ test('a journal is a Periodical, and a bare Wikidata id becomes its entity URI',
 
     assertSameValue('Periodical', $data['@type']);
     assertSameValue('2366-2425', $data['issn']);
-    assertSameValue(['https://www.wikidata.org/entity/Q15755461'], $data['sameAs']);
+    assertSameValue(['http://www.wikidata.org/entity/Q15755461'], $data['sameAs']);
 });
 
 test('a place has numeric coordinates and the place that contains it', function (): void {
@@ -156,7 +156,11 @@ test('an article sits in its periodical, volume and issue, with its DOI', functi
     assertSameValue('42', $data['isPartOf']['isPartOf']['volumeNumber']);
     assertSameValue('0021-8537', $data['isPartOf']['isPartOf']['isPartOf']['issn']);
     assertSameValue('185', $data['pageStart']);
-    assertSameValue('https://doi.org/10.1234/abcd', $data['identifier']);
+    assertSameValue(
+        ['@type' => 'PropertyValue', 'propertyID' => 'DOI', 'value' => '10.1234/abcd', 'url' => 'https://doi.org/10.1234/abcd'],
+        $data['identifier']
+    );
+    assertSameValue(['https://doi.org/10.1234/abcd'], $data['sameAs'], 'the DOI is the same work, published');
 });
 
 test('a YouTube video carries its embed URL and duration', function (): void {
@@ -175,4 +179,36 @@ test('a YouTube video carries its embed URL and duration', function (): void {
 test('the home page WebSite no longer carries the retired SearchAction', function (): void {
     $source = (string) file_get_contents(__DIR__ . '/../src/Service/StructuredData.php');
     assertTrue(!str_contains($source, "'potentialAction'"), 'Google retired the sitelinks search box in 2024');
+});
+
+test('sameAs is limited to authority IRIs, in their canonical form', function (): void {
+    $term = new Resource('Karakul sheep', 6, 'Authority file', [
+        'dcterms:identifier' => [
+            new Value(uriValue: 'https://www.wikidata.org/wiki/Q1189283'),
+            new Value(uriValue: 'https://www.youtube.com/playlist?list=PL123'),
+            new Value(uriValue: 'https://gepris.dfg.de/gepris/projekt/390713894'),
+            new Value(uriValue: 'http://d-nb.info/gnd/4163233-2'),
+            new Value(uriValue: 'https://orcid.org/0000-0003-0959-2092'),
+            new Value(uriValue: 'https://id.loc.gov/authorities/subjects/sh85071763.html'),
+            new Value(uriValue: 'https://www.geonames.org/2950159/berlin.html'),
+            new Value(uriValue: 'https://ror.org/0234wmv40'),
+            new Value(uriValue: 'https://viaf.org/viaf/12345/'),
+            new Value(uriValue: 'https://isni.org/isni/000000012146438X'),
+            new Value('Halle Fotoglasplatten'),
+        ],
+    ]);
+    $builder = new StructuredData([6 => 'DefinedTerm']);
+
+    $data = $builder->forResource($term, new SiteRepresentation(), null, null);
+
+    assertSameValue([
+        'http://www.wikidata.org/entity/Q1189283',
+        'https://d-nb.info/gnd/4163233-2',
+        'https://orcid.org/0000-0003-0959-2092',
+        'http://id.loc.gov/authorities/subjects/sh85071763',
+        'https://sws.geonames.org/2950159/',
+        'https://ror.org/0234wmv40',
+        'http://viaf.org/viaf/12345',
+        'https://isni.org/isni/000000012146438X',
+    ], $data['sameAs']);
 });

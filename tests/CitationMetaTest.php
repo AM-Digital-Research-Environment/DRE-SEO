@@ -111,3 +111,20 @@ test('a podcast credits its host as its author and names its Zotero type', funct
     assertSameValue(['Akese, Grace Abena'], tagValues($tags, 'citation_author'), 'the host, as on the record page');
     assertSameValue(['podcast'], tagValues($tags, 'DC.type'));
 });
+
+test('DC.identifier is the persistent identifier when there is one, else the page', function (): void {
+    $book = new ItemRepresentation('A book', 15, 'Book', [
+        'dcterms:title' => [new ValueRepresentation('A book')],
+        'dcterms:creator' => [new ValueRepresentation('Example, Ada')],
+        'bibo:doi' => [new ValueRepresentation('10.1234/abcd')],
+    ], null, 77);
+
+    $page = 'https://example.test/s/amira/item/77';
+    $withUri = citationMetaService()->tags($book, $page, 'https://example.test/resource/77');
+    $withoutUri = citationMetaService()->tags($book, $page);
+
+    assertSameValue(['https://example.test/resource/77'], tagValues($withUri, 'DC.identifier'));
+    assertSameValue([$page], tagValues($withUri, 'citation_public_url'), 'the landing page stays the page');
+    assertSameValue([$page], tagValues($withoutUri, 'DC.identifier'));
+    assertSameValue(['10.1234/abcd'], tagValues($withUri, 'citation_doi'));
+});

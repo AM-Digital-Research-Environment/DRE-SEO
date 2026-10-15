@@ -60,6 +60,7 @@ class HeadMetadata
         private readonly CitationKindMap $kinds,
         private readonly ResourceSummary $summary,
         private readonly Signposting $signposting,
+        private readonly ?LinkedDataIdentity $identity = null,
     ) {
     }
 
@@ -116,7 +117,7 @@ class HeadMetadata
         // the page as a reference, and FAIR Signposting links that point
         // machines at the same record in citation and RDF formats.
         if ($this->citationsEnabled()) {
-            $this->citationMeta->apply($view, $resource, $canonical);
+            $this->citationMeta->apply($view, $resource, $canonical, $this->identity?->uri($resource) ?? $canonical);
         }
         if ($canonical !== null && $resource instanceof ItemRepresentation) {
             $this->signposts = $this->signposting->links(

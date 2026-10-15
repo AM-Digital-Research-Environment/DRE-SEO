@@ -7,6 +7,7 @@ use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationExport;
 use DRESeo\Service\CitationFormatter;
 use DRESeo\Service\CitationKindMap;
+use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\ViewLocale;
 use Laminas\View\Helper\AbstractHelper;
 use Laminas\View\Renderer\PhpRenderer;
@@ -76,6 +77,7 @@ class Citation extends AbstractHelper
         private readonly array $enabledFormats,
         private readonly bool $enabled,
         private readonly string $curatedLabel = 'As catalogued',
+        private readonly ?LinkedDataIdentity $identity = null,
     ) {
     }
 
@@ -92,7 +94,9 @@ class Citation extends AbstractHelper
         /** @var PhpRenderer $view */
         $view = $this->getView();
         $site = $this->currentSite($view);
-        $url = $this->itemUrl($item, $site);
+        // The URL a citation carries is the record's persistent identifier —
+        // its Linked Data URI — else its page.
+        $url = $this->identity?->uri($item) ?? $this->itemUrl($item, $site);
         $record = $this->citationData->build($item, $url, $site?->title());
 
         $locale = ViewLocale::forCitation($view);

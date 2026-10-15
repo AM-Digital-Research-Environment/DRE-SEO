@@ -97,7 +97,7 @@ class StructuredData
                 ?? $this->fallbackDescription($resource)
         );
 
-        $sameAs = $this->identityUris($resource);
+        $sameAs = $this->sameAsFor($resource);
         if ($type === 'VideoObject') {
             $watchUrl = $this->uris($resource, 'fabio:hasURL')[0] ?? null;
             if ($watchUrl !== null) {
@@ -121,6 +121,23 @@ class StructuredData
         }
 
         return $data;
+    }
+
+    /**
+     * The IRIs a record is the same as: DRE Linked Data's canonical identity
+     * links when it publishes them, else the allowlisted authority IRIs the
+     * record itself carries; and a work's DOI, as its https://doi.org/ IRI.
+     *
+     * @return string[]
+     */
+    public function sameAsFor(AbstractResourceEntityRepresentation $resource): array
+    {
+        $sameAs = $this->identity?->sameAs($resource) ?? $this->identityUris($resource);
+        $doi = $this->doi($resource);
+        if ($doi !== null) {
+            $sameAs[] = 'https://doi.org/' . $doi;
+        }
+        return array_values(array_unique($sameAs));
     }
 
     /** The schema.org @type a resource is published as, from its template. */
@@ -343,9 +360,16 @@ class StructuredData
             $data['spatialCoverage'] = $places;
         }
 
+        // The DOI identifies the published version; it is an identifier and
+        // `sameAs`, never the record's own @id or url.
         $doi = $this->doi($resource);
         if ($doi !== null) {
-            $data['identifier'] = 'https://doi.org/' . $doi;
+            $data['identifier'] = [
+                '@type'      => 'PropertyValue',
+                'propertyID' => 'DOI',
+                'value'      => $doi,
+                'url'        => 'https://doi.org/' . $doi,
+            ];
         }
         $isbn = $this->isbn($resource);
         if ($isbn !== null && $type === 'Book') {

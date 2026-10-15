@@ -38,13 +38,19 @@ class CitationMeta
     ) {
     }
 
+    /**
+     * @param string|null $canonical the record page
+     * @param string|null $citeAs    the record's persistent identifier (its
+     *                               Linked Data URI); the page when null
+     */
     public function apply(
         PhpRenderer $view,
         AbstractResourceEntityRepresentation $resource,
-        ?string $canonical
+        ?string $canonical,
+        ?string $citeAs = null
     ): void {
         $headMeta = $view->headMeta();
-        foreach ($this->tags($resource, $canonical) as [$name, $content]) {
+        foreach ($this->tags($resource, $canonical, $citeAs) as [$name, $content]) {
             $headMeta->appendName($name, $content);
         }
     }
@@ -55,15 +61,16 @@ class CitationMeta
      *
      * @return array<int,array{0:string,1:string}>
      */
-    public function tags(AbstractResourceEntityRepresentation $resource, ?string $canonical): array
+    public function tags(AbstractResourceEntityRepresentation $resource, ?string $canonical, ?string $citeAs = null): array
     {
         $kind = $this->kinds->forResource($resource);
         $isWork = $resource instanceof ItemRepresentation && !$kind->isAuthorityRecord();
+        $citeAs ??= $canonical;
 
-        $tags = $this->dublinCore($resource, $canonical, $isWork ? $kind : null);
+        $tags = $this->dublinCore($resource, $citeAs, $isWork ? $kind : null);
         if ($isWork) {
             /** @var ItemRepresentation $resource */
-            $tags = [...$tags, ...$this->highwire($this->citationData->build($resource, $canonical), $resource, $canonical)];
+            $tags = [...$tags, ...$this->highwire($this->citationData->build($resource, $citeAs), $resource, $canonical)];
         }
         return $tags;
     }
@@ -165,7 +172,7 @@ class CitationMeta
     /** @return array<int,array{0:string,1:string}> */
     private function dublinCore(
         AbstractResourceEntityRepresentation $resource,
-        ?string $canonical,
+        ?string $identifier,
         ?CitationKind $workKind
     ): array {
         $tags = [];
@@ -189,10 +196,11 @@ class CitationMeta
             ?? ($resource->resourceClass() ? $resource->resourceClass()->label() : null));
         $add('DC.language', $this->firstLabel($resource, 'dcterms:language'));
 
-        // DC.identifier is the resource's own (canonical) URL. The DOI is
-        // conveyed solely through citation_doi → Zotero's DOI field; emitting it
-        // here as well made Zotero copy it into the Extra field redundantly.
-        $add('DC.identifier', $canonical);
+        // DC.identifier is the record's persistent identifier: its Linked Data
+        // URI, else its page. The DOI is conveyed solely through citation_doi
+        // → Zotero's DOI field; emitting it here as well made Zotero copy it
+        // into the Extra field redundantly.
+        $add('DC.identifier', $identifier);
 
         foreach ($this->labels($resource, 'dcterms:subject') as $subject) {
             $add('DC.subject', $subject);

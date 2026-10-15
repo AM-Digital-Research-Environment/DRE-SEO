@@ -131,7 +131,7 @@ test('Signposting describes the record by its RDF documents when DRE Linked Data
         [LD_BASE . '/resource/41980.jsonld', 'application/ld+json'],
     ], array_map(static fn (array $link) => [$link['href'], $link['type']], $describedBy));
     assertTrue(!str_contains((string) json_encode($links), '/api/items/'), 'the Omeka API is no longer offered');
-    assertSameValue(['rel' => 'cite-as', 'href' => 'https://example.test/s/amira/item/41980'], $links[0]);
+    assertSameValue(['rel' => 'cite-as', 'href' => LD_BASE . '/resource/41980'], $links[0], 'cite-as is the persistent URI');
     assertTrue(in_array(['rel' => 'type', 'href' => 'https://schema.org/Thesis'], $links, true), 'the schema.org type is linked');
 });
 
@@ -161,4 +161,87 @@ test('the Link header carries the same set, in RFC 8288 syntax, and is always a 
         $header
     );
     assertTrue(preg_match('/\A[\x20-\x7E]+\z/', $header) === 1, 'printable ASCII only');
+});
+
+test('cite-as is the page without DRE Linked Data, and never the DOI', function (): void {
+    $thesis = new Item('A thesis', 30, 'Thesis', [
+        'bibo:doi' => [new Value('10.1234/abcd')],
+    ], 'https://example.test/s/amira/item/41980', 41980);
+
+    $without = (new Signposting(new StructuredData([30 => 'Thesis']), new LinkedDataIdentity()))
+        ->links($thesis, 'https://example.test/s/amira/item/41980', 'https://example.test', false);
+    $identity = linkedDataIdentity();
+    $with = (new Signposting(new StructuredData([30 => 'Thesis'], 'CreativeWork', null, $identity), $identity))
+        ->links($thesis, 'https://example.test/s/amira/item/41980', 'https://example.test', false);
+
+    assertSameValue('https://example.test/s/amira/item/41980', $without[0]['href']);
+    assertSameValue(LD_BASE . '/resource/41980', $with[0]['href']);
+    assertTrue(!str_contains((string) json_encode([$without, $with]), 'doi.org'), 'the DOI resolves to the publisher, not this record');
+});
+
+test('DRE Linked Data 0.3.0 sameAs is preferred, and each resource is described once', function (): void {
+    $calls = 0;
+    $helper = static function (Resource $resource) use (&$calls): array {
+        $calls++;
+        return [
+            'uri' => LD_BASE . '/resource/' . $resource->id(),
+            'page' => 'https://example.test/s/amira/item/' . $resource->id(),
+            'sameAs' => ['http://www.wikidata.org/entity/Q1', 'https://d-nb.info/gnd/118540238', 'not an IRI'],
+        ];
+    };
+    $identity = new LinkedDataIdentity(static fn () => $helper);
+    $person = new Resource('Goethe, Johann Wolfgang von', 4, 'Person', [
+        'dcterms:identifier' => [new Value(uriValue: 'https://www.youtube.com/playlist?list=abc')],
+    ], idValue: 7);
+    $builder = new StructuredData([4 => 'Person'], 'CreativeWork', null, $identity);
+
+    $data = $builder->forResource($person, new SiteRepresentation(), null, null);
+    $identity->uri($person);
+    $identity->page($person);
+
+    assertSameValue(['http://www.wikidata.org/entity/Q1', 'https://d-nb.info/gnd/118540238'], $data['sameAs']);
+    assertSameValue('https://example.test/s/amira/item/7', $identity->page($person));
+    assertSameValue(1, $calls, 'memoised per resource');
+});
+
+test('DRE Linked Data 0.2.0 has no sameAs or dataset: the caller falls back', function (): void {
+    $identity = linkedDataIdentity();
+    $person = new Resource('Example, Ada', 4, 'Person', [
+        'dcterms:identifier' => [new Value(uriValue: 'https://www.wikidata.org/wiki/Q42')],
+    ], idValue: 8);
+
+    assertSameValue(null, $identity->sameAs($person));
+    assertSameValue(null, $identity->page($person));
+    assertSameValue([], $identity->dataset(), 'a closure helper has no dataset()');
+    $data = (new StructuredData([4 => 'Person'], 'CreativeWork', null, $identity))
+        ->forResource($person, new SiteRepresentation(), null, null);
+    assertSameValue(['http://www.wikidata.org/entity/Q42'], $data['sameAs']);
+});
+
+test('dataset() is read from a helper object that has it, and a failure is contained', function (): void {
+    $helper = new class {
+        public function __invoke(Resource $resource): array
+        {
+            return [];
+        }
+
+        public function dataset(): array
+        {
+            return ['uri' => LD_BASE . '/linked-data/void#dataset'];
+        }
+    };
+    $broken = new class {
+        public function __invoke(Resource $resource): array
+        {
+            return [];
+        }
+
+        public function dataset(): array
+        {
+            throw new RuntimeException('no dump');
+        }
+    };
+
+    assertSameValue(LD_BASE . '/linked-data/void#dataset', (new LinkedDataIdentity(static fn () => $helper))->dataset()['uri']);
+    assertSameValue([], (new LinkedDataIdentity(static fn () => $broken))->dataset());
 });

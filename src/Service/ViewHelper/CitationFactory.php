@@ -5,6 +5,7 @@ namespace DRESeo\Service\ViewHelper;
 
 use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationFormatter;
+use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\SettingFlag;
 use DRESeo\View\Helper\Citation;
 use Laminas\ServiceManager\Factory\FactoryInterface;
@@ -24,6 +25,7 @@ final class CitationFactory implements FactoryInterface
             $config['formats'] ?? [],
             SettingFlag::isOn($container->get('Omeka\Settings'), 'dre_seo_citation_meta', true),
             (string) ($config['curated_label'] ?? 'As catalogued'),
+            $container->get(LinkedDataIdentity::class),
         );
     }
 }

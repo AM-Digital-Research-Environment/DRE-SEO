@@ -47,8 +47,10 @@ final class Signposting
      */
     public function links(ItemRepresentation $item, string $canonical, string $origin, bool $citations): array
     {
-        $doi = $this->doi($item);
-        $links = [['rel' => 'cite-as', 'href' => $doi !== null ? 'https://doi.org/' . $doi : $canonical]];
+        // cite-as is this catalogue record's persistent identifier: its
+        // Linked Data URI, else the page. A DOI names the publisher's version,
+        // not this record, so it is `sameAs` in the JSON-LD instead.
+        $links = [['rel' => 'cite-as', 'href' => $this->identity->uri($item) ?? $canonical]];
 
         if ($citations) {
             $origin = rtrim($origin, '/');

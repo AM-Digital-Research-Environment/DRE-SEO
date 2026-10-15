@@ -6,6 +6,7 @@ namespace DRESeo\Controller;
 use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationExport;
 use DRESeo\Service\DefaultSite;
+use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\SettingFlag;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -23,9 +24,10 @@ use Omeka\Settings\Settings;
  * place, subject heading, …) exports as a web page of the database, the same
  * entry citation the record page shows.
  *
- * The canonical URL baked into the export is the *default site's* item page, so
- * a downloaded citation points at the same address regardless of which site the
- * reader came from.
+ * The URL baked into the export is the record's persistent identifier — its
+ * DRE Linked Data URI (`/resource/{id}`, which 303s to the page) — else the
+ * *default site's* item page, so a downloaded citation points at the same
+ * address regardless of which site the reader came from.
  */
 class CitationController extends AbstractActionController
 {
@@ -35,6 +37,7 @@ class CitationController extends AbstractActionController
         private readonly ApiManager $api,
         private readonly Settings $settings,
         private readonly DefaultSite $defaultSite,
+        private readonly ?LinkedDataIdentity $identity = null,
     ) {
     }
 
@@ -56,7 +59,7 @@ class CitationController extends AbstractActionController
         }
 
         $site = $this->defaultSite->get();
-        $record = $this->citationData->build($item, $this->itemUrl($item), $site?->title());
+        $record = $this->citationData->build($item, $this->identity?->uri($item) ?? $this->itemUrl($item), $site?->title());
         $body = $this->citationExport->serialize($record, $format);
         if ($body === null) {
             return $this->notFound();
