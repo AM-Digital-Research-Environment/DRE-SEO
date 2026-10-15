@@ -20,9 +20,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 - The catalogue as a schema.org `Dataset` on the home page, from DRE Linked Data's
   `dataset()` (0.3.0+): VoID URI as `@id`, a description of at least 50 characters (Google
   Dataset Search's minimum), licence, publisher with its Wikidata `sameAs`, `dateModified`,
-  the dumps as `DataDownload`s and AMIRA as the `DataCatalog`. The home page's `WebSite`
-  names the site search as a `SearchAction` again (core's `index/search`,
-  `dre_seo.structured_data.search_path`).
+  the dumps as `DataDownload`s and AMIRA as the `DataCatalog`.
 - Research items (an item whose `dcterms:isPartOf` links to a `foaf:Project` record — the
   rule DRE-theme's `RecordAccess` applies) state `conditionsOfAccess`: their access rights
   and a statement that AMIRA holds the metadata only and access requests go to the project

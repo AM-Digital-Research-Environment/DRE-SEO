@@ -176,22 +176,9 @@ test('a YouTube video carries its embed URL and duration', function (): void {
     assertSameValue('PT48M32S', $data['duration']);
 });
 
-test('the home page WebSite names its home page and the site search', function (): void {
-    $config = require __DIR__ . '/../config/module.config.php';
-    $site = new SiteRepresentation('amira', 'AMIRA', new Omeka\Api\Representation\SitePageRepresentation('home'));
-    $builder = new StructuredData([], 'CreativeWork', null, null, ['search_path' => $config['dre_seo']['structured_data']['search_path']]);
-
-    $data = $builder->webSite(new Laminas\View\Renderer\PhpRenderer(), $site);
-
-    assertSameValue('https://example.test/s/amira/page/home', $data['url']);
-    assertSameValue('SearchAction', $data['potentialAction']['@type']);
-    assertSameValue(
-        'https://example.test/s/amira/index/search?fulltext_search={search_term_string}',
-        $data['potentialAction']['target']['urlTemplate']
-    );
-    assertSameValue('required name=search_term_string', $data['potentialAction']['query-input']);
-    $without = (new StructuredData([]))->webSite(new Laminas\View\Renderer\PhpRenderer(), $site);
-    assertTrue(!isset($without['potentialAction']), 'no search path, no action');
+test('the home page WebSite no longer carries the retired SearchAction', function (): void {
+    $source = (string) file_get_contents(__DIR__ . '/../src/Service/StructuredData.php');
+    assertTrue(!str_contains($source, "'potentialAction'"), 'Google retired the sitelinks search box in 2024');
 });
 
 test('sameAs is limited to authority IRIs, in their canonical form', function (): void {

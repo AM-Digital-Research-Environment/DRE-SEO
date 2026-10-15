@@ -17,7 +17,6 @@ final class StructuredDataFactory implements FactoryInterface
             $container->get(CitationKindMap::class),
             $container->get(LinkedDataIdentity::class),
             [
-                'search_path' => array_key_exists('search_path', $config) ? $config['search_path'] : null,
                 'access_free' => (array) ($config['access_free'] ?? []),
                 // Resolved on first use, once the request's locale is set.
                 'access_statement' => static function () use ($container): string {

@@ -60,9 +60,7 @@ class StructuredData
 
     /**
      * @param array<int,string> $templateTypes resource template id => schema @type
-     * @param array{search_path?:?string,access_free?:array<string,bool>,access_statement?:\Closure|string|null} $options
-     *        search_path: the site search, relative to the site root, with a
-     *        {search_term_string} placeholder (null: no SearchAction);
+     * @param array{access_free?:array<string,bool>,access_statement?:\Closure|string|null} $options
      *        access_free: access-right label => whether that access is free;
      *        access_statement: the sentence a research item's conditionsOfAccess
      *        ends with (a closure is resolved on first use, so it is translated
@@ -202,33 +200,20 @@ class StructuredData
     }
 
     /**
-     * The home page's WebSite node, which Google reads for the site name. It
-     * names the site search as a SearchAction: Google retired the sitelinks
-     * search box it once fed (November 2024), but the action still tells any
-     * consumer how to search the site. The search URL is core's
-     * `/s/{slug}/index/search?fulltext_search=…` by default, which runs the
-     * site's configured search.
+     * The home page's WebSite node, which Google reads for the site name. The
+     * SearchAction it once carried fed the sitelinks search box, which Google
+     * retired in November 2024, so it is no longer emitted.
      *
      * @return array<mixed>
      */
     public function webSite(PhpRenderer $view, SiteRepresentation $site): array
     {
-        $data = [
+        return [
             '@context' => 'https://schema.org',
             '@type'    => 'WebSite',
             'name'     => $site->title(),
             'url'      => $this->homeUrl($view, $site),
         ];
-        $path = $this->options['search_path'] ?? null;
-        if (is_string($path) && str_contains($path, '{search_term_string}')) {
-            $root = rtrim((string) $view->url('site', ['site-slug' => $site->slug()], ['force_canonical' => true]), '/');
-            $data['potentialAction'] = [
-                '@type'       => 'SearchAction',
-                'target'      => ['@type' => 'EntryPoint', 'urlTemplate' => $root . '/' . ltrim($path, '/')],
-                'query-input' => 'required name=search_term_string',
-            ];
-        }
-        return $data;
     }
 
     /**
