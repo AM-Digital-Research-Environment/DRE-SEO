@@ -6,6 +6,7 @@ namespace DRESeo\Controller;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\SettingFlag;
+use DRESeo\Service\SiteHome;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -54,27 +55,24 @@ class SitemapController extends AbstractActionController
             return $this->notFound();
         }
 
-        // Pass the site navigation tree + homepage so the sitemap mirrors the
-        // menu structure (order + depth-based priority). Guarded so a missing
-        // method or empty nav simply degrades to listing every public page.
+        // Pass the site navigation tree + home page so the sitemap mirrors the
+        // menu structure (order + depth-based priority) and lists the home
+        // first. Guarded so a missing method or empty nav simply degrades to
+        // listing every public page.
         $navTree = [];
-        $homepageId = null;
         try {
             $nav = $site->navigation();
             $navTree = is_array($nav) ? $nav : [];
-            $homepage = $site->homepage();
-            $homepageId = $homepage ? $homepage->id() : null;
         } catch (\Throwable $e) {
             // degrade gracefully
         }
 
         return $this->xml($this->generator->buildPages(
             $this->siteUrl($site),
-            $this->hostUrl($site),
             $site->id(),
             $this->ttl(),
             $navTree,
-            $homepageId
+            SiteHome::pageId($site)
         ));
     }
 

@@ -280,10 +280,19 @@ namespace Omeka\Api\Representation {
     if (!class_exists(SiteRepresentation::class)) {
         class SiteRepresentation
         {
+            /** @param object[] $linkedPagesValue */
             public function __construct(
                 private readonly string $slugValue = 'amira',
                 private readonly string $titleValue = 'AMIRA',
+                private readonly ?object $homepageValue = null,
+                private readonly array $linkedPagesValue = [],
+                private readonly int $idValue = 1,
             ) {
+            }
+
+            public function id(): int
+            {
+                return $this->idValue;
             }
 
             public function slug(): string
@@ -294,6 +303,210 @@ namespace Omeka\Api\Representation {
             public function title(): string
             {
                 return $this->titleValue;
+            }
+
+            public function homepage(): ?object
+            {
+                return $this->homepageValue;
+            }
+
+            /** @return object[] */
+            public function linkedPages(): array
+            {
+                return $this->linkedPagesValue;
+            }
+        }
+    }
+
+    if (!class_exists(SitePageRepresentation::class)) {
+        class SitePageRepresentation
+        {
+            public function __construct(
+                private readonly string $slugValue = 'home',
+                private readonly string $titleValue = 'Home',
+                private readonly int $idValue = 10,
+            ) {
+            }
+
+            public function id(): int
+            {
+                return $this->idValue;
+            }
+
+            public function slug(): string
+            {
+                return $this->slugValue;
+            }
+
+            public function title(): string
+            {
+                return $this->titleValue;
+            }
+
+            public function siteUrl(?string $siteSlug = null, bool $canonical = false): string
+            {
+                return 'https://example.test/s/' . ($siteSlug ?? 'amira') . '/page/' . $this->slugValue;
+            }
+        }
+    }
+}
+
+namespace Laminas\View\Renderer {
+    if (!class_exists(PhpRenderer::class)) {
+        /**
+         * A head-helper recorder standing in for Laminas' renderer: every
+         * <meta>, <link> and JSON-LD script a service writes lands in $head.
+         */
+        class PhpRenderer
+        {
+            /** @var array<string,array<int,mixed>> */
+            public array $head = ['meta' => [], 'link' => [], 'script' => [], 'title' => []];
+
+            /** @var array<string,mixed> */
+            public array $vars = [];
+
+            public function __construct(
+                public string $currentUrl = 'https://example.test/s/amira/page/home',
+                public string $origin = 'https://example.test',
+            ) {
+            }
+
+            public function serverUrl($requestUri = null): string
+            {
+                if ($requestUri === true) {
+                    return $this->currentUrl;
+                }
+                return $this->origin . (is_string($requestUri) ? $requestUri : '');
+            }
+
+            public function url($name = null, array $params = [], $options = []): string
+            {
+                $path = $name === 'site' ? '/s/' . ($params['site-slug'] ?? '') : '/' . (string) $name;
+                return !empty($options['force_canonical']) ? $this->origin . $path : $path;
+            }
+
+            public function headMeta(): object
+            {
+                return new class ($this) {
+                    public function __construct(private readonly PhpRenderer $view)
+                    {
+                    }
+
+                    private function put(string $kind, string $key, string $content, bool $replace): self
+                    {
+                        if ($replace) {
+                            $this->view->head['meta'] = array_values(array_filter(
+                                $this->view->head['meta'],
+                                static fn (array $m): bool => !($m[0] === $kind && $m[1] === $key)
+                            ));
+                        }
+                        $this->view->head['meta'][] = [$kind, $key, $content];
+                        return $this;
+                    }
+
+                    public function setName(string $key, string $content): self
+                    {
+                        return $this->put('name', $key, $content, true);
+                    }
+
+                    public function appendName(string $key, string $content): self
+                    {
+                        return $this->put('name', $key, $content, false);
+                    }
+
+                    public function setProperty(string $key, string $content): self
+                    {
+                        return $this->put('property', $key, $content, true);
+                    }
+                };
+            }
+
+            public function headLink($attributes = null): object
+            {
+                if (is_array($attributes)) {
+                    $this->head['link'][] = $attributes;
+                }
+                return $this;
+            }
+
+            public function headScript(): object
+            {
+                return new class ($this) {
+                    public function __construct(private readonly PhpRenderer $view)
+                    {
+                    }
+
+                    public function appendScript(string $script, string $type = 'text/javascript', array $attrs = []): self
+                    {
+                        $this->view->head['script'][] = $script;
+                        return $this;
+                    }
+                };
+            }
+
+            public function headTitle(): object
+            {
+                return new class ($this) {
+                    public function __construct(private readonly PhpRenderer $view)
+                    {
+                    }
+
+                    public function getContainer(): \ArrayObject
+                    {
+                        return new class ($this->view) extends \ArrayObject {
+                            public function __construct(private readonly PhpRenderer $view)
+                            {
+                                parent::__construct($view->head['title']);
+                            }
+
+                            public function exchangeArray(object|array $array): array
+                            {
+                                $this->view->head['title'] = (array) $array;
+                                return parent::exchangeArray($array);
+                            }
+                        };
+                    }
+
+                    public function append(string $title): self
+                    {
+                        $this->view->head['title'][] = $title;
+                        return $this;
+                    }
+                };
+            }
+
+            public function getHelperPluginManager(): object
+            {
+                return new class {
+                    public function has(string $name): bool
+                    {
+                        return false;
+                    }
+                };
+            }
+
+            /** @return string[] every content written under a <meta> name or property */
+            public function meta(string $key): array
+            {
+                return array_values(array_map(
+                    static fn (array $m): string => $m[2],
+                    array_filter($this->head['meta'], static fn (array $m): bool => $m[1] === $key)
+                ));
+            }
+
+            /** @return array<int,array<string,string>> the <link> elements with this rel */
+            public function links(string $rel): array
+            {
+                return array_values(array_filter(
+                    $this->head['link'],
+                    static fn (array $l): bool => ($l['rel'] ?? '') === $rel
+                ));
+            }
+
+            /** @return array<int,array<mixed>> the JSON-LD documents, decoded */
+            public function jsonLd(): array
+            {
+                return array_map(static fn (string $json): array => json_decode($json, true), $this->head['script']);
             }
         }
     }

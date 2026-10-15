@@ -687,9 +687,14 @@ class StructuredData
         return $name !== '' ? ['@id' => null, 'name' => $name, 'url' => null] : null;
     }
 
+    /**
+     * The home page's own URL ({@see SiteHome}), the same one its canonical,
+     * the sitemap and IndexNow name. `/s/{slug}/` — with the slash — is a 404,
+     * and the bare site root only redirects there.
+     */
     private function homeUrl(PhpRenderer $view, SiteRepresentation $site): string
     {
-        $url = $view->url('site', ['site-slug' => $site->slug()], ['force_canonical' => true]);
-        return rtrim($url, '/') . '/';
+        return SiteHome::url($site)
+            ?? rtrim((string) $view->url('site', ['site-slug' => $site->slug()], ['force_canonical' => true]), '/');
     }
 }

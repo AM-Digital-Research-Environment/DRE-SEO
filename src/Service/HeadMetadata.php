@@ -154,20 +154,19 @@ class HeadMetadata
         array $overrides,
         bool $isHomepage
     ): void {
-        // The home page is reachable at three URLs — the host root `/`, the site
-        // root `/s/{slug}`, and this `/s/{slug}/page/{slug}` — which Google
-        // consolidates onto the bare domain (it picks `/`, not the page URL, as
-        // canonical). Declare `/` as the homepage canonical so our declaration
-        // matches Google's choice; every other page stays self-canonical. The
-        // sitemap lists the home at `/` to match.
-        $canonical = $isHomepage
-            ? rtrim($view->serverUrl('/'), '/') . '/'
-            : $page->siteUrl($site->slug(), true);
+        // Every page is self-canonical, the home page included. Omeka renders
+        // no page at the host root or the site root: `/` and `/s/{slug}` only
+        // redirect (302) to this `/s/{slug}/page/{slug}` URL, so a canonical
+        // there would name a redirect chain. The sitemap, IndexNow and the
+        // WebSite node use the same URL ({@see SiteHome}).
+        $canonical = $page->siteUrl($site->slug(), true);
         $this->setCanonical($view, $canonical);
 
+        // The home page is the site: its link preview carries the site's
+        // name, not the page title ("Home").
         $title = isset($overrides['title']) && $overrides['title'] !== ''
             ? $overrides['title']
-            : (string) $page->title();
+            : ($isHomepage ? (string) $site->title() : (string) $page->title());
         // Fully own the <title> when an editor set a custom one (clear the stack
         // first so the page's default title segment is replaced, not appended);
         // the theme appends the site + installation suffix afterwards.

@@ -211,10 +211,9 @@ class Module extends AbstractModule
         $store->setSite($site->id());
         $overrides = $store->get($page->id());
 
-        $homepage = $site->homepage();
-        $isHomepage = $homepage && $homepage->id() === $page->id();
+        $isHomepage = Service\SiteHome::pageId($site) === $page->id();
 
-        $this->headMetadata()->applyPage($view, $page, $site, $overrides, (bool) $isHomepage);
+        $this->headMetadata()->applyPage($view, $page, $site, $overrides, $isHomepage);
     }
 
     public function handleLayout(EventInterface $event): void

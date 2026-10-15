@@ -80,20 +80,19 @@ class SitemapGenerator
      * reflects their menu depth (top-level entries outrank submenu items), then
      * any remaining public pages (demoted, so nothing is silently dropped).
      *
-     * @param string $hostUrl the scheme+host root (no path) where the home page
-     *                        canonically lives
-     * @param array<mixed> $navTree the site's o:navigation tree
+     * @param string       $siteUrl    the site root, `https://host/s/{slug}`
+     * @param array<mixed> $navTree    the site's o:navigation tree
+     * @param int|null     $homepageId the page the site root redirects to ({@see SiteHome})
      */
     public function buildPages(
         string $siteUrl,
-        string $hostUrl,
         int $siteId,
         int $ttl,
         array $navTree = [],
         ?int $homepageId = null
     ): string {
-        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, $hostUrl);
-        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $hostUrl, $siteId, $navTree, $homepageId) {
+        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, (string) $homepageId);
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId, $navTree, $homepageId) {
             // All public pages, keyed by id.
             $pagesById = [];
             foreach ($this->fetchPages($siteId) as $row) {
@@ -111,27 +110,12 @@ class SitemapGenerator
                 ];
             };
 
-            // Home first, at the bare domain root. The home page declares `/` as
-            // its canonical (host root, site root and /page/{slug} all resolve
-            // there and Google consolidates them onto the domain), so the sitemap
-            // lists `/` to match — not the /page/{slug} URL, which would disagree
-            // with that canonical. The homepage's own page entry is marked
-            // emitted so the nav loop below skips it.
-            $homeLoc = rtrim($hostUrl, '/') . '/';
+            // Home first, at its own page URL — the URL its canonical names.
+            // The host root and the site root only redirect there, so they are
+            // not listed.
             if ($homepageId !== null && isset($pagesById[$homepageId])) {
-                $urls[] = [
-                    'loc'        => $homeLoc,
-                    'lastmod'    => $this->w3c($pagesById[$homepageId]['modified'] ?? null),
-                    'changefreq' => $this->changefreq('home'),
-                    'priority'   => $this->priority('home'),
-                ];
+                $urls[] = $pageUrl($pagesById[$homepageId], $this->priority('home'), $this->changefreq('home'));
                 $emitted[$homepageId] = true;
-            } else {
-                $urls[] = [
-                    'loc'        => $homeLoc,
-                    'changefreq' => $this->changefreq('home'),
-                    'priority'   => $this->priority('home'),
-                ];
             }
 
             // Navigation pages, in menu order; priority by depth.

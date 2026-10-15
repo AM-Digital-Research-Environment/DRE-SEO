@@ -108,7 +108,7 @@ test('sitemap index chunks items and isolates cached sites and hosts', function 
     }
 });
 
-test('pages sitemap follows navigation order and emits the bare-domain homepage', function (): void {
+test('pages sitemap follows navigation order and lists the home page at its own URL', function (): void {
     $connection = new FakeConnection();
     $connection->pages[1] = [
         ['id' => 1, 'slug' => 'home', 'modified' => '2026-01-02 03:04:05'],
@@ -128,15 +128,16 @@ test('pages sitemap follows navigation order and emits the bare-domain homepage'
 
     $xml = $generator->buildPages(
         'https://example.test/s/amira',
-        'https://example.test',
         1,
         0,
         $navigation,
         1
     );
 
+    // `/` and `/s/amira` only redirect to the home page; it is listed at the
+    // URL its canonical names.
     assertSameValue([
-        'https://example.test/',
+        'https://example.test/s/amira/page/home',
         'https://example.test/s/amira/page/research%20%26%20data',
         'https://example.test/s/amira/page/team',
         'https://example.test/s/amira/page/hidden',
