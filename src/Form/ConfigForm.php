@@ -97,7 +97,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Noindex filtered / paginated browse pages', // @translate
-                'info'  => 'Keeps faceted and paginated browse URLs out of the index (they add little and dilute crawl budget) while still letting crawlers follow links to the resource pages. Recommended.', // @translate
+                'info'  => 'Keeps faceted and paginated browse URLs, search results pages (Omeka’s site search and DRE Search) and any other URL with a query string out of the index — they add little and dilute crawl budget — while crawlers still follow their links to the resource pages. A record paging through its connection lists stays indexable. Recommended.', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_noindex_browse'],
         ]);
@@ -111,6 +111,16 @@ class ConfigForm extends Form
                 'info'  => 'Adds structured data (Person, Place, Organization, CreativeWork/Dataset, scholarly types …) to resource pages for richer search results and Google Dataset Search. With DRE Linked Data installed, each record is identified by its permanent /resource/{id} URI. Recommended. Omeka embeds a second JSON-LD block of its own that contradicts this one; switch it off in the site’s settings (“Disable JSON-LD embed”).', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_jsonld_enabled'],
+        ]);
+
+        $this->add([
+            'name'    => 'dre_seo_access_statement',
+            'type'    => Element\Textarea::class,
+            'options' => [
+                'label' => 'Access statement for research items', // @translate
+                'info'  => 'Closes the schema.org conditionsOfAccess of every research item (an item that is part of a project), after its recorded access rights. Leave blank for the default, translated into the page language: “AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record.”', // @translate
+            ],
+            'attributes' => ['id' => 'dre_seo_access_statement', 'rows' => 3],
         ]);
 
         $this->add([
@@ -150,7 +160,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Ping IndexNow when content changes', // @translate
-                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item or page is added or edited, so it is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
+                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_ping_enabled'],
         ]);
@@ -176,6 +186,7 @@ class ConfigForm extends Form
             'dre_seo_noindex_site',
             'dre_seo_noindex_browse',
             'dre_seo_jsonld_enabled',
+            'dre_seo_access_statement',
             'dre_seo_citation_meta',
             'dre_seo_sitemap_enabled',
             'dre_seo_sitemap_ttl',

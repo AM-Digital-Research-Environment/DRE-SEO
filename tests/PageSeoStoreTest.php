@@ -18,7 +18,8 @@ test('page SEO overrides are normalized at the storage boundary', function (): v
             'robots' => 'noindex, follow',
             'unexpected' => 'discard me',
         ],
-        11 => ['title' => '', 'image' => 0, 'robots' => 'noindex, nofollow'],
+        11 => ['title' => '', 'image' => 0, 'robots' => 'noindex, nofollow', 'jsonld' => ''],
+        13 => ['jsonld' => 'off'],
         0 => ['title' => 'invalid page id'],
         'not-an-id' => ['title' => 'invalid page id'],
         12 => 'invalid fields',
@@ -31,6 +32,7 @@ test('page SEO overrides are normalized at the storage boundary', function (): v
             'image' => 42,
             'robots' => 'noindex, follow',
         ],
+        13 => ['jsonld' => false],
     ], $store->all());
 });
 

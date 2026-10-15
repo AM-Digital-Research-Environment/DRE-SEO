@@ -17,12 +17,16 @@ use Omeka\Api\Representation\ItemRepresentation;
  * Two vocabularies, both read by Zotero's "Embedded Metadata" translator:
  *   • Highwire Press  (citation_title, citation_author, citation_journal_title …)
  *     — the richest signal and what drives Zotero's item-type detection and
- *     Google Scholar's indexing. Emitted for the citable works only: items whose
- *     template is a publication, a research item, a podcast or a video. Item-set
- *     and media pages, and descriptive records (people, places, subject
- *     headings), carry none, so Scholar never indexes them as articles.
- *   • Dublin Core     (DC.title, DC.creator, DC.date …) — a generic fallback,
- *     emitted for every resource (including person / place / organisation pages).
+ *     Google Scholar's indexing. Emitted for scholarly literature only — an
+ *     article, conference paper, chapter, book, thesis or report
+ *     ({@see CitationKind::isScholarly()}) that names at least one author, on
+ *     a template not listed in `dre_seo.citation.highwire_excluded_templates`
+ *     (journal issues, series editorships). Google Scholar takes any page with
+ *     citation_title for a paper, and drops a paper with no author.
+ *   • Dublin Core     (DC.title, DC.creator, DC.date, DC.type …) — emitted for
+ *     every resource. It is all a research item, a podcast, a video, a dataset,
+ *     a post, a journal issue, a series, an authority record, an item set or a
+ *     media page carries; DC.type still names a work's exact Zotero type.
  *
  * The Highwire tags are written from the same {@see CitationRecord} the record
  * page's formatted citations and downloads read, so the panel, the downloads
@@ -32,19 +36,31 @@ class CitationMeta
 {
     use ResourceValueReader;
 
+    /**
+     * @param int[] $highwireExcluded resource template ids whose items carry no
+     *                                Highwire tags although their kind is
+     *                                scholarly (a journal issue, a series)
+     */
     public function __construct(
         private readonly CitationKindMap $kinds,
         private readonly CitationData $citationData,
+        private readonly array $highwireExcluded = [],
     ) {
     }
 
+    /**
+     * @param string|null $canonical the record page
+     * @param string|null $citeAs    the record's persistent identifier (its
+     *                               Linked Data URI); the page when null
+     */
     public function apply(
         PhpRenderer $view,
         AbstractResourceEntityRepresentation $resource,
-        ?string $canonical
+        ?string $canonical,
+        ?string $citeAs = null
     ): void {
         $headMeta = $view->headMeta();
-        foreach ($this->tags($resource, $canonical) as [$name, $content]) {
+        foreach ($this->tags($resource, $canonical, $citeAs) as [$name, $content]) {
             $headMeta->appendName($name, $content);
         }
     }
@@ -55,17 +71,28 @@ class CitationMeta
      *
      * @return array<int,array{0:string,1:string}>
      */
-    public function tags(AbstractResourceEntityRepresentation $resource, ?string $canonical): array
+    public function tags(AbstractResourceEntityRepresentation $resource, ?string $canonical, ?string $citeAs = null): array
     {
         $kind = $this->kinds->forResource($resource);
         $isWork = $resource instanceof ItemRepresentation && !$kind->isAuthorityRecord();
+        $citeAs ??= $canonical;
 
-        $tags = $this->dublinCore($resource, $canonical, $isWork ? $kind : null);
-        if ($isWork) {
-            /** @var ItemRepresentation $resource */
-            $tags = [...$tags, ...$this->highwire($this->citationData->build($resource, $canonical), $resource, $canonical)];
+        /** @var ItemRepresentation $resource */
+        $record = $isWork ? $this->citationData->build($resource, $citeAs) : null;
+
+        $tags = $this->dublinCore($resource, $citeAs, $record);
+        if ($record !== null && $this->isScholarlyPaper($record, $resource)) {
+            $tags = [...$tags, ...$this->highwire($record, $resource, $canonical)];
         }
         return $tags;
+    }
+
+    /** Whether a work is cited to Zotero and Google Scholar as a paper. */
+    private function isScholarlyPaper(CitationRecord $record, ItemRepresentation $item): bool
+    {
+        return $record->kind->isScholarly()
+            && $record->authors !== []
+            && !in_array(CitationKindMap::templateId($item), array_map('intval', $this->highwireExcluded), true);
     }
 
     // ─── Highwire Press (citation_*) ────────────────────────────────────────
@@ -91,7 +118,8 @@ class CitationMeta
             $add('citation_editor', $editor->literal);
         }
         $add('citation_publication_date', $this->scholarDate($record->issued));
-        $add('citation_language', $record->language);
+        // A BCP 47 tag ("de"), as Scholar expects, never the label ("German").
+        $add('citation_language', $this->languageCodes($item)[0] ?? null);
         $add('citation_doi', $record->doi);
         if ($record->keywords !== []) {
             $add('citation_keywords', implode('; ', $record->keywords));
@@ -165,9 +193,10 @@ class CitationMeta
     /** @return array<int,array{0:string,1:string}> */
     private function dublinCore(
         AbstractResourceEntityRepresentation $resource,
-        ?string $canonical,
-        ?CitationKind $workKind
+        ?string $identifier,
+        ?CitationRecord $work
     ): array {
+        $workKind = $work?->kind;
         $tags = [];
         $add = static function (string $name, ?string $content) use (&$tags): void {
             if ($content !== null && $content !== '') {
@@ -176,7 +205,12 @@ class CitationMeta
         };
 
         $add('DC.title', $this->firstString($resource, ['dcterms:title']));
-        foreach ($this->people($resource, ['dcterms:creator', 'bibo:authorList', 'marcrel:aut']) as $creator) {
+        // A work's creators are its citation authors — a podcast's host, a
+        // video's speakers — so a page with no Highwire tags still names them.
+        $creators = $work !== null
+            ? array_map(static fn ($creator): string => $creator->literal, $work->authors)
+            : $this->people($resource, ['dcterms:creator', 'bibo:authorList', 'marcrel:aut']);
+        foreach ($creators as $creator) {
             $add('DC.creator', $creator);
         }
         $add('DC.date', $this->firstString($resource, self::DATE_TERMS));
@@ -187,12 +221,13 @@ class CitationMeta
         // video or a dataset is saved as one. Anything else gives its class.
         $add('DC.type', $workKind?->zoteroType()
             ?? ($resource->resourceClass() ? $resource->resourceClass()->label() : null));
-        $add('DC.language', $this->firstLabel($resource, 'dcterms:language'));
+        $add('DC.language', $this->languageCodes($resource)[0] ?? $this->firstLabel($resource, 'dcterms:language'));
 
-        // DC.identifier is the resource's own (canonical) URL. The DOI is
-        // conveyed solely through citation_doi → Zotero's DOI field; emitting it
-        // here as well made Zotero copy it into the Extra field redundantly.
-        $add('DC.identifier', $canonical);
+        // DC.identifier is the record's persistent identifier: its Linked Data
+        // URI, else its page. The DOI is conveyed solely through citation_doi
+        // → Zotero's DOI field; emitting it here as well made Zotero copy it
+        // into the Extra field redundantly.
+        $add('DC.identifier', $identifier);
 
         foreach ($this->labels($resource, 'dcterms:subject') as $subject) {
             $add('DC.subject', $subject);

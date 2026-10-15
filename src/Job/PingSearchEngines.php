@@ -6,6 +6,7 @@ namespace DRESeo\Job;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PingQueue;
 use DRESeo\Service\Pinger;
+use DRESeo\Service\SettingFlag;
 use Omeka\Job\AbstractJob;
 
 /**
@@ -29,7 +30,7 @@ class PingSearchEngines extends AbstractJob
         $complete = true;
 
         try {
-            if ((string) $settings->get('dre_seo_ping_enabled', '0') !== '1') {
+            if (!SettingFlag::isOn($settings, 'dre_seo_ping_enabled')) {
                 return;
             }
             $key = trim((string) $settings->get('dre_seo_indexnow_key', ''));
@@ -58,7 +59,7 @@ class PingSearchEngines extends AbstractJob
             $keyLocation = $scheme . '://' . $host . '/' . $key . '.txt';
 
             try {
-                $ok = $services->get(Pinger::class)->submitIndexNow($host, $key, $keyLocation, $pending);
+                $status = $services->get(Pinger::class)->submitIndexNow($host, $key, $keyLocation, $pending);
             } catch (\Throwable $e) {
                 $queue->requeue($pending);
                 $complete = false;
@@ -67,14 +68,26 @@ class PingSearchEngines extends AbstractJob
                 ]);
                 return;
             }
-            if (!$ok) {
+            if (Pinger::accepted($status)) {
+                $logger->info(sprintf('DRESeo: IndexNow ping accepted for %d URL(s).', count($pending)));
+                return;
+            }
+            if (Pinger::retryable($status)) {
                 $queue->requeue($pending);
                 $complete = false;
+                $logger->info(sprintf(
+                    'DRESeo: IndexNow ping failed (HTTP %d) for %d URL(s); retained for retry.',
+                    $status,
+                    count($pending)
+                ));
+                return;
             }
-            $logger->info(sprintf(
-                'DRESeo: IndexNow ping %s for %d URL(s).',
-                $ok ? 'accepted' : 'failed; retained for retry',
-                count($pending)
+            // A permanent refusal fails the same way every time: drop the
+            // batch rather than resend it with every later edit.
+            $logger->warn(sprintf(
+                'DRESeo: IndexNow refused %d URL(s) with HTTP %d; dropped (check the key and the host).',
+                count($pending),
+                $status
             ));
         } finally {
             if ($complete) {

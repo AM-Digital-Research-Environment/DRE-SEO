@@ -9,7 +9,7 @@ abstract: >-
   It emits Highwire Press and Dublin Core citation tags so the Zotero Connector,
   Google Scholar and other reference managers capture each record as a correctly
   typed reference, formats Chicago, APA and MLA citations on the record page, and
-  serves BibTeX, RIS and CSL-JSON downloads. It also serves an XML sitemap index
+  serves BibTeX, RIS, CSL-JSON and plain-text downloads. It also serves an XML sitemap index
   with per-type children, a robots.txt, a Google Search Console verification tag,
   and an optional IndexNow ping when public content changes. Built for the Africa
   Multiple Cluster of Excellence Digital Research Environment.
@@ -23,8 +23,8 @@ authors:
 repository-code: "https://github.com/AM-Digital-Research-Environment/DRE-SEO"
 url: "https://github.com/AM-Digital-Research-Environment/DRE-SEO"
 license: GPL-3.0-or-later
-version: 0.12.0
-date-released: "2026-10-14"
+version: 0.13.0
+date-released: "2026-10-15"
 keywords:
   - Omeka S
   - search engine optimisation

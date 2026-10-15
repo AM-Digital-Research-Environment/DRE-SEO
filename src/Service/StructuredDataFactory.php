@@ -16,6 +16,19 @@ final class StructuredDataFactory implements FactoryInterface
             $config['default_type'] ?? 'CreativeWork',
             $container->get(CitationKindMap::class),
             $container->get(LinkedDataIdentity::class),
+            [
+                'access_free' => (array) ($config['access_free'] ?? []),
+                // Resolved on first use, once the request's locale is set.
+                'access_statement' => static function () use ($container): string {
+                    $custom = trim((string) ($container->get('Omeka\Settings')->get('dre_seo_access_statement', '') ?? ''));
+                    if ($custom !== '') {
+                        return $custom;
+                    }
+                    return $container->has('MvcTranslator')
+                        ? (string) $container->get('MvcTranslator')->translate(StructuredData::ACCESS_STATEMENT)
+                        : StructuredData::ACCESS_STATEMENT;
+                },
+            ],
         );
     }
 }

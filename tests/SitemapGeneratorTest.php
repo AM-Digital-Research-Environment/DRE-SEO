@@ -108,7 +108,7 @@ test('sitemap index chunks items and isolates cached sites and hosts', function 
     }
 });
 
-test('pages sitemap follows navigation order and emits the bare-domain homepage', function (): void {
+test('pages sitemap follows navigation order and lists the home page at its own URL', function (): void {
     $connection = new FakeConnection();
     $connection->pages[1] = [
         ['id' => 1, 'slug' => 'home', 'modified' => '2026-01-02 03:04:05'],
@@ -128,15 +128,16 @@ test('pages sitemap follows navigation order and emits the bare-domain homepage'
 
     $xml = $generator->buildPages(
         'https://example.test/s/amira',
-        'https://example.test',
         1,
         0,
         $navigation,
         1
     );
 
+    // `/` and `/s/amira` only redirect to the home page; it is listed at the
+    // URL its canonical names.
     assertSameValue([
-        'https://example.test/',
+        'https://example.test/s/amira/page/home',
         'https://example.test/s/amira/page/research%20%26%20data',
         'https://example.test/s/amira/page/team',
         'https://example.test/s/amira/page/hidden',
@@ -214,4 +215,29 @@ test('the shipped sitemap config emits no priority or changefreq hints', functio
 
     assertTrue(!str_contains($xml, '<priority>') && !str_contains($xml, '<changefreq>'));
     assertTrue(str_contains($xml, '<lastmod>2026-01-01T00:00:00+00:00</lastmod>'));
+});
+
+test('pages an editor set to noindex are not listed', function (): void {
+    $connection = new FakeConnection();
+    $connection->pages[1] = [
+        ['id' => 1, 'slug' => 'home', 'modified' => null],
+        ['id' => 2, 'slug' => 'imprint', 'modified' => null],
+        ['id' => 3, 'slug' => 'team', 'modified' => null],
+    ];
+    $generator = new SitemapGenerator($connection, sitemapConfig(), null, new MemoryLogger());
+
+    $xml = $generator->buildPages('https://example.test/s/amira', 1, 0, [], 1, [2]);
+
+    assertSameValue([
+        'https://example.test/s/amira/page/home',
+        'https://example.test/s/amira/page/team',
+    ], xmlLocations($xml, 'url'));
+});
+
+test('page overrides name the noindex pages the sitemap leaves out', function (): void {
+    $store = new DRESeo\Service\PageSeoStore(new Omeka\Settings\SiteSettings());
+    $store->setSite(1);
+    $store->replaceAll([2 => ['robots' => 'noindex, follow'], 3 => ['robots' => 'index, follow'], 4 => ['title' => 'x']]);
+
+    assertSameValue([2], $store->noindexPageIds());
 });

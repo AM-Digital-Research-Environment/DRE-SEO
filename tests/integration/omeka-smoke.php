@@ -217,6 +217,7 @@ try {
         DRESeo\Service\ResourceSummary::class,
         DRESeo\Service\Signposting::class,
         DRESeo\Service\LinkedDataIdentity::class,
+        DRESeo\Service\ImageDimensions::class,
     ];
     foreach ($serviceTypes as $type) {
         smokeAssert($services->get($type) instanceof $type, sprintf('Factory failed for %s.', $type));
@@ -288,6 +289,89 @@ try {
         count($sharedEvents->getListeners(['Omeka\\Api\\Adapter\\ItemAdapter'], 'api.create.post')) === 1,
         'API content-change listener was not attached.'
     );
+    foreach (['Omeka\\Api\\Adapter\\ItemSetAdapter', 'Omeka\\Api\\Adapter\\SitePageAdapter'] as $adapterClass) {
+        smokeAssert(
+            count($sharedEvents->getListeners([$adapterClass], 'api.delete.pre')) === 1,
+            sprintf('IndexNow delete listener was not attached to %s.', $adapterClass)
+        );
+    }
+
+    // IndexNow: the api.*.post events carry the entity, not its
+    // representation; a public record, one just made private and one about to
+    // be deleted are queued at their page URL on the default site.
+    $defaultSite = $services->get(DRESeo\Service\DefaultSite::class);
+    foreach (['site' => new SmokeSiteRepresentation(), 'resolved' => true] as $property => $value) {
+        $reflection = new ReflectionProperty(DRESeo\Service\DefaultSite::class, $property);
+        $reflection->setValue($defaultSite, $value);
+    }
+    $settings->set('dre_seo_ping_enabled', '1');
+    $settings->set('dre_seo_indexnow_key', 'abcdef1234567890');
+    $entity = static fn (int $id, bool $public): object => new class ($id, $public) {
+        public function __construct(private int $id, public bool $public)
+        {
+        }
+
+        public function getId(): int
+        {
+            return $this->id;
+        }
+
+        public function isPublic(): bool
+        {
+            return $this->public;
+        }
+    };
+    $records = [7 => $entity(7, true), 8 => $entity(8, false), 9 => $entity(9, false), 10 => $entity(10, true)];
+    $adapter = new class ($records) {
+        public function __construct(private array $records)
+        {
+        }
+
+        public function getRepresentation(object $entity): object
+        {
+            return new class ($entity->getId()) {
+                public function __construct(private int $id)
+                {
+                }
+
+                public function siteUrl($slug = null, $canonical = false): string
+                {
+                    return 'https://example.test/s/' . $slug . '/item/' . $this->id;
+                }
+            };
+        }
+
+        public function findEntity($id, $request = null): object
+        {
+            return $this->records[$id];
+        }
+    };
+    $apiEvents = new Laminas\EventManager\EventManager($sharedEvents, ['Omeka\\Api\\Adapter\\ItemAdapter']);
+    $update = new Omeka\Api\Request(Omeka\Api\Request::UPDATE, 'items');
+    // 7: public, edited. 8: public until this update made it private.
+    // 9: private before and after. 10: public, deleted.
+    $records[8]->public = true;
+    $apiEvents->triggerEvent(new Laminas\EventManager\Event('api.hydrate.pre', $adapter, ['entity' => $records[8], 'request' => $update]));
+    $records[8]->public = false;
+    $apiEvents->triggerEvent(new Laminas\EventManager\Event('api.hydrate.pre', $adapter, ['entity' => $records[9], 'request' => $update]));
+    foreach ([7, 8, 9] as $id) {
+        $apiEvents->triggerEvent(new Laminas\EventManager\Event('api.update.post', $adapter, [
+            'request' => $update,
+            'response' => new Omeka\Api\Response($records[$id]),
+        ]));
+    }
+    $delete = new Omeka\Api\Request(Omeka\Api\Request::DELETE, 'items');
+    $delete->setId(10);
+    $apiEvents->triggerEvent(new Laminas\EventManager\Event('api.delete.pre', $adapter, ['request' => $delete]));
+    smokeAssert(
+        $settings->get('dre_seo_ping_pending') === [
+            'https://example.test/s/amira/item/7',
+            'https://example.test/s/amira/item/8',
+            'https://example.test/s/amira/item/10',
+        ],
+        'IndexNow did not queue the changed records: ' . json_encode($settings->get('dre_seo_ping_pending'))
+    );
+    $settings->set('dre_seo_ping_enabled', '0');
 
     $_SERVER['HTTPS'] = 'on';
     $_SERVER['HTTP_HOST'] = 'example.test';

@@ -80,24 +80,31 @@ class SitemapGenerator
      * reflects their menu depth (top-level entries outrank submenu items), then
      * any remaining public pages (demoted, so nothing is silently dropped).
      *
-     * @param string $hostUrl the scheme+host root (no path) where the home page
-     *                        canonically lives
-     * @param array<mixed> $navTree the site's o:navigation tree
+     * @param string       $siteUrl    the site root, `https://host/s/{slug}`
+     * @param array<mixed> $navTree    the site's o:navigation tree
+     * @param int|null     $homepageId the page the site root redirects to ({@see SiteHome})
+     * @param int[]        $noindexIds pages an editor set to noindex, which a
+     *                                 sitemap must not list
      */
     public function buildPages(
         string $siteUrl,
-        string $hostUrl,
         int $siteId,
         int $ttl,
         array $navTree = [],
-        ?int $homepageId = null
+        ?int $homepageId = null,
+        array $noindexIds = []
     ): string {
-        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, $hostUrl);
-        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $hostUrl, $siteId, $navTree, $homepageId) {
-            // All public pages, keyed by id.
+        $noindexIds = array_values(array_unique(array_map('intval', $noindexIds)));
+        sort($noindexIds);
+        $cacheKey = $this->cacheKey($siteId, 'pages', $siteUrl, (string) $homepageId, implode(',', $noindexIds));
+        return $this->cached($cacheKey, $ttl, function () use ($siteUrl, $siteId, $navTree, $homepageId, $noindexIds) {
+            // All public pages, keyed by id, less those kept out of the index.
             $pagesById = [];
             foreach ($this->fetchPages($siteId) as $row) {
                 $pagesById[(int) $row['id']] = $row;
+            }
+            foreach ($noindexIds as $id) {
+                unset($pagesById[$id]);
             }
 
             $urls = [];
@@ -111,27 +118,12 @@ class SitemapGenerator
                 ];
             };
 
-            // Home first, at the bare domain root. The home page declares `/` as
-            // its canonical (host root, site root and /page/{slug} all resolve
-            // there and Google consolidates them onto the domain), so the sitemap
-            // lists `/` to match — not the /page/{slug} URL, which would disagree
-            // with that canonical. The homepage's own page entry is marked
-            // emitted so the nav loop below skips it.
-            $homeLoc = rtrim($hostUrl, '/') . '/';
+            // Home first, at its own page URL — the URL its canonical names.
+            // The host root and the site root only redirect there, so they are
+            // not listed.
             if ($homepageId !== null && isset($pagesById[$homepageId])) {
-                $urls[] = [
-                    'loc'        => $homeLoc,
-                    'lastmod'    => $this->w3c($pagesById[$homepageId]['modified'] ?? null),
-                    'changefreq' => $this->changefreq('home'),
-                    'priority'   => $this->priority('home'),
-                ];
+                $urls[] = $pageUrl($pagesById[$homepageId], $this->priority('home'), $this->changefreq('home'));
                 $emitted[$homepageId] = true;
-            } else {
-                $urls[] = [
-                    'loc'        => $homeLoc,
-                    'changefreq' => $this->changefreq('home'),
-                    'priority'   => $this->priority('home'),
-                ];
             }
 
             // Navigation pages, in menu order; priority by depth.
@@ -413,6 +405,12 @@ class SitemapGenerator
         return htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
     }
 
+    /**
+     * A database timestamp as a W3C datetime. Omeka stores `created` and
+     * `modified` as naive DATETIMEs written in UTC — its bootstrap sets PHP's
+     * default timezone to UTC before Doctrine formats them — so they are read
+     * back as UTC, never in the server's zone.
+     */
     private function w3c(?string $dbDatetime): ?string
     {
         if (!$dbDatetime) {

@@ -9,6 +9,11 @@
 
 $this->headLink()->appendStylesheet($this->assetUrl('css/admin.css', 'DRESeo'));
 
+$jsonLdOptions = [
+    ''    => $this->translate('On'),
+    'off' => $this->translate('Off'),
+];
+
 $robotsOptions = [
     ''               => $this->translate('Default (indexable)'),
     'index, follow'  => $this->translate('Index, follow'),
@@ -23,7 +28,7 @@ $form->prepare();
 
 <div class="active section" role="tabpanel">
     <p>
-        <?php echo $this->translate('Override the title, description, share image and indexing for individual static pages. Leave a field blank to fall back to the page’s own content and the site-wide defaults set in Configure. Resource (item) pages derive their SEO automatically and are not listed here.'); ?>
+        <?php echo $this->translate('Override the title, description, share image, indexing and JSON-LD for individual static pages. Leave a field blank to fall back to the page’s own content and the site-wide defaults set in Configure. Resource (item) pages derive their SEO automatically and are not listed here.'); ?>
     </p>
 
     <?php echo $this->form()->openTag($form); ?>
@@ -37,6 +42,7 @@ $form->prepare();
                 <th><?php echo $this->translate('Meta description'); ?></th>
                 <th><?php echo $this->translate('Share image (asset ID)'); ?></th>
                 <th><?php echo $this->translate('Indexing'); ?></th>
+                <th><?php echo $this->translate('JSON-LD'); ?></th>
             </tr>
         </thead>
         <tbody>
@@ -75,10 +81,21 @@ $form->prepare();
                             <?php endforeach; ?>
                         </select>
                     </td>
+                    <td>
+                        <?php $jsonLd = ($o['jsonld'] ?? true) === false ? 'off' : ''; ?>
+                        <select name="<?php echo $this->escapeHtmlAttr($base . '[jsonld]'); ?>">
+                            <?php foreach ($jsonLdOptions as $value => $label): ?>
+                                <option value="<?php echo $this->escapeHtmlAttr($value); ?>"
+                                    <?php echo $jsonLd === $value ? 'selected' : ''; ?>>
+                                    <?php echo $this->escapeHtml($label); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
                 </tr>
             <?php endforeach; ?>
             <?php if (!count($pages)): ?>
-                <tr><td colspan="5"><?php echo $this->translate('This site has no pages yet.'); ?></td></tr>
+                <tr><td colspan="6"><?php echo $this->translate('This site has no pages yet.'); ?></td></tr>
             <?php endif; ?>
         </tbody>
     </table>

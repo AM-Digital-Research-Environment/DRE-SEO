@@ -37,6 +37,23 @@ class HeadMetadata
 
     private const DESCRIPTION_MAX = 160;
 
+    /**
+     * Query parameters that only track a visit and never change the page:
+     * dropped from canonicals and ignored when deciding whether a URL is a
+     * variant to keep out of the index.
+     */
+    private const TRACKING_PARAMS = [
+        'fbclid', 'gclid', 'dclid', 'gbraid', 'wbraid', 'msclkid', 'yclid', 'igshid',
+        'mc_cid', 'mc_eid', '_ga', '_gl', '_hsenc', '_hsmi', 'mkt_tok',
+    ];
+
+    /**
+     * The only parameters a record page keeps indexable: paging through its
+     * connection lists (DRE-theme's ConnectionQuery). The canonical still
+     * names the record itself.
+     */
+    private const RECORD_PAGING_PARAMS = ['page', 'lr_page', 'lr_property'];
+
     /** Open Graph locales for the languages a site is likely to be set to. */
     private const OG_LOCALES = [
         'en' => 'en_US', 'fr' => 'fr_FR', 'de' => 'de_DE', 'pt' => 'pt_BR',
@@ -50,6 +67,9 @@ class HeadMetadata
     private array $signposts = [];
 
     private ?string $description = null;
+
+    /** Whether phase 1 described a record page (item, item set or media). */
+    private bool $recordPage = false;
     private ?string $defaultImageUrl = null;
     private bool $defaultImageResolved = false;
 
@@ -60,6 +80,8 @@ class HeadMetadata
         private readonly CitationKindMap $kinds,
         private readonly ResourceSummary $summary,
         private readonly Signposting $signposting,
+        private readonly ?LinkedDataIdentity $identity = null,
+        private readonly ?ImageDimensions $imageDimensions = null,
     ) {
     }
 
@@ -70,6 +92,7 @@ class HeadMetadata
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site
     ): void {
+        $this->recordPage = true;
         $title = $this->resourceTitle($resource);
         $fullDescription = $this->summary->describe($resource, $site->title());
         $description = $this->truncate($fullDescription);
@@ -116,18 +139,38 @@ class HeadMetadata
         // the page as a reference, and FAIR Signposting links that point
         // machines at the same record in citation and RDF formats.
         if ($this->citationsEnabled()) {
-            $this->citationMeta->apply($view, $resource, $canonical);
+            $this->citationMeta->apply($view, $resource, $canonical, $this->identity?->uri($resource) ?? $canonical);
         }
-        if ($canonical !== null && $resource instanceof ItemRepresentation) {
-            $this->signposts = $this->signposting->links(
-                $resource,
-                $canonical,
-                $view->serverUrl(),
-                $this->citationsEnabled()
-            );
-            foreach ($this->signposts as $link) {
-                $view->headLink($link);
+        if ($canonical !== null) {
+            // A file's page points back at the record it belongs to.
+            $collection = null;
+            if ($resource instanceof MediaRepresentation) {
+                try {
+                    $collection = $this->absoluteResourceUrl($resource->item(), $site);
+                } catch (\Throwable $e) {
+                    $collection = null;
+                }
             }
+            $this->signpost($view, $resource, $canonical, $collection);
+        }
+    }
+
+    /** Emit the record's Signposting links, and keep them for the HTTP Link header. */
+    private function signpost(
+        PhpRenderer $view,
+        AbstractResourceEntityRepresentation $resource,
+        string $canonical,
+        ?string $collection = null
+    ): void {
+        $this->signposts = $this->signposting->links(
+            $resource,
+            $canonical,
+            $view->serverUrl(),
+            $this->citationsEnabled(),
+            $collection
+        );
+        foreach ($this->signposts as $link) {
+            $view->headLink($link);
         }
     }
 
@@ -154,20 +197,19 @@ class HeadMetadata
         array $overrides,
         bool $isHomepage
     ): void {
-        // The home page is reachable at three URLs — the host root `/`, the site
-        // root `/s/{slug}`, and this `/s/{slug}/page/{slug}` — which Google
-        // consolidates onto the bare domain (it picks `/`, not the page URL, as
-        // canonical). Declare `/` as the homepage canonical so our declaration
-        // matches Google's choice; every other page stays self-canonical. The
-        // sitemap lists the home at `/` to match.
-        $canonical = $isHomepage
-            ? rtrim($view->serverUrl('/'), '/') . '/'
-            : $page->siteUrl($site->slug(), true);
+        // Every page is self-canonical, the home page included. Omeka renders
+        // no page at the host root or the site root: `/` and `/s/{slug}` only
+        // redirect (302) to this `/s/{slug}/page/{slug}` URL, so a canonical
+        // there would name a redirect chain. The sitemap, IndexNow and the
+        // WebSite node use the same URL ({@see SiteHome}).
+        $canonical = $page->siteUrl($site->slug(), true);
         $this->setCanonical($view, $canonical);
 
+        // The home page is the site: its link preview carries the site's
+        // name, not the page title ("Home").
         $title = isset($overrides['title']) && $overrides['title'] !== ''
             ? $overrides['title']
-            : (string) $page->title();
+            : ($isHomepage ? (string) $site->title() : (string) $page->title());
         // Fully own the <title> when an editor set a custom one (clear the stack
         // first so the page's default title segment is replaced, not appended);
         // the theme appends the site + installation suffix afterwards.
@@ -203,8 +245,16 @@ class HeadMetadata
             $this->setRobots($view, (string) $overrides['robots']);
         }
 
-        if ($isHomepage && $this->jsonLdEnabled()) {
+        // An editor can switch a page's JSON-LD off (the per-page override).
+        if ($isHomepage && $this->jsonLdEnabled() && ($overrides['jsonld'] ?? true) !== false) {
             $this->addJsonLd($view, $this->structuredData->webSite($view, $site));
+            // The catalogue as a Dataset, for Google Dataset Search, when DRE
+            // Linked Data describes it.
+            $dataset = $this->identity?->dataset() ?? [];
+            $node = $dataset ? $this->structuredData->dataset($view, $site, $dataset) : null;
+            if ($node !== null) {
+                $this->addJsonLd($view, $node);
+            }
         }
     }
 
@@ -218,10 +268,11 @@ class HeadMetadata
      */
     public function applyBrowse(PhpRenderer $view, SiteRepresentation $site, ?ItemSetRepresentation $itemSet = null): void
     {
-        // Self-referential canonical (full current URL) keeps facet/sort
-        // variants from looking like duplicate content while staying safe for
-        // paginated pages (no collapsing page 2 onto page 1).
-        $current = $view->serverUrl(true);
+        // Self-referential canonical (the current URL, less tracking
+        // parameters) keeps facet/sort variants from looking like duplicate
+        // content while staying safe for paginated pages (no collapsing page
+        // 2 onto page 1).
+        $current = self::withoutTracking($view->serverUrl(true));
         $this->setCanonical($view, $current);
 
         // Only noindex faceted / paginated / sorted variants (which carry a
@@ -252,17 +303,36 @@ class HeadMetadata
         if (!$hasQuery && $this->jsonLdEnabled()) {
             $this->addJsonLd($view, $this->structuredData->collectionPage($view, $itemSet, $site, $current, $description));
         }
+        // The landing page is the item set's page: it is signposted like a
+        // record (cite-as, the RDF descriptions), on its clean URL only.
+        if (!$hasQuery) {
+            $this->signpost($view, $itemSet, $current);
+        }
     }
 
     // ─── Phase 2: site-wide constants + gap-fill (view.layout) ──────────────
 
-    public function applyGlobals(PhpRenderer $view, ?SiteRepresentation $site): void
+    /**
+     * @param bool $isSearch whether the page is a search results page (core's
+     *                       index/search and advanced search, DRE Search's
+     *                       results page), which is never worth indexing
+     */
+    public function applyGlobals(PhpRenderer $view, ?SiteRepresentation $site, bool $isSearch = false): void
     {
         $headMeta = $view->headMeta();
 
         // Master noindex (staging) overrides everything.
         if ($this->boolSetting('dre_seo_noindex_site')) {
             $this->setRobots($view, 'noindex, nofollow', true);
+        }
+        // Search results and query-string variants of any page stay out of
+        // the index; crawlers still follow their links to the records. A
+        // record paging through its connection lists, or a URL that only
+        // carries tracking parameters, is not a variant.
+        if ($this->boolSetting('dre_seo_noindex_browse')
+            && ($isSearch || $this->isQueryVariant($view->serverUrl(true)))
+        ) {
+            $this->setRobots($view, 'noindex, follow');
         }
         // An indexable page lets Google show its image at full width in Search
         // and Discover, where the default is a small thumbnail.
@@ -302,8 +372,10 @@ class HeadMetadata
                 $this->setImage($view, $img, $site ? $site->title() : null);
             }
         }
+        // A page nothing else described (a search page, another module's page)
+        // is canonical without its query string.
         if (!$this->isApplied('canonical')) {
-            $this->setCanonical($view, $view->serverUrl(true));
+            $this->setCanonical($view, self::withoutQuery($view->serverUrl(true)));
         }
         if (!$this->isApplied('og:title')) {
             // Mirror the rendered <title>'s leading segment as og/twitter title.
@@ -318,7 +390,7 @@ class HeadMetadata
             $this->setOpenGraph($view, ['og:description' => $this->description]);
         }
         if (!$this->isApplied('og:url')) {
-            $headMeta->setProperty('og:url', $view->serverUrl(true));
+            $headMeta->setProperty('og:url', self::withoutQuery($view->serverUrl(true)));
         }
     }
 
@@ -345,6 +417,13 @@ class HeadMetadata
     public function setImage(PhpRenderer $view, string $url, ?string $alt = null): void
     {
         $this->setOpenGraph($view, ['og:image' => $url]);
+        // The size, when the image is a local file: a preview can then be laid
+        // out before it loads. Unknown sizes are left out, never guessed.
+        $size = $this->imageDimensions?->of($url);
+        if ($size !== null) {
+            $view->headMeta()->setProperty('og:image:width', (string) $size[0]);
+            $view->headMeta()->setProperty('og:image:height', (string) $size[1]);
+        }
         $view->headMeta()->setName('twitter:image', $url);
         if ($alt !== null && trim($alt) !== '') {
             $view->headMeta()->setProperty('og:image:alt', $alt);
@@ -382,9 +461,11 @@ class HeadMetadata
     /** @param array<mixed> $data A JSON-LD document. */
     public function addJsonLd(PhpRenderer $view, array $data): void
     {
+        // Compact: nobody reads the inline block, and on a record with a long
+        // abstract the indentation is a measurable share of the page.
         $json = json_encode(
             $data,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_PRETTY_PRINT
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
         );
         if ($json === false) {
             return;
@@ -399,6 +480,44 @@ class HeadMetadata
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * Whether a URL is a query-string variant of a page: it carries a
+     * parameter that is neither tracking nor, on a record page, paging
+     * through the record's connection lists.
+     */
+    private function isQueryVariant(string $url): bool
+    {
+        $query = (string) (parse_url(self::withoutTracking($url), PHP_URL_QUERY) ?? '');
+        if ($query === '') {
+            return false;
+        }
+        if (!$this->recordPage) {
+            return true;
+        }
+        parse_str($query, $params);
+        return array_diff(array_keys($params), self::RECORD_PAGING_PARAMS) !== [];
+    }
+
+    /** $url without its query string (and fragment). */
+    private static function withoutQuery(string $url): string
+    {
+        return (string) preg_replace('/[?#].*\z/s', '', $url);
+    }
+
+    /** $url without utm_* and the other tracking parameters, its other parameters untouched. */
+    private static function withoutTracking(string $url): string
+    {
+        $parts = explode('?', (string) preg_replace('/#.*\z/s', '', $url), 2);
+        if (!isset($parts[1]) || $parts[1] === '') {
+            return $parts[0];
+        }
+        $kept = array_filter(explode('&', $parts[1]), static function (string $pair): bool {
+            $name = strtolower(urldecode(explode('=', $pair, 2)[0]));
+            return $name !== '' && !str_starts_with($name, 'utm_') && !in_array($name, self::TRACKING_PARAMS, true);
+        });
+        return $kept ? $parts[0] . '?' . implode('&', $kept) : $parts[0];
+    }
 
     /**
      * The page title. A media record is often titled with its source URL

@@ -9,6 +9,88 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-15
+
+An SEO and FAIR audit of the live site, applied together with DRE Linked Data 0.3.0 and
+DRE-theme 2.38.0 under one shared identity contract. Everything that reads DRE Linked Data
+falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
+
+### Added
+
+- The catalogue as a schema.org `Dataset` on the home page, from DRE Linked Data's
+  `dataset()` (0.3.0+): VoID URI as `@id`, a description of at least 50 characters (Google
+  Dataset Search's minimum), licence, publisher with its Wikidata `sameAs`, `dateModified`,
+  the dumps as `DataDownload`s and AMIRA as the `DataCatalog`.
+- Research items (an item whose `dcterms:isPartOf` links to a `foaf:Project` record — the
+  rule DRE-theme's `RecordAccess` applies) state `conditionsOfAccess`: their access rights
+  and a statement that AMIRA holds the metadata only and access requests go to the project
+  (setting **Access statement for research items**, translatable by default).
+  `isAccessibleForFree` is set only when the access rights decide it.
+- `/cite/{id}/txt`: the default style's citation as UTF-8 plain text, offered by
+  `dreCitation()` as "Plain text"
+  ([#1](https://github.com/AM-Digital-Research-Environment/DRE-SEO/issues/1)). Every `/cite`
+  download carries `Access-Control-Allow-Origin: *`, an `ETag`, `Last-Modified` and
+  `Cache-Control: public, max-age=300`, and answers a conditional request with 304.
+- Signposting `author` links (ORCID iD, else the person's resource URI); item-set landing
+  pages and media pages are signposted too, a media page with `collection` pointing at its
+  item.
+- An item set's `CollectionPage` has an `@id` and a `mainEntity` `Collection` under the
+  item set's resource URI.
+- `og:image:width` / `og:image:height` when the share image is a local file.
+- The per-page **JSON-LD** override (Admin → SEO → Static pages), stored since 0.1 but never
+  read, now switches a page's JSON-LD off.
+
+### Fixed
+
+- The home page's canonical was `/` and the sitemap listed `/`, but `/` and `/s/amira` only
+  redirect to `/s/amira/page/home`; the `WebSite` url, the breadcrumb root and
+  `CollectionPage.isPartOf` named `/s/amira/` — with the slash, a 404. The homepage page's
+  own URL is now the one home URL everywhere (canonical, `og:url`, sitemap, IndexNow,
+  JSON-LD), and its `og:title` / `og:image:alt` are the site title instead of "Home".
+- IndexNow never queued anything: the `api.*.post` events carry the entity, which has no
+  `siteUrl()`, so no URL was ever built. The representation is now built from the adapter.
+  Item sets are pinged too, and so is a record just made private or about to be deleted.
+  The queue's read-modify-write runs under a MySQL named lock and bypasses Omeka's
+  per-request settings cache, so concurrent saves no longer drop URLs; a permanent IndexNow
+  refusal (400/403/422) is dropped rather than requeued.
+- Highwire `citation_*` tags only on scholarly papers — an article, conference paper,
+  chapter, book, thesis or report that names an author. A research-item video with no author
+  (/s/amira/item/8698) carried `citation_title` and a date, as did every podcast, video,
+  dataset, post and journal issue; they now carry Dublin Core only, `DC.creator` naming a
+  podcast's host or a video's speakers.
+- A linked record in the JSON-LD is typed as its own page types it: a research item's
+  project is a `ResearchProject`, not a `CreativeWork`.
+- `sameAs` is limited to authority IRIs in canonical form (DRE Linked Data's list when it
+  has one); YouTube playlists and GEPRIS pages are no longer `sameAs`, and Wikidata is
+  `http://www.wikidata.org/entity/Q…` as in the RDF.
+- A linked licence item ("CC-BY-NC-SA-4.0") resolves to its creativecommons.org URL in the
+  JSON-LD and in Signposting `license`; before, the JSON-LD gave its label as text and
+  Signposting skipped it.
+- `datePublished`, `dateCreated` and `uploadDate` are ISO 8601; a video without a
+  publication date takes its `dcterms:created` (else the record's creation) as
+  `uploadDate`.
+- `inLanguage`, `citation_language` and `DC.language` are BCP 47 tags (`de`, `pcm`) from the
+  language record's ISO 639 code, not labels ("German").
+- Search results pages (core's site search and advanced search, DRE Search's results page)
+  and query-string variants of any other page are `noindex, follow` with the browse switch
+  on; a record paging through its connection lists stays indexable. Canonicals drop
+  tracking parameters, and a page nothing else described is canonical without its query.
+- The pages sitemap leaves out pages set to noindex, and no sitemap is served (or named in
+  robots.txt) while the whole site is noindex.
+
+### Changed
+
+- **Identity** (shared contract with DRE Linked Data and DRE-theme): Signposting `cite-as`
+  (head and `Link` header), `DC.identifier` and the URL in formatted citations and
+  BibTeX/RIS/CSL-JSON downloads are the record's DRE Linked Data URI, else its page. The
+  DOI leaves `cite-as`; it is a JSON-LD `PropertyValue` `identifier` and a `sameAs`.
+  Canonical, `og:url` and JSON-LD `url` stay the page.
+- Inline JSON-LD is compact (no pretty-printing).
+- `LinkedDataIdentity` describes each resource once per request, and `CitationData` builds
+  each item's record once per request across representations.
+- The lastmod timezone was checked against Omeka (naive UTC datetimes) and is correct; the
+  reason is now documented.
+
 ## [0.12.0] — 2026-10-14
 
 ### Added
@@ -321,7 +403,8 @@ GitHub release and shipped no installable asset.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.10.0...v0.10.1

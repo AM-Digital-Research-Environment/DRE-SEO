@@ -5,7 +5,9 @@ namespace DRESeo\Controller;
 
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
+use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\SettingFlag;
+use DRESeo\Service\SiteHome;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -29,6 +31,7 @@ class SitemapController extends AbstractActionController
         private readonly SitemapGenerator $generator,
         private readonly Settings $settings,
         private readonly DefaultSite $defaultSite,
+        private readonly ?PageSeoStore $pageSeoStore = null,
     ) {
     }
 
@@ -54,27 +57,25 @@ class SitemapController extends AbstractActionController
             return $this->notFound();
         }
 
-        // Pass the site navigation tree + homepage so the sitemap mirrors the
-        // menu structure (order + depth-based priority). Guarded so a missing
-        // method or empty nav simply degrades to listing every public page.
+        // Pass the site navigation tree + home page so the sitemap mirrors the
+        // menu structure (order + depth-based priority) and lists the home
+        // first. Guarded so a missing method or empty nav simply degrades to
+        // listing every public page.
         $navTree = [];
-        $homepageId = null;
         try {
             $nav = $site->navigation();
             $navTree = is_array($nav) ? $nav : [];
-            $homepage = $site->homepage();
-            $homepageId = $homepage ? $homepage->id() : null;
         } catch (\Throwable $e) {
             // degrade gracefully
         }
 
         return $this->xml($this->generator->buildPages(
             $this->siteUrl($site),
-            $this->hostUrl($site),
             $site->id(),
             $this->ttl(),
             $navTree,
-            $homepageId
+            SiteHome::pageId($site),
+            $this->noindexPageIds($site)
         ));
     }
 
@@ -167,9 +168,33 @@ class SitemapController extends AbstractActionController
         return (int) $this->settings->get('dre_seo_sitemap_ttl', 86400);
     }
 
+    /**
+     * Sitemaps are served when switched on and the site is not kept out of
+     * the index as a whole: a sitemap listing pages that all say noindex is
+     * what Search Console reports as an error.
+     */
     private function sitemapEnabled(): bool
     {
-        return SettingFlag::isOn($this->settings, 'dre_seo_sitemap_enabled', true);
+        return SettingFlag::isOn($this->settings, 'dre_seo_sitemap_enabled', true)
+            && !SettingFlag::isOn($this->settings, 'dre_seo_noindex_site');
+    }
+
+    /**
+     * The pages an editor set to noindex (Admin → SEO → Static pages).
+     *
+     * @return int[]
+     */
+    private function noindexPageIds(SiteRepresentation $site): array
+    {
+        if ($this->pageSeoStore === null) {
+            return [];
+        }
+        try {
+            $this->pageSeoStore->setSite($site->id());
+            return $this->pageSeoStore->noindexPageIds();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     private function xml(string $body): Response

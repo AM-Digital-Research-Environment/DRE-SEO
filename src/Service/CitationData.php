@@ -61,14 +61,23 @@ final class CitationData
         'vimeo.com' => 'Vimeo',
     ];
 
+    /** Records kept per request by id; a CLI job building thousands keeps only the last few. */
+    private const MEMO_SIZE = 64;
+
     /**
-     * Built records per item object, then per URL and database name. Keyed by
-     * the representation itself, not its id, so a record can never outlive the
-     * item it was built from.
+     * Built records, keyed by item id and timestamp, then URL and database
+     * name. By id rather than by representation object: the meta tags, the
+     * theme's record panel, the description fallback and the /cite download
+     * each hold their own representation of the same item. The id is only
+     * trusted together with the item's created/modified timestamp; a
+     * representation that has neither is memoised per object instead.
      *
-     * @var \WeakMap<ItemRepresentation,array<string,CitationRecord>>
+     * @var array<string,CitationRecord>
      */
-    private \WeakMap $built;
+    private array $built = [];
+
+    /** @var \WeakMap<ItemRepresentation,array<string,CitationRecord>> */
+    private \WeakMap $builtPerObject;
 
     /**
      * @param string|null $publisher who publishes the database, for entry
@@ -79,7 +88,7 @@ final class CitationData
         private readonly CitationKindMap $kinds,
         private readonly ?string $publisher = null,
     ) {
-        $this->built = new \WeakMap();
+        $this->builtPerObject = new \WeakMap();
     }
 
     public function kind(?int $templateId): CitationKind
@@ -99,8 +108,9 @@ final class CitationData
 
     /**
      * The citation record for an item: a work, or an entry for an authority
-     * record. Memoised per item, URL and database name, since the meta tags,
-     * the record panel and the description fallback all ask for it on one page.
+     * record. Memoised per item, URL and database name for the request, since
+     * the meta tags, the record panel and the description fallback all ask for
+     * it on one page.
      *
      * @param string|null $url     the item's public (canonical) page URL
      * @param string|null $archive the database the item is held in (the site title)
@@ -109,16 +119,49 @@ final class CitationData
     {
         $url = ($url !== null && $url !== '') ? $url : null;
         $archive = ($archive !== null && trim($archive) !== '') ? trim($archive) : null;
-        $key = $url . "\0" . $archive;
-        $records = $this->built[$item] ?? [];
-        if (!isset($records[$key])) {
-            $records[$key] = $this->kinds->forResource($item)->isAuthorityRecord()
-                ? $this->buildEntry($item, $url, $archive)
-                : $this->buildWork($item, $url, $archive);
-            $this->built[$item] = $records;
+        $variant = $url . "\0" . $archive;
+        $stamp = $this->stamp($item);
+        if ($stamp === null) {
+            $records = $this->builtPerObject[$item] ?? [];
+            if (!isset($records[$variant])) {
+                $records[$variant] = $this->buildRecord($item, $url, $archive);
+                $this->builtPerObject[$item] = $records;
+            }
+            return $records[$variant];
         }
 
-        return $records[$key];
+        $key = $item->id() . "\0" . CitationKindMap::templateId($item) . "\0" . $stamp . "\0" . $variant;
+        if (!isset($this->built[$key])) {
+            if (count($this->built) >= self::MEMO_SIZE) {
+                array_shift($this->built);
+            }
+            $this->built[$key] = $this->buildRecord($item, $url, $archive);
+        }
+
+        return $this->built[$key];
+    }
+
+    private function buildRecord(ItemRepresentation $item, ?string $url, ?string $archive): CitationRecord
+    {
+        return $this->kinds->forResource($item)->isAuthorityRecord()
+            ? $this->buildEntry($item, $url, $archive)
+            : $this->buildWork($item, $url, $archive);
+    }
+
+    /** When the item last changed (or was created), to the second; null when unknown. */
+    private function stamp(ItemRepresentation $item): ?string
+    {
+        foreach (['modified', 'created'] as $method) {
+            try {
+                $date = method_exists($item, $method) ? $item->{$method}() : null;
+            } catch (\Throwable $e) {
+                $date = null;
+            }
+            if ($date instanceof \DateTimeInterface) {
+                return $date->format('U');
+            }
+        }
+        return null;
     }
 
     private function buildWork(ItemRepresentation $item, ?string $url, ?string $archive): CitationRecord

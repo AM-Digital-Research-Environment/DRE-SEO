@@ -76,6 +76,24 @@ enum CitationKind: string
     }
 
     /**
+     * Scholarly literature in the sense Google Scholar indexes it: articles,
+     * conference papers, chapters, books, theses and reports (working papers,
+     * preprints). Only these carry Highwire `citation_*` tags, and only when
+     * they name an author ({@see CitationMeta}). Research items, posts,
+     * datasets, podcasts and videos are works too — cited, exported and
+     * described in Dublin Core — but Scholar treats a page with
+     * `citation_title` as a paper, and a field recording or a video is none.
+     */
+    public function isScholarly(): bool
+    {
+        return match ($this) {
+            self::Article, self::Conference, self::Chapter, self::Book,
+            self::Thesis, self::Report => true,
+            default => false,
+        };
+    }
+
+    /**
      * Works published *inside* a container. Drives title treatment: quoted
      * (Chicago/MLA) or plain (APA) with an italic container, rather than an
      * italic standalone title.

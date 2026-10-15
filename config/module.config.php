@@ -32,11 +32,13 @@ return [
             Service\Signposting::class      => Service\SignpostingFactory::class,
             // The DRE Linked Data module's resource URIs, when it is installed.
             Service\LinkedDataIdentity::class => Service\LinkedDataIdentityFactory::class,
+            // The serialisers; the plain-text download renders the default style.
+            Service\CitationExport::class    => Service\CitationExportFactory::class,
+            Service\ImageDimensions::class   => Service\ImageDimensionsFactory::class,
         ],
         'invokables' => [
-            // Stateless serialisers: no config, no dependencies.
+            // Stateless formatter: no config, no dependencies.
             Service\CitationFormatter::class => Service\CitationFormatter::class,
-            Service\CitationExport::class    => Service\CitationExport::class,
         ],
     ],
 
@@ -207,6 +209,14 @@ return [
             // MongoDB2OmekaS/config/profiles/amira.json; tests/amira-templates.php
             // fails the suite when a site template is missing here).
             'default_type'   => 'CreativeWork',
+            // dcterms:accessRights label => whether that access is free, for a
+            // research item's isAccessibleForFree. A label not listed (AMIRA's
+            // "No Raw Data") decides nothing, and the property is left out.
+            'access_free'    => [
+                'Public'     => true,
+                'Group'      => false,
+                'Individual' => false,
+            ],
             'template_types' => [
                 2  => 'Organization',     // organisation (foaf:Organization)
                 3  => 'Place',            // location
@@ -244,6 +254,12 @@ return [
             // kinds (person/place/organization/project/section) emit Dublin Core
             // only; the rest emit kind-specific citation_* tags for Zotero.
             'default_kind'   => 'item',
+            // Templates whose kind is scholarly but whose items are not papers:
+            // they carry Dublin Core only, no Highwire citation_* tags.
+            'highwire_excluded_templates' => [
+                17, // journal issue: the issue, not an article in it
+                29, // series editorship: a book series or a journal
+            ],
             // Who publishes the database, named in the entry citation of an
             // authority record ("Aas, Norbert." Person record. AMIRA. <publisher>.).
             'publisher'      => 'Africa Multiple Cluster of Excellence, University of Bayreuth',
@@ -293,8 +309,9 @@ return [
             ],
             'curated_label' => 'As catalogued',
 
-            // Download serialisations offered at /cite/{id}/{format}.
-            'formats' => ['bibtex', 'ris', 'csljson'],
+            // Download serialisations offered at /cite/{id}/{format}; `txt` is
+            // the default style's citation as plain text.
+            'formats' => ['bibtex', 'ris', 'csljson', 'txt'],
         ],
     ],
 ];

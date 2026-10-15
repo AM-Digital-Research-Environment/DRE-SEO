@@ -5,6 +5,7 @@ namespace DRESeo\Service\Concern;
 
 use DRESeo\Service\Citation\CitationRecord;
 use DRESeo\Service\Citation\IssuedDate;
+use DRESeo\Service\LanguageCode;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
@@ -39,6 +40,27 @@ trait ResourceValueReader
      * bibo:isbn13; bibo:isbn is the generic term a hand-entered record may use.
      */
     private const ISBN_TERMS = ['bibo:isbn13', 'bibo:isbn', 'bibo:isbn10'];
+
+    /**
+     * The authorities whose IRIs are identity links (`sameAs`), each as the
+     * pattern a stored URI must match and the canonical IRI it becomes — the
+     * allowlist DRE Linked Data applies to its owl:sameAs / skos:exactMatch
+     * links, so the page and the RDF name the same targets. Anything else in
+     * dcterms:identifier (a YouTube playlist, a GEPRIS project page, a free
+     * shelf mark) is not the same thing as the record and is never `sameAs`.
+     */
+    private const AUTHORITIES = [
+        'wikidata' => ['~^https?://(?:www\.|m\.)?wikidata\.org/(?:entity|wiki)/(Q[1-9][0-9]*)/?$~i', 'http://www.wikidata.org/entity/$1'],
+        'gnd'      => ['~^https?://d-nb\.info/gnd/([0-9X-]+)/?$~i', 'https://d-nb.info/gnd/$1'],
+        'orcid'    => ['~^https?://(?:www\.)?orcid\.org/([0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X])/?$~i', 'https://orcid.org/$1'],
+        'viaf'     => ['~^https?://(?:www\.)?viaf\.org/viaf/([0-9]+)/?$~i', 'http://viaf.org/viaf/$1'],
+        'isni'     => ['~^https?://(?:www\.)?isni\.org/isni/([0-9]{15}[0-9X])/?$~i', 'https://isni.org/isni/$1'],
+        'ror'      => ['~^https?://(?:www\.)?ror\.org/(0[a-z0-9]{8})/?$~i', 'https://ror.org/$1'],
+        'loc'      => ['~^https?://id\.loc\.gov/authorities/(subjects|names|genreForms)/([a-z]+[0-9]+)(?:\.html)?$~', 'http://id.loc.gov/authorities/$1/$2'],
+        'geonames' => ['~^https?://(?:www\.|sws\.)?geonames\.org/([0-9]+)(?:/.*)?$~i', 'https://sws.geonames.org/$1/'],
+        'doi'      => ['~^https?://(?:dx\.)?doi\.org/(10\.[0-9]{4,9}/\S+)$~i', 'https://doi.org/$1'],
+        'handle'   => ['~^https?://hdl\.handle\.net/([0-9.]+/\S+)$~i', 'https://hdl.handle.net/$1'],
+    ];
 
     /**
      * First non-empty literal/label across the given terms, in order, tags stripped.
@@ -180,7 +202,7 @@ trait ResourceValueReader
                 $uri = trim(strip_tags((string) $value));
             }
             if (preg_match('/\AQ\d+\z/', $uri)) {
-                $uri = 'https://www.wikidata.org/entity/' . $uri;
+                $uri = 'http://www.wikidata.org/entity/' . $uri;
             }
             if (preg_match('#\Ahttps?://\S+\z#i', $uri)) {
                 $out[$uri] = $uri;
@@ -190,21 +212,145 @@ trait ResourceValueReader
     }
 
     /**
-     * The record's identity links — `sameAs` in JSON-LD: the authority URIs in
+     * The record's identity links — `sameAs` in JSON-LD: the authority IRIs in
      * dcterms:identifier (GND for people, Wikidata for places and institutions,
-     * LCSH and Wikidata for subject headings) and the RDSpace handle. WissKI
-     * links are retired and deliberately never read.
+     * LCSH and Wikidata for subject headings), in their canonical form, and the
+     * RDSpace handle. Only the {@see AUTHORITIES} qualify. WissKI links are
+     * retired and deliberately never read.
      *
      * @return string[]
      */
     private function identityUris(AbstractResourceEntityRepresentation $resource): array
     {
-        $out = $this->uris($resource, 'dcterms:identifier');
+        $out = [];
+        foreach ($this->uris($resource, 'dcterms:identifier') as $uri) {
+            $iri = $this->authorityIri($uri);
+            if ($iri !== null) {
+                $out[$iri] = $iri;
+            }
+        }
         $handle = $this->firstString($resource, ['dre:rdspaceHandle']);
         if ($handle !== null) {
-            $out[] = str_starts_with($handle, 'http') ? $handle : 'https://hdl.handle.net/' . ltrim($handle, '/');
+            $iri = str_starts_with($handle, 'http') ? $handle : 'https://hdl.handle.net/' . ltrim($handle, '/');
+            $out[$iri] = $iri;
         }
-        return array_values(array_unique($out));
+        return array_values($out);
+    }
+
+    /** A stored URI as its authority's canonical IRI, or null when it is no authority's. */
+    private function authorityIri(string $uri): ?string
+    {
+        $uri = trim($uri);
+        foreach (self::AUTHORITIES as [$pattern, $canonical]) {
+            if (preg_match($pattern, $uri)) {
+                return (string) preg_replace($pattern, $canonical, $uri);
+            }
+        }
+        return null;
+    }
+
+    /** The ORCID iD among the IRIs, if any. */
+    private static function orcidOf(array $iris): ?string
+    {
+        foreach ($iris as $iri) {
+            if (is_string($iri) && preg_match('~^https://orcid\.org/[0-9X-]{19}$~', $iri)) {
+                return $iri;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The record's languages as BCP 47 tags ("de", "pcm"), in document order:
+     * a linked language record by the ISO 639 code it keeps in
+     * dcterms:alternative, a literal when it is itself a code. A language
+     * known only by its name yields no tag.
+     *
+     * @return string[]
+     */
+    private function languageCodes(AbstractResourceEntityRepresentation $resource): array
+    {
+        $out = [];
+        foreach ($resource->value('dcterms:language', ['all' => true]) as $value) {
+            if (!$value instanceof ValueRepresentation) {
+                continue;
+            }
+            $linked = $value->valueResource();
+            $candidates = $linked
+                ? array_map(
+                    static fn ($alternative): string => trim(strip_tags((string) $alternative)),
+                    $linked->value('dcterms:alternative', ['all' => true])
+                )
+                : [trim(strip_tags((string) $value))];
+            foreach ($candidates as $candidate) {
+                $tag = LanguageCode::toBcp47($candidate);
+                if ($tag !== null) {
+                    $out[$tag] = $tag;
+                    break;
+                }
+            }
+        }
+        return array_values($out);
+    }
+
+    /**
+     * Whether an item is a research item: one of its dcterms:isPartOf values
+     * links to a record of class foaf:Project. The rule DRE-theme's
+     * RecordAccess applies, by resource class rather than template id, so the
+     * theme's access notice and the structured data agree on which records
+     * AMIRA describes but does not hold.
+     */
+    private function isResearchItem(AbstractResourceEntityRepresentation $resource): bool
+    {
+        if (!$resource instanceof ItemRepresentation) {
+            return false;
+        }
+        foreach ($resource->value('dcterms:isPartOf', ['all' => true]) as $value) {
+            $linked = $value instanceof ValueRepresentation ? $value->valueResource() : null;
+            $class = $linked ? $linked->resourceClass() : null;
+            if ($class && $class->term() === 'foaf:Project') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The first of $terms as an ISO 8601 date, as precise as stored
+     * ("2018", "2018-12", "2018-12-07"). The raw stored value is read, so a
+     * NumericDataTypes timestamp keeps its month and day; a value that names
+     * no year yields null rather than free text.
+     *
+     * @param string[] $terms
+     */
+    private function isoDate(AbstractResourceEntityRepresentation $resource, array $terms): ?string
+    {
+        foreach ($terms as $term) {
+            $value = $resource->value($term);
+            if (!$value instanceof ValueRepresentation) {
+                continue;
+            }
+            $raw = trim((string) $value->value());
+            if ($raw === '') {
+                $raw = trim(strip_tags((string) $value));
+            }
+            if ($raw === '') {
+                continue;
+            }
+            $date = IssuedDate::parse($raw);
+            if ($date->year === null) {
+                return null;
+            }
+            $out = sprintf('%04d', $date->year);
+            if ($date->month !== null && $date->month >= 1 && $date->month <= 12) {
+                $out .= sprintf('-%02d', $date->month);
+                if ($date->day !== null && checkdate($date->month, $date->day, $date->year)) {
+                    $out .= sprintf('-%02d', $date->day);
+                }
+            }
+            return $out;
+        }
+        return null;
     }
 
     /** When the Omeka record last changed, to the day. */

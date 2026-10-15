@@ -82,6 +82,9 @@ class SeoController extends AbstractActionController
             $form->setData($post);
             if ($form->isValid()) {
                 $this->pageSeoStore->replaceAll((array) ($post['pages'] ?? []));
+                // A page set to noindex leaves the pages sitemap now, not when
+                // the cached copy expires.
+                $this->generator->clearCache();
                 $this->messenger()->addSuccess('Static-page SEO saved.'); // @translate
                 return $this->redirect()->toRoute('admin/dre-seo/pages');
             }
