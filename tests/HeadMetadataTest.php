@@ -231,3 +231,37 @@ test('a local share image declares its size; a remote one does not', function ()
         @rmdir($files);
     }
 });
+
+test('a research item page: one identity, no Highwire, typed project, access conditions', function (): void {
+    $identity = new LinkedDataIdentity(static fn () => static fn ($resource): array => [
+        'uri' => 'https://example.test/resource/' . $resource->id(),
+        'downloads' => [['label' => 'Turtle', 'type' => 'text/turtle', 'url' => 'https://example.test/resource/' . $resource->id() . '.ttl']],
+    ]);
+    $project = new Omeka\Api\Representation\ItemRepresentation('Karakul Circulations', 5, 'Project', [], 'https://example.test/s/amira/item/1794', 1794, 'foaf:Project');
+    $video = new Omeka\Api\Representation\ItemRepresentation('Alles was irgendwie nützt', 10, null, [
+        'dcterms:title' => [new Omeka\Api\Representation\ValueRepresentation('Alles was irgendwie nützt')],
+        'dcterms:created' => [new Omeka\Api\Representation\ValueRepresentation('1905-07-08')],
+        'dcterms:isPartOf' => [new Omeka\Api\Representation\ValueRepresentation('', $project)],
+        'dcterms:accessRights' => [new Omeka\Api\Representation\ValueRepresentation('', new Omeka\Api\Representation\ItemRepresentation('No Raw Data', 6))],
+    ], 'https://example.test/s/amira/item/8698', 8698);
+    $view = new PhpRenderer('https://example.test/s/amira/item/8698');
+
+    headMetadataService([], $identity)->applyResource($view, $video, amiraSite());
+
+    assertSameValue('https://example.test/s/amira/item/8698', $view->links('canonical')[0]['href']);
+    assertSameValue(['https://example.test/s/amira/item/8698'], $view->meta('og:url'));
+    assertSameValue(['https://example.test/resource/8698'], $view->meta('DC.identifier'));
+    assertSameValue('https://example.test/resource/8698', $view->links('cite-as')[0]['href']);
+    assertSameValue([], array_values(array_filter(
+        array_column($view->head['meta'], 1),
+        static fn (string $name): bool => str_starts_with($name, 'citation_')
+    )), 'no Highwire tags on a research item without an author');
+    [$record, $breadcrumb] = $view->jsonLd();
+    assertSameValue('https://example.test/resource/8698', $record['@id']);
+    assertSameValue('https://example.test/s/amira/item/8698', $record['url']);
+    assertSameValue('ResearchProject', $record['isPartOf']['@type']);
+    assertSameValue('https://example.test/resource/1794', $record['isPartOf']['@id']);
+    assertSameValue('1905-07-08', $record['dateCreated']);
+    assertSameValue('No Raw Data', $record['conditionsOfAccess'], 'no statement configured here');
+    assertSameValue('https://example.test/s/amira/page/home', $breadcrumb['itemListElement'][0]['item']);
+});
