@@ -27,7 +27,7 @@ tables, no theme edits.
 |---|---|
 | **Meta tags** | `<title>`, `<meta name="description">`, canonical link on every public page. |
 | **Open Graph / Twitter** | `og:title/description/image/type/url/site_name/locale` + `twitter:card/title/description/image/site` so shared links render a rich preview. |
-| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with allowlisted authority IRIs as `sameAs`; every linked record typed as its own page types it. `WebSite` and the catalogue as a `Dataset` on the home page, `CollectionPage` on item-set pages and `BreadcrumbList` on resource pages. With [DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData), every record node takes its permanent `/resource/{id}` URI as `@id`. |
+| **schema.org JSON-LD** | Per-resource structured data typed from the resource template (Person, Place, Organization, ResearchProject, DefinedTerm, Periodical, CreativeWork, Dataset, scholarly types …), with allowlisted authority IRIs as `sameAs`; every linked record typed as its own page types it. `WebSite` on the home page, the catalogue as a `Dataset` on its landing page (the *Linked open data* page), `CollectionPage` on item-set pages and `BreadcrumbList` on resource pages. With [DRE Linked Data](https://github.com/AM-Digital-Research-Environment/DRE-LinkedData), every record node takes its permanent `/resource/{id}` URI as `@id`. |
 | **Citations** | "Cite this record" on every record page — Chicago, APA, MLA and BibTeX/RIS/CSL-JSON/plain-text downloads for works, and an entry citation ("Person record. AMIRA. Last modified …") for authority records. |
 | **FAIR Signposting** | `cite-as`, `describedby`, `type`, `author`, `license`, `item` and `collection` links on item, item-set and media pages, as `<link>` elements and as an HTTP `Link` header, for FAIR assessors such as F-UJI. |
 | **Citation metadata (Zotero)** | Highwire Press `citation_*` tags for scholarly papers (articles, chapters, books, theses, reports … with an author) and Dublin Core `DC.*` for every record, so the **Zotero Connector**, Google Scholar, Mendeley and other reference managers capture each record as a properly-typed reference, and Scholar indexes only papers. |
@@ -115,7 +115,7 @@ The head signals are written into Omeka's request-global head placeholder helper
   ~160 chars), canonical from the resource's site URL, `og:image` from the primary media, and
   JSON-LD from the resource template.
 * **Static pages** (`view.show.after` on the Page controller): the editor's per-page
-  overrides, else defaults; on the home page, `WebSite` and `Dataset` JSON-LD, and the
+  overrides, else defaults; on the home page, `WebSite` JSON-LD and the
   site title as `og:title`. Every page is **self-canonical, the home page included**:
   Omeka renders no page at the host root or the site root — `/` and `/s/{slug}` only
   redirect (302) to the homepage page, `/s/{slug}/page/{slug}` — so a canonical there
@@ -163,8 +163,10 @@ share one identity contract:
   Signposting level 1, because many harvesters read headers only. It is sent with or
   without DRE Linked Data.
 * **Dataset.** When DRE Linked Data describes its dataset (`dreLinkedData()->dataset()`,
-  0.3.0+), the home page carries it as a schema.org `Dataset` for Google Dataset Search:
-  `@id` the VoID dataset URI, a description of at least 50 characters, the licence, the
+  0.3.0+), its landing page carries it as a schema.org `Dataset` for Google Dataset Search.
+  The landing page is the page with the *Linked open data* block, which DRE Linked Data
+  0.3.1+ names as `landingPage` (it is also the VoID's `dcat:landingPage` and the Dataset's
+  `url`); with 0.3.0 it is the home page. The node has `@id` the VoID dataset URI, a description of at least 50 characters, the licence, the
   publisher (with its Wikidata IRI as `sameAs`), `dateModified`, the dumps as
   `DataDownload`s and AMIRA as the `DataCatalog`.
 

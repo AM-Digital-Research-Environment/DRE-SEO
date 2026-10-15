@@ -251,7 +251,8 @@ class StructuredData
             '@id'         => $uri,
             'name'        => $title,
             'description' => $description,
-            'url'         => $home,
+            // The page that explains the dataset (DRE Linked Data 0.3.1+), else the home.
+            'url'         => self::httpUrl($dataset['landingPage'] ?? null) ?? $home,
         ];
         $licence = is_string($dataset['licence'] ?? null) ? trim($dataset['licence']) : '';
         if ($licence !== '') {
@@ -292,6 +293,13 @@ class StructuredData
         }
         $data['includedInDataCatalog'] = ['@type' => 'DataCatalog', 'name' => $site->title(), 'url' => $home];
         return $data;
+    }
+
+    /** An absolute http(s) URL, or null. */
+    private static function httpUrl(mixed $value): ?string
+    {
+        $url = is_string($value) ? trim($value) : '';
+        return preg_match('~^https?://~i', $url) ? $url : null;
     }
 
     /**

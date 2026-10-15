@@ -9,6 +9,12 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.13.1] — 2026-10-15
+
+### Changed
+
+- The schema.org `Dataset` is on the dataset's landing page, the page that carries DRE Linked Data's *Linked open data* block, and its `url` is that page. DRE Linked Data 0.3.1 names the page (`dataset()['landingPage']`) and gives the same page as the VoID's `dcat:landingPage`, so Google Dataset Search and data catalogues send people to the page that explains the dataset. With DRE Linked Data 0.3.0, which names no landing page, the `Dataset` stays on the home page. The home page keeps its `WebSite` node.
+
 ## [0.13.0] — 2026-10-15
 
 An SEO and FAIR audit of the live site, applied together with DRE Linked Data 0.3.0 and
