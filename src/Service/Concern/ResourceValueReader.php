@@ -134,6 +134,11 @@ trait ResourceValueReader
      * a downloaded filename mean something. The prefix test is deliberate: a
      * research item's dcterms:identifier is often free text (a shelf mark, or a
      * whole descriptive title), which would make a nonsense key.
+     *
+     * Since MongoDB2OmekaS of 27 October 2026 the id is the label of a link to
+     * the repository permalink, and a URI value renders as its URI, so the label
+     * is read from the stored value; a link without one names its id by the
+     * permalink. Older records carry the id as a literal.
      */
     private function accession(AbstractResourceEntityRepresentation $resource): ?string
     {
@@ -146,9 +151,15 @@ trait ResourceValueReader
             if (!$value instanceof ValueRepresentation) {
                 continue;
             }
-            $text = trim(strip_tags((string) $value));
+            $text = trim(strip_tags($value->type() === 'uri' ? (string) $value->value() : (string) $value));
             if (preg_match('/^e(?:ref|pub)-\S+$/i', $text)) {
                 return $text;
+            }
+            if (
+                $value->type() === 'uri'
+                && preg_match('~^https?://(eref|epub)\.uni-bayreuth\.de/id/eprint/(\d+)~i', (string) $value->uri(), $m)
+            ) {
+                return strtolower($m[1]) . '-' . $m[2];
             }
         }
 

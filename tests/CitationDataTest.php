@@ -350,6 +350,27 @@ test('the accession id prefers dre:id and falls back to a publication id', funct
         assertSameValue($publicationId, $data->build($publication)->accession);
     }
 
+    // Since 27 October 2026 the id labels a link to its repository permalink;
+    // the label is the stored value (real Omeka renders a URI value as its URI),
+    // and an unlabelled link names its id by the permalink.
+    $linked = new ItemRepresentation('A book', 15, null, [
+        'dcterms:identifier' => [
+            new ValueRepresentation(
+                'https://eref.uni-bayreuth.de/id/eprint/70514/',
+                null,
+                'https://eref.uni-bayreuth.de/id/eprint/70514/',
+                'eref-70514',
+            ),
+        ],
+    ]);
+    assertSameValue('eref-70514', $data->build($linked)->accession);
+    $unlabelled = new ItemRepresentation('A book', 15, null, [
+        'dcterms:identifier' => [
+            new ValueRepresentation('', null, 'https://epub.uni-bayreuth.de/id/eprint/5720/', ''),
+        ],
+    ]);
+    assertSameValue('epub-5720', $data->build($unlabelled)->accession);
+
     // Free text alone yields nothing, so the cite key falls back to item-<id>.
     $freeText = new ItemRepresentation('A record', 10, null, [
         'dcterms:identifier' => [literalValue('Some descriptive shelf mark')],
