@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<ruleset name="DRE SEO">
+    <description>PSR-12, which is what the codebase already follows.</description>
+
+    <file>Module.php</file>
+    <file>src</file>
+    <file>config</file>
+
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+
+    <rule ref="PSR12">
+        <!--
+            Omeka's config and language files are long data tables; aligned
+            values read better than a hard column limit allows, and the same
+            goes for the SQL, the regular expressions and the documentation
+            blocks that explain AMIRA's field conventions.
+        -->
+        <exclude name="Generic.Files.LineLength"/>
+
+        <!--
+            Every file opens `<?php`, `declare(strict_types=1);`, then the
+            file docblock. PSR-12 wants the docblock first. The house order is
+            uniform across the codebase and keeps the strict_types line beside
+            the tag it qualifies; the sniff is the only thing that disagrees.
+        -->
+        <exclude name="PSR12.Files.FileHeader"/>
+    </rule>
+</ruleset>

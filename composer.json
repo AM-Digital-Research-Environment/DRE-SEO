@@ -35,8 +35,11 @@
     "syntax": "@php tests/lint.php",
     "test": "@php tests/run.php",
     "integration": "@php tests/integration/omeka-smoke.php",
+    "lint": "phpcs",
+    "lint:fix": "phpcbf",
     "check": [
       "@syntax",
+      "@lint",
       "@test"
     ]
   },
@@ -44,6 +47,8 @@
     "syntax": "Syntax-check every PHP and PHTML file with php -l.",
     "test": "Run the unit harness.",
     "integration": "Run the smoke test against the Omeka installation in OMEKA_PATH.",
+    "lint": "Check PSR-12 compliance.",
+    "lint:fix": "Fix what PHP_CodeSniffer can fix automatically.",
     "check": "Everything CI runs except the Omeka integration test."
   },
   "config": {

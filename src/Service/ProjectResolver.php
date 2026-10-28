@@ -79,7 +79,8 @@ final class ProjectResolver
         }
         foreach ((array) $values as $value) {
             $linked = $value instanceof ValueRepresentation ? $value->valueResource() : null;
-            if ($linked instanceof ItemRepresentation
+            if (
+                $linked instanceof ItemRepresentation
                 && self::isProject($linked)
                 && self::isPublic($linked)
                 && !self::same($linked, $resource)

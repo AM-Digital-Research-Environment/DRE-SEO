@@ -164,7 +164,8 @@ class Module extends AbstractModule
         try {
             $routeMatch = $event->getRouteMatch();
             $request = $event->getRequest();
-            if ($routeMatch === null || $routeMatch->getMatchedRouteName() !== 'site/item-set'
+            if (
+                $routeMatch === null || $routeMatch->getMatchedRouteName() !== 'site/item-set'
                 || !$request instanceof HttpRequest
             ) {
                 return null;
@@ -178,7 +179,8 @@ class Module extends AbstractModule
             $projects = $services->get(ProjectResolver::class);
             // The cheap checks first: no item set is read for a POST, or when
             // the site keeps its item-set pages.
-            if (!in_array($request->getMethod(), [HttpRequest::METHOD_GET, HttpRequest::METHOD_HEAD], true)
+            if (
+                !in_array($request->getMethod(), [HttpRequest::METHOD_GET, HttpRequest::METHOD_HEAD], true)
                 || !$projects->redirectsEnabled((int) $site->id())
             ) {
                 return null;
@@ -212,11 +214,13 @@ class Module extends AbstractModule
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
         // Resource show pages — derive meta + JSON-LD from the resource.
-        foreach ([
-            'Omeka\Controller\Site\Item',
-            'Omeka\Controller\Site\ItemSet',
-            'Omeka\Controller\Site\Media',
-        ] as $controller) {
+        foreach (
+            [
+                'Omeka\Controller\Site\Item',
+                'Omeka\Controller\Site\ItemSet',
+                'Omeka\Controller\Site\Media',
+            ] as $controller
+        ) {
             $sharedEventManager->attach($controller, 'view.show.after', [$this, 'handleResourceShow']);
             $sharedEventManager->attach($controller, 'view.browse.after', [$this, 'handleBrowse']);
         }
@@ -238,11 +242,13 @@ class Module extends AbstractModule
         // Auto-ping on public content changes (no-op unless ping is enabled):
         // a public record created, edited, made private or deleted. The
         // visibility a record had before an update is noted at hydrate.pre.
-        foreach ([
-            'Omeka\Api\Adapter\ItemAdapter',
-            'Omeka\Api\Adapter\ItemSetAdapter',
-            'Omeka\Api\Adapter\SitePageAdapter',
-        ] as $adapter) {
+        foreach (
+            [
+                'Omeka\Api\Adapter\ItemAdapter',
+                'Omeka\Api\Adapter\ItemSetAdapter',
+                'Omeka\Api\Adapter\SitePageAdapter',
+            ] as $adapter
+        ) {
             $sharedEventManager->attach($adapter, 'api.hydrate.pre', [$this, 'noteVisibility']);
             $sharedEventManager->attach($adapter, 'api.create.post', [$this, 'handleContentChange']);
             $sharedEventManager->attach($adapter, 'api.update.post', [$this, 'handleContentChange']);
@@ -356,7 +362,8 @@ class Module extends AbstractModule
     {
         $entity = $event->getParam('entity');
         $request = $event->getParam('request');
-        if (!is_object($entity) || !method_exists($entity, 'getId') || !method_exists($entity, 'isPublic')
+        if (
+            !is_object($entity) || !method_exists($entity, 'getId') || !method_exists($entity, 'isPublic')
             || !$request || $request->getOperation() !== 'update'
         ) {
             return;

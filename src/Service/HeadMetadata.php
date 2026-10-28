@@ -362,7 +362,8 @@ class HeadMetadata
         // the index; crawlers still follow their links to the records. A
         // record paging through its connection lists, or a URL that only
         // carries tracking parameters, is not a variant.
-        if ($this->boolSetting('dre_seo_noindex_browse')
+        if (
+            $this->boolSetting('dre_seo_noindex_browse')
             && ($isSearch || $this->isQueryVariant($view->serverUrl(true)))
         ) {
             $this->setRobots($view, 'noindex, follow');
@@ -559,7 +560,8 @@ class HeadMetadata
     private function resourceTitle(AbstractResourceEntityRepresentation $resource): string
     {
         $title = trim((string) $resource->displayTitle());
-        if ($resource instanceof MediaRepresentation
+        if (
+            $resource instanceof MediaRepresentation
             && ($title === '' || preg_match('#\Ahttps?://#i', $title))
         ) {
             try {
@@ -715,7 +717,8 @@ class HeadMetadata
         if ($raw === '') {
             return '';
         }
-        if (stripos($raw, '<meta') !== false
+        if (
+            stripos($raw, '<meta') !== false
             && preg_match('/content\s*=\s*"([^"]+)"/i', $raw, $m)
         ) {
             return trim($m[1]);
