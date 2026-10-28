@@ -25,12 +25,21 @@
 # unpacks it. Everything else is repository furniture and stays out.
 #
 # Consequence worth knowing: `composer check` / `composer test` do NOT run inside
-# an unpacked release, because tests/ is excluded by design. Run them from a clone.
+# an unpacked release, because tests/ and the tool configurations are excluded by
+# design. Run them from a clone. Some entries name files that do not exist yet;
+# they cost nothing and keep a new one from leaking the day it is added.
 # ---------------------------------------------------------------------------
 /.gitattributes  export-ignore
 /.gitignore      export-ignore
+/.editorconfig   export-ignore
 /.github         export-ignore
 /tests           export-ignore
+/phpcs.xml.dist  export-ignore
+/phpunit.xml.dist export-ignore
+/phpunit.integration.xml.dist export-ignore
+/phpstan.neon.dist export-ignore
+/phpstan-baseline.neon export-ignore
 /CITATION.cff    export-ignore
 /CONTRIBUTING.md export-ignore
 /SECURITY.md     export-ignore
+/CLAUDE.md       export-ignore

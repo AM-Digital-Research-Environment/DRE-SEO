@@ -21,14 +21,30 @@
       "DRESeo\\": "src/"
     }
   },
+  "require-dev": {
+    "phpunit/phpunit": "^13.4",
+    "phpstan/phpstan": "^2.3",
+    "squizlabs/php_codesniffer": "^4.0"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "DRESeo\\Test\\": "tests/"
+    }
+  },
   "scripts": {
-    "lint": "@php tests/lint.php",
+    "syntax": "@php tests/lint.php",
     "test": "@php tests/run.php",
     "integration": "@php tests/integration/omeka-smoke.php",
     "check": [
-      "@lint",
+      "@syntax",
       "@test"
     ]
+  },
+  "scripts-descriptions": {
+    "syntax": "Syntax-check every PHP and PHTML file with php -l.",
+    "test": "Run the unit harness.",
+    "integration": "Run the smoke test against the Omeka installation in OMEKA_PATH.",
+    "check": "Everything CI runs except the Omeka integration test."
   },
   "config": {
     "platform": {

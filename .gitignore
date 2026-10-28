@@ -1,6 +1,12 @@
-# Composer (this module ships no third-party dependencies; vendor/ is never committed)
+# Composer. The module ships no third-party dependencies: vendor/ holds the
+# development tools only and is never committed, and neither is the lock.
 /vendor/
 composer.lock
+
+# PHPUnit's result cache, and an Omeka S tree to run the integration suite
+# against (OMEKA_PATH may point anywhere; this is a conventional place).
+/.phpunit.cache/
+/.integration/
 
 # OS / editor cruft
 .DS_Store

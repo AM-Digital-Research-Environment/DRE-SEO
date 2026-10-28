@@ -32,6 +32,9 @@ jobs:
       - name: Validate Composer metadata
         run: composer validate --strict
 
+      - name: Install development tools
+        run: composer install --prefer-dist --no-interaction --no-progress
+
       - name: Lint and test
         run: composer check
 
