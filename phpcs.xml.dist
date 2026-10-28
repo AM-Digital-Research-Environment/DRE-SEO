@@ -4,9 +4,12 @@
 
     <file>Module.php</file>
     <file>src</file>
+    <file>tests</file>
     <file>config</file>
 
     <exclude-pattern>*/vendor/*</exclude-pattern>
+    <!-- The smoke script is replaced by a PHPUnit suite in tests/Integration. -->
+    <exclude-pattern>tests/integration/*</exclude-pattern>
 
     <arg name="extensions" value="php"/>
     <arg name="colors"/>
@@ -28,5 +31,15 @@
             the tag it qualifies; the sniff is the only thing that disagrees.
         -->
         <exclude name="PSR12.Files.FileHeader"/>
+    </rule>
+
+    <!--
+        tests/Shim/omeka.php deliberately declares several stand-ins in one
+        file, each in its own namespace block and guarded by class_exists().
+        Splitting them per-file would scatter the boundary this file exists
+        to make visible in one place.
+    -->
+    <rule ref="PSR1.Classes.ClassDeclaration.MultipleClasses">
+        <exclude-pattern>tests/Shim/omeka\.php</exclude-pattern>
     </rule>
 </ruleset>

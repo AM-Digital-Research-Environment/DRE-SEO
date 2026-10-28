@@ -316,7 +316,7 @@ item's FaBiO class, so only a `fabio:DoctoralThesis` is cited as a PhD dissertat
 habilitation's plain `fabio:Thesis` reads as "Thesis".
 
 Both template maps are keyed by instance-specific template ids, and a template neither names
-falls back silently to `CreativeWork` / `item`. `tests/amira-templates.php` lists the AMIRA
+falls back silently to `CreativeWork` / `item`. `tests/Fixture/amira-templates.php` lists the AMIRA
 instance's templates: when the site gains one, add it there and the suite fails until both
 maps name it. `citation_pdf_url` is emitted only for a
 **public** PDF media, so restricted bitstreams are never exposed. Toggle the whole feature with

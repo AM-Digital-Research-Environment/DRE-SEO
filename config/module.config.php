@@ -236,8 +236,9 @@ return [
         ],
         'structured_data' => [
             // schema.org @type per Omeka resource template id (pinned in
-            // MongoDB2OmekaS/config/profiles/amira.json; tests/amira-templates.php
-            // fails the suite when a site template is missing here).
+            // MongoDB2OmekaS/config/profiles/amira.json; the list in
+            // tests/Fixture/amira-templates.php fails the suite when a site
+            // template is missing here).
             'default_type'   => 'CreativeWork',
             // dcterms:accessRights label => whether that access is free, for a
             // research item's isAccessibleForFree. A label not listed (AMIRA's

@@ -35,6 +35,11 @@ jobs:
       - name: Install development tools
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Syntax check
+        run: |
+          find . -path ./vendor -prune -o \( -name '*.php' -o -name '*.phtml' \) -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+
       - name: Lint and test
         run: composer check
 
