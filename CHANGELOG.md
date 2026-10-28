@@ -9,6 +9,14 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Changed
+
+- **PHP 8.4 is now the minimum** (`composer.json` `require.php`, was 8.2). Production runs
+  8.5, which CI keeps testing alongside the 8.4 floor. The move follows the development
+  tools: PHPUnit 13 needs PHP 8.4.1, and `config.platform.php` makes Composer resolve them
+  for that floor whichever PHP runs it. The module's code is unchanged; an Omeka
+  installation still on PHP 8.2 or 8.3 should stay on 0.15.0.
+
 ## [0.15.0] — 2026-10-15
 
 The research project's item becomes its one public page: its item set redirects there, and

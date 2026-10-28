@@ -3,7 +3,7 @@
 [![CI](https://github.com/AM-Digital-Research-Environment/DRE-SEO/actions/workflows/ci.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/DRE-SEO/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/AM-Digital-Research-Environment/DRE-SEO?sort=semver&label=release)](https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/latest)
 [![Omeka S ^4.2.0](https://img.shields.io/badge/Omeka%20S-%5E4.2.0-3b5f7d)](https://omeka.org/s/)
-[![PHP >= 8.2](https://img.shields.io/badge/PHP-%E2%89%A5%208.2-777bb4)](https://www.php.net/)
+[![PHP >= 8.4](https://img.shields.io/badge/PHP-%E2%89%A5%208.4-777bb4)](https://www.php.net/)
 [![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-009260)](LICENSE)
 
 Search-engine optimisation and XML sitemap for the **Africa Multiple DRE** Omeka S
@@ -64,8 +64,8 @@ No web-server changes are needed: nginx's `try_files … /index.php` already rou
 There are no third-party dependencies, so `composer install` is **not** required — Omeka
 autoloads the `DRESeo\` namespace from `src/`.
 
-**Requirements:** Omeka S `^4.2.0`, PHP `>= 8.2`. CI covers both the supported
-floor (PHP 8.2) and the production runtime (PHP 8.5).
+**Requirements:** Omeka S `^4.2.0`, PHP `>= 8.4`. CI covers both the supported
+floor (PHP 8.4) and the production runtime (PHP 8.5).
 
 ---
 
@@ -418,7 +418,7 @@ content via the robots.txt `Sitemap:` line and Search Console.
 ```
 DRESeo/
 ├── .github/workflows/
-│   ├── ci.yml                       # PHP 8.2 + production PHP 8.5 checks, Omeka smoke test
+│   ├── ci.yml                       # PHP 8.4 + production PHP 8.5 checks, Omeka smoke test
 │   └── release.yml                  # tag -> DRESeo.zip + SHA-256 on the GitHub release
 ├── CHANGELOG.md
 ├── CITATION.cff                     # how to cite the module (GitHub / Zenodo read this)
@@ -473,7 +473,7 @@ composer check
 This syntax-checks every PHP/PHTML file and exercises sitemap XML generation and caching,
 static-page override normalization, the current Africa Multiple template mapping, YouTube
 `VideoObject` output, IndexNow key validation, and single-flight batching. GitHub Actions
-runs the same command on PHP 8.2 and the production PHP 8.5 runtime. A separate job downloads
+runs the same command on PHP 8.4 and the production PHP 8.5 runtime. A separate job downloads
 the checksum-pinned official Omeka S 4.2.1 release and exercises the module's real service
 factories, shared event listeners, configuration form, Laminas head helpers, and DBAL-backed
 sitemap generation. You can run it locally against an unpacked release with:

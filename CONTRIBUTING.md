@@ -30,7 +30,7 @@ The integration smoke test runs the real service factories against an unpacked O
 OMEKA_PATH=/path/to/omeka-s composer integration
 ```
 
-CI runs both on PHP 8.2 and 8.5, plus the smoke test against a checksum-pinned Omeka S
+CI runs both on PHP 8.4 and 8.5, plus the smoke test against a checksum-pinned Omeka S
 4.2.1. Please run `composer check` before pushing — it catches essentially everything CI
 would, and saves a round-trip.
 
