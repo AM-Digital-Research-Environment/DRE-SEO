@@ -8,8 +8,6 @@
     <file>config</file>
 
     <exclude-pattern>*/vendor/*</exclude-pattern>
-    <!-- The smoke script is replaced by a PHPUnit suite in tests/Integration. -->
-    <exclude-pattern>tests/integration/*</exclude-pattern>
 
     <arg name="extensions" value="php"/>
     <arg name="colors"/>

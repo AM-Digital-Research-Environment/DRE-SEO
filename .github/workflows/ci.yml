@@ -71,5 +71,8 @@ jobs:
           unzip -q "$archive" -d "$RUNNER_TEMP"
           echo "OMEKA_PATH=$RUNNER_TEMP/omeka-s" >> "$GITHUB_ENV"
 
-      - name: Run Omeka integration smoke test
-        run: composer integration
+      - name: Install module development tools
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run real-framework integration tests
+        run: composer test:integration

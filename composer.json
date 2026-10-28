@@ -33,7 +33,7 @@
   },
   "scripts": {
     "test": "phpunit",
-    "integration": "@php tests/integration/omeka-smoke.php",
+    "test:integration": "@php tests/Integration/run.php --configuration phpunit.integration.xml.dist",
     "lint": "phpcs",
     "lint:fix": "phpcbf",
     "check": [
@@ -43,7 +43,7 @@
   },
   "scripts-descriptions": {
     "test": "Run the PHPUnit suite.",
-    "integration": "Run the smoke test against the Omeka installation in OMEKA_PATH.",
+    "test:integration": "Run the separate suite against the Omeka installation in OMEKA_PATH.",
     "lint": "Check PSR-12 compliance.",
     "lint:fix": "Fix what PHP_CodeSniffer can fix automatically.",
     "check": "Everything CI runs except the Omeka integration test."

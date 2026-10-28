@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/Integration/bootstrap.php"
+         colors="true"
+         failOnWarning="true"
+         cacheDirectory=".phpunit.cache/integration">
+    <testsuites>
+        <testsuite name="Omeka integration">
+            <directory>tests/Integration</directory>
+            <exclude>tests/Integration/bootstrap.php</exclude>
+            <exclude>tests/Integration/run.php</exclude>
+        </testsuite>
+    </testsuites>
+    <!--
+        Omeka S 4.2.1's pinned DBAL and Laminas versions emit PHP 8.5
+        deprecations of their own (PDO::sqliteCreateFunction() and the like).
+        Those are indirect: raised in third-party code that third-party code
+        called. Ignoring them keeps the suite about the module, while one
+        raised in src/, or by a call from it, still reports.
+    -->
+    <source ignoreIndirectDeprecations="true">
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+    </source>
+</phpunit>
