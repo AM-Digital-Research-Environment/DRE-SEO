@@ -25,6 +25,12 @@ declare(strict_types=1);
  * those. No third-party Composer dependencies, so there is no bundled vendor/
  * — Omeka autoloads the DRESeo\ namespace from src/ (and, while the module is
  * inactive, loadLifecycleDependencies() does).
+ *
+ * This file is the wiring: services, listeners, ACL, the lifecycle and the
+ * configuration form. What the listeners do lives in src/ — the head in
+ * Service\HeadMetadata, the API listeners in Listener\ContentChanges, the
+ * project redirect in Listener\ProjectItemSetRedirect, the site settings in
+ * Form\SiteSettingsElements — and the listener methods named here delegate.
  */
 
 namespace DRESeo;
@@ -33,14 +39,12 @@ use DRESeo\Service\DefaultSite;
 use DRESeo\Service\HeadMetadata;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\LandingPages;
-use DRESeo\Service\PingQueue;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\Signposting;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Http\Header\GenericMultiHeader;
-use Laminas\Http\Request as HttpRequest;
 use Laminas\Http\Response as HttpResponse;
 use Laminas\Mvc\Controller\AbstractController;
 use Laminas\Mvc\MvcEvent;
@@ -50,7 +54,6 @@ use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
-use Omeka\Api\Request as ApiRequest;
 use Omeka\Form\SiteSettingsForm;
 use Omeka\Module\AbstractModule;
 use Omeka\Permissions\Acl;
@@ -101,25 +104,8 @@ class Module extends AbstractModule
         'dre_seo_sitemap_ttl'     => '86400',
     ];
 
-    /**
-     * What an API request's pre-events noted for its post-event, which can no
-     * longer read it: whether the record an update changes was public before,
-     * and the URL of a record a delete removes. Keyed by the request object, so
-     * an entry lives exactly as long as its request (batch operations finalize
-     * each sub-request separately).
-     *
-     * @var \WeakMap<ApiRequest,bool>
-     */
-    private \WeakMap $wasPublic;
-
-    /** @var \WeakMap<ApiRequest,string> */
-    private \WeakMap $deletedUrls;
-
-    public function __construct()
-    {
-        $this->wasPublic = new \WeakMap();
-        $this->deletedUrls = new \WeakMap();
-    }
+    /** The API listeners' state and logic, built on the first content change. */
+    private ?Listener\ContentChanges $contentChanges = null;
 
     /** @return array<string,mixed> */
     public function getConfig(): array
@@ -275,63 +261,12 @@ class Module extends AbstractModule
     }
 
     /**
-     * A research project's item-set page (`/s/{site}/item-set/{id}`, GET or
-     * HEAD) answers 301 with the project item's page in the same site, when
-     * the item set stands for a public project and the site has not switched
-     * the redirect off ({@see ProjectResolver}). Returning the response ends
-     * the route event, so neither the controller nor the theme runs. Nothing
-     * here touches the session, and any failure leaves the page as it was.
+     * A research project's item-set page answers 301 with the project item
+     * ({@see Listener\ProjectItemSetRedirect}).
      */
     public function redirectProjectItemSet(MvcEvent $event): ?HttpResponse
     {
-        try {
-            $routeMatch = $event->getRouteMatch();
-            $request = $event->getRequest();
-            if (
-                $routeMatch === null || $routeMatch->getMatchedRouteName() !== 'site/item-set'
-                || !$request instanceof HttpRequest
-            ) {
-                return null;
-            }
-            // Core's preparePublicSite has put the site on the view model.
-            $site = $event->getViewModel()->getVariable('site');
-            if (!$site instanceof SiteRepresentation) {
-                return null;
-            }
-            $services = $event->getApplication()->getServiceManager();
-            $projects = $services->get(ProjectResolver::class);
-            // The cheap checks first: no item set is read for a POST, or when
-            // the site keeps its item-set pages.
-            if (
-                !in_array($request->getMethod(), [HttpRequest::METHOD_GET, HttpRequest::METHOD_HEAD], true)
-                || !$projects->redirectsEnabled((int) $site->id())
-            ) {
-                return null;
-            }
-            try {
-                // As the current user: a private item set is not found.
-                $itemSet = $services->get('Omeka\ApiManager')
-                    ->read('item_sets', (int) $routeMatch->getParam('item-set-id'))
-                    ->getContent();
-            } catch (\Throwable $e) {
-                return null;
-            }
-            $url = $projects->itemSetRedirectUrl(
-                $request->getMethod(),
-                (string) $routeMatch->getMatchedRouteName(),
-                $itemSet instanceof ItemSetRepresentation ? $itemSet : null,
-                $site
-            );
-            $response = $event->getResponse();
-            if ($url === null || !$response instanceof HttpResponse) {
-                return null;
-            }
-            $response->setStatusCode(HttpResponse::STATUS_CODE_301);
-            $response->getHeaders()->addHeaderLine('Location', $url);
-            return $response;
-        } catch (\Throwable $e) {
-            return null;
-        }
+        return (new Listener\ProjectItemSetRedirect())($event);
     }
 
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
@@ -494,174 +429,35 @@ class Module extends AbstractModule
         );
     }
 
-    // ─── API listener: queue IndexNow pings ─────────────────────────────────
+    // ─── API listeners: sitemap invalidation, IndexNow pings ────────────────
 
-    /**
-     * Note whether a record was public before an update changes it, so an
-     * edit that makes it private can be pinged too. api.hydrate.pre is the
-     * last point at which the entity still holds its stored visibility.
-     */
+    // Named in the wiring above. The state and the logic live in one
+    // Listener\ContentChanges per request, which the pre- and post-events of
+    // an API request must share.
+
     public function noteVisibility(EventInterface $event): void
     {
-        $request = $event->getParam('request');
-        $entity = $event->getParam('entity');
-        if (
-            !$request instanceof ApiRequest
-            || $request->getOperation() !== ApiRequest::UPDATE
-            || !is_object($entity) || !method_exists($entity, 'isPublic')
-        ) {
-            return;
-        }
-        $this->wasPublic[$request] = (bool) $entity->isPublic();
+        $this->contentChanges()->noteVisibility($event);
     }
 
-    /**
-     * Note the URL of a public record about to be deleted, so engines recrawl
-     * it and find it gone. By api.delete.post Doctrine has cleared the
-     * entity's id, so the URL can no longer be built. The ping itself waits
-     * for the post-event: a delete that fails pings nothing.
-     */
     public function noteDeletion(EventInterface $event): void
     {
-        $request = $event->getParam('request');
-        $adapter = $event->getTarget();
-        if (
-            !$request instanceof ApiRequest
-            || !is_object($adapter) || !method_exists($adapter, 'findEntity')
-            || !$this->getServiceLocator()->get(PingQueue::class)->isEnabled()
-        ) {
-            return;
-        }
-        try {
-            $entity = $adapter->findEntity($request->getId(), $request);
-        } catch (\Throwable $e) {
-            return;
-        }
-        if (!is_object($entity) || (method_exists($entity, 'isPublic') && !$entity->isPublic())) {
-            return;
-        }
-        $url = $this->publicUrl($adapter, $entity);
-        if ($url !== null) {
-            $this->deletedUrls[$request] = $url;
-        }
+        $this->contentChanges()->noteDeletion($event);
     }
 
-    /**
-     * A record a save changed: invalidate the sitemap, then queue the record
-     * for IndexNow — a created or updated one when it is public, so engines
-     * crawl the change, or when it has just been made private, so they
-     * recrawl the page and drop it; a deleted one at the URL noted before the
-     * deletion.
-     */
     public function handleContentChange(EventInterface $event): void
     {
-        // Read what the request's pre-events noted, whether or not a ping follows.
-        $request = $event->getParam('request');
-        $wasPublic = false;
-        $deletedUrl = null;
-        if ($request instanceof ApiRequest) {
-            $wasPublic = $this->wasPublic[$request] ?? false;
-            $deletedUrl = $this->deletedUrls[$request] ?? null;
-            unset($this->wasPublic[$request], $this->deletedUrls[$request]);
-        }
-
-        $this->invalidateSitemap();
-
-        if (!$this->getServiceLocator()->get(PingQueue::class)->isEnabled()) {
-            return;
-        }
-        if ((string) $event->getName() === 'api.delete.post') {
-            $url = $deletedUrl;
-        } else {
-            $response = $event->getParam('response');
-            $entity = is_object($response) && method_exists($response, 'getContent') ? $response->getContent() : null;
-            if (!is_object($entity)) {
-                return;
-            }
-            $isPublic = !method_exists($entity, 'isPublic') || $entity->isPublic();
-            $url = $isPublic || $wasPublic ? $this->publicUrl($event->getTarget(), $entity) : null;
-        }
-        if ($url !== null) {
-            $this->queuePing($url);
-        }
+        $this->contentChanges()->handleContentChange($event);
     }
 
-    /** A change that reshapes a sitemap without being one of its URLs: invalidate only. */
     public function handleSitemapChange(EventInterface $event): void
     {
-        $this->invalidateSitemap();
+        $this->contentChanges()->handleSitemapChange($event);
     }
 
-    /**
-     * Invalidate the sitemap cache so a change shows on the next crawl
-     * instead of after the cache lifetime (24 hours by default) or the
-     * dashboard's Regenerate button. Any create, update or delete can affect
-     * the URL set or a <lastmod>, a public→private edit included, so there is
-     * no public check. A failure is the generator's to log; it must never
-     * break the save.
-     */
-    private function invalidateSitemap(): void
+    private function contentChanges(): Listener\ContentChanges
     {
-        $services = $this->getServiceLocator();
-        try {
-            if (!$services->get(Service\SettingsGate::class)->isOn('dre_seo_sitemap_enabled', true)) {
-                return;
-            }
-            $services->get(SitemapGenerator::class)->clearCache();
-        } catch (\Throwable $e) {
-            // never let SEO bookkeeping break a save
-        }
-    }
-
-    /** The URL an entity is pinged at, through its API representation. */
-    private function publicUrl(mixed $adapter, object $entity): ?string
-    {
-        $resource = $this->representation($adapter, $entity);
-        return $resource ? $this->resourcePublicUrl($resource) : null;
-    }
-
-    /**
-     * The API representation of an entity. The api.*.post events carry the
-     * entity itself — the response is turned into a representation only
-     * after they run — so it is built from the adapter.
-     */
-    private function representation(mixed $adapter, object $entity): ?object
-    {
-        if ($entity instanceof AbstractResourceEntityRepresentation || $entity instanceof SitePageRepresentation) {
-            return $entity;
-        }
-        if (!is_object($adapter) || !method_exists($adapter, 'getRepresentation')) {
-            return null;
-        }
-        try {
-            return $adapter->getRepresentation($entity);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    /**
-     * Put a URL in the outbox, then start a drain job if none was started in
-     * the last quarter hour; the cron drains it in any case.
-     */
-    private function queuePing(string $url): void
-    {
-        $services = $this->getServiceLocator();
-        try {
-            $queue = $services->get(PingQueue::class);
-            $queue->push($url);
-            $queue->dispatchIfDue();
-        } catch (\Throwable $e) {
-            // SEO bookkeeping must never make the underlying resource save fail.
-            try {
-                $services->get('Omeka\Logger')->err('DRESeo: failed to queue an IndexNow URL.', [
-                    'url' => $url,
-                    'exception' => $e,
-                ]);
-            } catch (\Throwable) {
-                // The logger itself is best-effort at this boundary.
-            }
-        }
+        return $this->contentChanges ??= new Listener\ContentChanges($this->getServiceLocator());
     }
 
     // ─── Site settings (Sites → {site} → Settings → SEO) ────────────────────
@@ -674,66 +470,18 @@ class Module extends AbstractModule
         }
         $services = $this->getServiceLocator();
         // Core targets the site settings at the site being edited.
-        $siteSettings = $services->get('Omeka\Settings\Site');
-        $defaults = (array) ($services->get('Config')['dre_seo']['breadcrumb']['landing_pages'] ?? []);
-
-        $groups = (array) ($form->getOption('element_groups') ?? []);
-        $groups['dre_seo'] = 'SEO'; // @translate
-        $form->setOption('element_groups', $groups);
-
-        $redirect = $siteSettings->get(ProjectResolver::REDIRECT_SETTING);
-        $form->add([
-            'name'    => ProjectResolver::REDIRECT_SETTING,
-            'type'    => 'checkbox',
-            'options' => [
-                'element_group' => 'dre_seo',
-                'label' => 'Redirect a project’s item set page to the project', // @translate
-                'info'  => 'A research project is both an item and the item set of its collection. When on, the item set’s page answers with a permanent redirect (301) to the project item, which is then the project’s one page in search engines and the sitemap. An item set is a project’s when its “Is Part Of” links to the public project item, or the public project item has the same dre:id.', // @translate
-            ],
-            'attributes' => [
-                'id'    => ProjectResolver::REDIRECT_SETTING,
-                // On unless switched off.
-                'value' => in_array($redirect, [null, '', '1', 1, true], true) ? '1' : '0',
-            ],
-        ]);
-        $form->add([
-            'name'    => LandingPages::SETTING,
-            'type'    => 'textarea',
-            'options' => [
-                'element_group' => 'dre_seo',
-                'label' => 'Breadcrumb landing pages', // @translate
-                'info'  => 'The page that presents each item set’s records, named in the breadcrumb between the home page and the record: one “item set id = page slug” per line. A line replaces the module’s default for that item set, and “id =” with no slug removes it. A page that does not exist or is private is skipped. Blank: the defaults shown.', // @translate
-            ],
-            'attributes' => [
-                'id'          => LandingPages::SETTING,
-                'rows'        => 8,
-                'placeholder' => LandingPages::format($defaults),
-                'value'       => (string) ($siteSettings->get(LandingPages::SETTING) ?? ''),
-            ],
-        ]);
+        (new Form\SiteSettingsElements(
+            $services->get('Omeka\Settings\Site'),
+            (array) ($services->get('Config')['dre_seo']['breadcrumb']['landing_pages'] ?? [])
+        ))->addTo($form);
     }
 
     public function addSiteSettingsFilters(EventInterface $event): void
     {
         $inputFilter = $event->getParam('inputFilter');
-        if (!is_object($inputFilter) || !method_exists($inputFilter, 'add')) {
-            return;
+        if (is_object($inputFilter) && method_exists($inputFilter, 'add')) {
+            Form\SiteSettingsElements::addFilters($inputFilter);
         }
-        $inputFilter->add(['name' => ProjectResolver::REDIRECT_SETTING, 'required' => false]);
-        $inputFilter->add([
-            'name'       => LandingPages::SETTING,
-            'required'   => false,
-            'filters'    => [['name' => 'StringTrim']],
-            'validators' => [[
-                'name'    => 'Callback',
-                'options' => [
-                    'callback' => static fn ($value): bool => LandingPages::invalidLines((string) $value) === [],
-                    'messages' => [
-                        'callbackValue' => 'Write one “item set id = page slug” per line, for example “29918 = publications”.', // @translate
-                    ],
-                ],
-            ]],
-        ]);
     }
 
     // ─── Module configuration form ──────────────────────────────────────────
@@ -878,27 +626,6 @@ class Module extends AbstractModule
         try {
             $site = $view->currentSite();
             return $site instanceof SiteRepresentation ? $site : null;
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    /**
-     * The URL a record is pinged at: its canonical page on the default site.
-     * A site page is pinged only when it belongs to the default site, at its
-     * own page URL — the home page included, which is canonical there too.
-     */
-    private function resourcePublicUrl(object $resource): ?string
-    {
-        $site = $this->getServiceLocator()->get(DefaultSite::class)->get();
-        if ($site === null || !method_exists($resource, 'siteUrl')) {
-            return null;
-        }
-        try {
-            if ($resource instanceof SitePageRepresentation) {
-                return $resource->site()->id() === $site->id() ? $resource->siteUrl($site->slug(), true) : null;
-            }
-            return $resource->siteUrl($site->slug(), true);
         } catch (\Throwable $e) {
             return null;
         }
