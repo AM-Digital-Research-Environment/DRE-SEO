@@ -411,9 +411,7 @@ class Module extends AbstractModule
         if (!$site || !$resource instanceof AbstractResourceEntityRepresentation) {
             return;
         }
-        $headMetadata = $this->headMetadata();
-        $headMetadata->applyResource($view, $resource, $site);
-        $this->addLinkHeader($headMetadata->signposts());
+        $this->headMetadata()->applyResource($view, $resource, $site);
     }
 
     public function handleBrowse(EventInterface $event): void
@@ -427,13 +425,11 @@ class Module extends AbstractModule
             // An item set's landing page is a browse of its items; Omeka hands
             // the set to the view, and its metadata describes the page.
             $itemSet = $view->itemSet ?? null;
-            $headMetadata = $this->headMetadata();
-            $headMetadata->applyBrowse(
+            $this->headMetadata()->applyBrowse(
                 $view,
                 $site,
                 $itemSet instanceof ItemSetRepresentation ? $itemSet : null
             );
-            $this->addLinkHeader($headMetadata->signposts());
         }
     }
 
@@ -469,7 +465,11 @@ class Module extends AbstractModule
         if (!$site) {
             return;
         }
-        $this->headMetadata()->applyGlobals($view, $site, $this->isSearchPage());
+        $headMetadata = $this->headMetadata();
+        $headMetadata->applyGlobals($view, $site, $this->isSearchPage());
+        // Once per page, after the action render has said what the page is:
+        // a template may trigger both the show and the browse event.
+        $this->addLinkHeader($headMetadata->signposts());
     }
 
     /**
@@ -789,20 +789,31 @@ class Module extends AbstractModule
 
     /**
      * Repeat the page's Signposting links as an HTTP `Link` header (FAIR
-     * Signposting level 1), for harvesters that read headers only. A
-     * multi-header, so another module's `Link` header is joined, not replaced.
+     * Signposting level 1), for harvesters that read headers only, within
+     * {@see Signposting::HEADER_BUDGET}.
+     *
+     * Joined to any Link header another module set, never replacing it.
+     * Laminas decides whether a header may repeat by the class registered for
+     * its name, not by the object handed in, and registers none for Link: a
+     * second addHeader() would overwrite the first, and a raw header line
+     * would be sent as a single header that PHP lets the last one replace.
+     * Registering the multi-header class for Link on this response makes every
+     * Link header in it one of several, each sent without replacing the rest.
      *
      * @param array<int,array{rel:string,href:string,type?:string}> $links
      */
     private function addLinkHeader(array $links): void
     {
-        if (!$links) {
+        $value = Signposting::header($links);
+        if ($value === '') {
             return;
         }
         try {
             $response = $this->getServiceLocator()->get('Application')->getResponse();
             if ($response instanceof HttpResponse) {
-                $response->getHeaders()->addHeader(new GenericMultiHeader('Link', Signposting::header($links)));
+                $headers = $response->getHeaders();
+                $headers->getPluginClassLoader()->registerPlugin('link', GenericMultiHeader::class);
+                $headers->addHeader(new GenericMultiHeader('Link', $value));
             }
         } catch (\Throwable $e) {
             // The head <link> elements carry the same set; the header is extra.

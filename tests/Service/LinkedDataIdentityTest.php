@@ -177,6 +177,25 @@ final class LinkedDataIdentityTest extends TestCase
         $this->assertTrue(preg_match('/\A[\x20-\x7E]+\z/', $header) === 1, 'printable ASCII only');
     }
 
+    /** A link that would take the header over budget is left out; a later one that fits is kept. */
+    public function testALinkPastTheHeaderBudgetIsLeftToTheHead(): void
+    {
+        $links = [
+            ['rel' => 'cite-as', 'href' => 'https://example.test/s/amira/item/42'],
+            ['rel' => 'item', 'href' => 'https://example.test/files/original/' . str_repeat('a', 200) . '.pdf', 'type' => 'application/pdf'],
+            ['rel' => 'collection', 'href' => 'https://example.test/s/amira/item/7'],
+        ];
+
+        $header = Signposting::header($links, 140);
+
+        $this->assertSame(
+            '<https://example.test/s/amira/item/42>; rel="cite-as", <https://example.test/s/amira/item/7>; rel="collection"',
+            $header
+        );
+        $this->assertLessThanOrEqual(140, strlen($header));
+        $this->assertLessThan(4096, Signposting::HEADER_BUDGET, "nginx's default fastcgi_buffer_size is one 4 KB page");
+    }
+
     public function testCiteAsIsThePageWithoutDRELinkedDataAndNeverTheDOI(): void
     {
         $thesis = new Item('A thesis', 30, 'Thesis', [

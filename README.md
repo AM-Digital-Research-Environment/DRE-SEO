@@ -185,7 +185,10 @@ share one identity contract:
   `collection`, pointing at its item.
 * **HTTP `Link` header.** The same Signposting set is sent as a `Link` header too, per FAIR
   Signposting level 1, because many harvesters read headers only. It is sent with or
-  without DRE Linked Data.
+  without DRE Linked Data, once per page (from the layout listener), beside any `Link`
+  header another module sets, and capped at 2 KB: nginx answers 502 when a FastCGI
+  response's headers overflow its default 4 KB buffer, so links that do not fit stay in
+  the head only, in their order (`cite-as` first).
 * **Dataset.** When DRE Linked Data describes its dataset (`dreLinkedData()->dataset()`,
   0.3.0+), its landing page carries it as a schema.org `Dataset` for Google Dataset Search.
   The landing page is the page with the *Linked open data* block, which DRE Linked Data

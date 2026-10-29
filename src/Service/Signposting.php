@@ -41,6 +41,15 @@ final class Signposting
     /** Where a work's authors are, preferred first — the order the JSON-LD `author` reads. */
     private const AUTHOR_TERMS = ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre', 'marcrel:hst', 'marcrel:spk'];
 
+    /**
+     * The most a `Link` header may grow to. nginx refuses a FastCGI response
+     * whose headers overflow `fastcgi_buffer_size` — one memory page, 4 KB on
+     * the usual Linux host — with a 502, and Omeka's own headers (the session
+     * cookie, the cache directives) share that buffer. Links beyond the budget
+     * stay in the page head only.
+     */
+    public const HEADER_BUDGET = 2048;
+
     /** Public files linked as `item`; a record with hundreds of scans links the first few. */
     private const MAX_ITEMS = 10;
 
@@ -120,14 +129,16 @@ final class Signposting
     }
 
     /**
-     * The links as one RFC 8288 `Link` header value. Anything a header may not
-     * carry is percent-encoded in the target, so the value is always valid.
+     * The links as one RFC 8288 `Link` header value, within $budget bytes.
+     * Anything a header may not carry is percent-encoded in the target, so the
+     * value is always valid. Links are taken in order, and one that would
+     * take the value over budget is left out — the head carries it still.
      *
      * @param array<int,array{rel:string,href:string,type?:string}> $links
      */
-    public static function header(array $links): string
+    public static function header(array $links, int $budget = self::HEADER_BUDGET): string
     {
-        $parts = [];
+        $value = '';
         foreach ($links as $link) {
             $target = preg_replace_callback(
                 '/[^\x21-\x7E]|[<>"]/',
@@ -138,9 +149,12 @@ final class Signposting
             if (isset($link['type']) && $link['type'] !== '') {
                 $part .= '; type="' . self::token($link['type']) . '"';
             }
-            $parts[] = $part;
+            $candidate = $value === '' ? $part : $value . ', ' . $part;
+            if (strlen($candidate) <= $budget) {
+                $value = $candidate;
+            }
         }
-        return implode(', ', $parts);
+        return $value;
     }
 
     /** What the page is about, as a schema.org type. */

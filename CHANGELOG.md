@@ -85,6 +85,15 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
 
 ### Fixed
 
+- **The Signposting `Link` header no longer replaces one another module set.** Laminas
+  decides whether a header may repeat by the class registered for its name, and registers
+  none for `Link`, so sending ours as a multi-header object was not enough: the module now
+  registers the multi-header class for `Link` on the response first. The header is added
+  once per page, from the layout listener, rather than by each action listener that ran
+  (a template that triggers both `view.show.after` and `view.browse.after` added it
+  twice), and it is capped at 2 KB
+  (`Signposting::HEADER_BUDGET`): nginx answers 502 when FastCGI response headers overflow
+  its default 4 KB buffer, so the links that do not fit are left to the page head.
 - Uninstall removes the sitemap cache (`files/dre-seo-cache/`) and the queue table, and, on
   a module that was deactivated first, the three site settings too: Omeka does not
   autoload an inactive module's classes, and the "Class not found" was swallowed. Install,
