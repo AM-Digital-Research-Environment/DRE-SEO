@@ -16,6 +16,29 @@ GitHub release and shipped no installable asset.
   tools: PHPUnit 13 needs PHP 8.4.1, and `config.platform.php` makes Composer resolve them
   for that floor whichever PHP runs it. The module's code is unchanged; an Omeka
   installation still on PHP 8.2 or 8.3 should stay on 0.15.0.
+- `language/template.pot` now lists every translatable string: 74, where the hand-kept
+  template had 42 and missed most of the configuration form, the dashboard's notices and the
+  Omeka JSON-LD embed warning. It is generated from the sources (`composer i18n`), and CI
+  fails when it falls behind them (`composer i18n:check`).
+- Release notes on GitHub are the release's CHANGELOG section rather than a generated list
+  of commits, with a paragraph on checking the zip against its `DRESeo.zip.sha256`. A release
+  whose section is missing is not published.
+
+### Development
+
+- The test suite runs on PHPUnit 13: the 171 unit tests of the former dependency-free
+  harness, one test method each, and the Omeka smoke script as a 22-test integration
+  suite (`composer test:integration`, with `OMEKA_PATH` pointing at Omeka S 4.2.1).
+  `composer install` now fetches the development tools; the module still has no runtime
+  dependencies.
+- PHPStan analyses `Module.php`, `src/` and `tests/` at level 6. The 13 findings that predate
+  it are recorded in `phpstan-baseline.neon`, a ledger to shrink, never to regenerate.
+- PHP_CodeSniffer checks PSR-12, and `.editorconfig` records the conventions.
+- `composer check` runs the translation check, PSR-12, PHPStan and the unit suite. CI splits
+  them into a test matrix (PHP 8.4 and 8.5), a quality job at the 8.4 floor and the
+  integration job; it runs on pushes to `main` and on pull requests, and cancels superseded
+  runs. The release job runs the same gates at the tag, and its leak check covers the new
+  tool configurations. Dependabot also proposes major bumps of the development tools.
 
 ## [0.15.0] — 2026-10-15
 

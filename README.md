@@ -417,14 +417,23 @@ content via the robots.txt `Sitemap:` line and Search Console.
 
 ```
 DRESeo/
-├── .github/workflows/
-│   ├── ci.yml                       # PHP 8.4 + production PHP 8.5 checks, Omeka smoke test
-│   └── release.yml                  # tag -> DRESeo.zip + SHA-256 on the GitHub release
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml                   # tests on PHP 8.4 + 8.5, quality gates, Omeka integration
+│   │   └── release.yml              # tested tag -> DRESeo.zip + SHA-256 on the GitHub release
+│   ├── scripts/
+│   │   ├── extract-strings.php      # sources -> language/template.pot (--check: freshness gate)
+│   │   └── compile-po.php           # language/*.po -> .mo, without gettext
+│   └── dependabot.yml               # action pins and Composer dev tools, monthly
 ├── CHANGELOG.md
 ├── CITATION.cff                     # how to cite the module (GitHub / Zenodo read this)
 ├── LICENSE                          # GPL-3.0-or-later
 ├── Module.php                       # listeners, ACL, install/uninstall, config form
 ├── composer.json                    # type omeka-module; PSR-4 DRESeo\ -> src/ (no runtime deps)
+├── phpunit.xml.dist                 # unit suite
+├── phpunit.integration.xml.dist     # integration suite (needs OMEKA_PATH)
+├── phpstan.neon.dist                # level 6; phpstan-baseline.neon holds the recorded debt
+├── phpcs.xml.dist                   # PSR-12
 ├── config/
 │   ├── module.ini
 │   └── module.config.php            # routes, services, navigation, dre_seo defaults
@@ -453,7 +462,12 @@ DRESeo/
 │       └── *Factory.php
 ├── view/dre-seo/admin/seo/{dashboard,pages}.phtml
 ├── asset/css/admin.css
-├── tests/                            # unit harness, PHP lint runner, Omeka integration smoke
+├── tests/
+│   ├── Service/, Config/             # PHPUnit unit tests, run on the shims
+│   ├── Integration/                  # PHPUnit suite against a real Omeka S (own bootstrap)
+│   ├── Double/, Fixture/             # shared test doubles and fixtures
+│   ├── Shim/omeka.php                # minimal Omeka/Laminas/Doctrine stand-ins
+│   └── Stub/omeka-laminas.stub       # supertypes for PHPStan only, never executed
 └── language/template.pot
 ```
 
@@ -463,24 +477,45 @@ zip holds only what Omeka needs at runtime plus the README, licence and changelo
 
 ## Development and testing
 
-The unit harness is deliberately dependency-free: Omeka supplies Laminas, PSR and Doctrine
-at runtime, so the module must not bundle duplicate framework packages. Run all checks with:
+The module has no runtime dependencies: Omeka supplies Laminas, PSR and Doctrine, so the
+module must not bundle duplicate framework packages. `composer install` fetches only the
+development tools (PHPUnit, PHPStan and PHP_CodeSniffer; PHP 8.4 or later). Run every local
+gate with:
 
 ```bash
+composer install
 composer check
 ```
 
-This syntax-checks every PHP/PHTML file and exercises sitemap XML generation and caching,
-static-page override normalization, the current Africa Multiple template mapping, YouTube
-`VideoObject` output, IndexNow key validation, and single-flight batching. GitHub Actions
-runs the same command on PHP 8.4 and the production PHP 8.5 runtime. A separate job downloads
-the checksum-pinned official Omeka S 4.2.1 release and exercises the module's real service
-factories, shared event listeners, configuration form, Laminas head helpers, and DBAL-backed
-sitemap generation. You can run it locally against an unpacked release with:
+`composer check` verifies that `language/template.pot` matches the sources
+(`composer i18n` regenerates it), checks PSR-12 (`composer lint`), runs PHPStan at level 6
+against `phpstan-baseline.neon` (`composer analyse`) and runs the PHPUnit unit suite
+(`composer test`). The unit tests cover the logic that regresses most silently — the
+citation record, formatter and BibTeX/RIS/CSL-JSON serialisers, the Highwire and Dublin
+Core tags, schema.org JSON-LD and the head metadata, DRE Linked Data identities, sitemap XML
+and caching, per-page overrides, the Africa Multiple template mapping, breadcrumbs and
+project resolution, and IndexNow key validation and batching — on minimal stand-ins in
+`tests/Shim/omeka.php`.
+
+The integration suite runs the module against the real framework: its service and
+controller factories, shared event listeners, configuration and site-settings forms, the
+project item-set redirect, IndexNow from API events, Laminas head helpers and the sitemap
+SQL on a DBAL connection. Point `OMEKA_PATH` at an installed Omeka S 4.2.1 (the official
+release zip, or a checkout after `composer install --no-dev`):
 
 ```bash
-OMEKA_PATH=/path/to/omeka-s composer integration
+OMEKA_PATH=/path/to/omeka-s composer test:integration
 ```
+
+Omeka's `vendor/autoload.php` is loaded before the module's development vendor, matching the
+production ownership of the Laminas, Doctrine and PSR classes.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the syntax sweep and the unit suite on
+PHP 8.4 and the production PHP 8.5, the translation, PSR-12 and PHPStan gates at the 8.4
+floor, and the integration suite on PHP 8.5 against the checksum-pinned official Omeka S
+4.2.1 release. The release workflow runs the same gates at the tag before it builds
+`DRESeo.zip`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions, including the
+rule for the PHPStan baseline.
 
 ---
 
