@@ -109,11 +109,16 @@ final class HeadMetadataTest extends TestCase
     public function testTheHomePageCarriesTheCatalogueDatasetWhenDRELinkedDataDescribesIt(): void
     {
         $helper = new class {
+            /**
+             * @param mixed $resource
+             * @return array<string,mixed>
+             */
             public function __invoke($resource): array
             {
                 return [];
             }
 
+            /** @return array<string,mixed> */
             public function dataset(): array
             {
                 return [
@@ -143,11 +148,16 @@ final class HeadMetadataTest extends TestCase
     public function testWithALandingPageDRELinkedData031TheDatasetMovesToThatPage(): void
     {
         $helper = new class {
+            /**
+             * @param mixed $resource
+             * @return array<string,mixed>
+             */
             public function __invoke($resource): array
             {
                 return [];
             }
 
+            /** @return array<string,mixed> */
             public function dataset(): array
             {
                 return [

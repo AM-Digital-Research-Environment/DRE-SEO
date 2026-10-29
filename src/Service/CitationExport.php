@@ -498,6 +498,7 @@ final class CitationExport
         return $parts;
     }
 
+    /** @param array<string,string> $fields */
     private function addField(array &$fields, string $name, ?string $value): void
     {
         if ($value !== null && $value !== '') {

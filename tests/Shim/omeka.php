@@ -21,12 +21,16 @@ namespace Doctrine\DBAL {
     if (!class_exists(Connection::class)) {
         class Connection
         {
+            /** @param array<mixed> $params */
             public function fetchOne(string $query, array $params = []): mixed
             {
                 throw new \LogicException('Test double must implement fetchOne().');
             }
 
-            /** @return array<int,array<string,mixed>> */
+            /**
+             * @param array<mixed> $params
+             * @return array<int,array<string,mixed>>
+             */
             public function fetchAllAssociative(string $query, array $params = []): array
             {
                 throw new \LogicException('Test double must implement fetchAllAssociative().');
@@ -39,13 +43,60 @@ namespace Laminas\Log {
     if (!interface_exists(LoggerInterface::class)) {
         interface LoggerInterface
         {
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function emerg($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function alert($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function crit($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function err($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function warn($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function notice($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function info($message, $extra = []);
+
+            /**
+             * @param string $message
+             * @param array<mixed>|\Traversable<mixed> $extra
+             * @return LoggerInterface
+             */
             public function debug($message, $extra = []);
         }
     }
@@ -59,6 +110,11 @@ namespace Omeka\Job {
             public array $dispatched = [];
             public bool $fail = false;
 
+            /**
+             * @param string $class
+             * @param array<string,mixed>|null $args
+             * @param object|null $strategy
+             */
             public function dispatch($class, $args = null, $strategy = null): object
             {
                 if ($this->fail) {
@@ -78,16 +134,25 @@ namespace Omeka\Settings {
             /** @var array<string,mixed> */
             private array $values = [];
 
+            /**
+             * @param string $id
+             * @param mixed $default
+             */
             public function get($id, $default = null): mixed
             {
                 return $this->values[$id] ?? $default;
             }
 
+            /**
+             * @param string $id
+             * @param mixed $value
+             */
             public function set($id, $value): void
             {
                 $this->values[$id] = $value;
             }
 
+            /** @param string $id */
             public function delete($id): void
             {
                 unset($this->values[$id]);
@@ -272,6 +337,7 @@ namespace Omeka\Api\Representation {
                     };
             }
 
+            /** @param array<string,mixed> $options */
             public function value(string $term, array $options = []): mixed
             {
                 $values = $this->values[$term] ?? [];
@@ -482,6 +548,7 @@ namespace Laminas\View\Renderer {
             ) {
             }
 
+            /** @param string|bool|null $requestUri */
             public function serverUrl($requestUri = null): string
             {
                 if ($requestUri === true) {
@@ -490,6 +557,11 @@ namespace Laminas\View\Renderer {
                 return $this->origin . (is_string($requestUri) ? $requestUri : '');
             }
 
+            /**
+             * @param string|null $name
+             * @param array<string,mixed> $params
+             * @param array<string,mixed>|bool $options
+             */
             public function url($name = null, array $params = [], $options = []): string
             {
                 $path = $name === 'site' ? '/s/' . ($params['site-slug'] ?? '') : '/' . (string) $name;
@@ -532,6 +604,7 @@ namespace Laminas\View\Renderer {
                 };
             }
 
+            /** @param array<string,mixed>|null $attributes */
             public function headLink($attributes = null): object
             {
                 if (is_array($attributes)) {
@@ -547,6 +620,7 @@ namespace Laminas\View\Renderer {
                     {
                     }
 
+                    /** @param array<string,mixed> $attrs */
                     public function appendScript(string $script, string $type = 'text/javascript', array $attrs = []): self
                     {
                         $this->view->head['script'][] = $script;
@@ -562,6 +636,7 @@ namespace Laminas\View\Renderer {
                     {
                     }
 
+                    /** @return \ArrayObject<int|string,mixed> */
                     public function getContainer(): \ArrayObject
                     {
                         return new class ($this->view) extends \ArrayObject {
@@ -570,6 +645,10 @@ namespace Laminas\View\Renderer {
                                 parent::__construct($view->head['title']);
                             }
 
+                            /**
+                             * @param object|array<int|string,mixed> $array
+                             * @return array<int|string,mixed>
+                             */
                             public function exchangeArray(object|array $array): array
                             {
                                 $this->view->head['title'] = (array) $array;

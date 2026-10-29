@@ -84,6 +84,7 @@ class Module extends AbstractModule
         'dre_seo_sitemap_ttl'     => '86400',
     ];
 
+    /** @return array<string,mixed> */
     public function getConfig(): array
     {
         return include __DIR__ . '/config/module.config.php';

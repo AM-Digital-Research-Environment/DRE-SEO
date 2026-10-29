@@ -57,6 +57,10 @@ final class ContentChangePingTest extends OmekaTestCase
                     {
                     }
 
+                    /**
+                     * @param string|null $slug
+                     * @param bool $canonical
+                     */
                     public function siteUrl($slug = null, $canonical = false): string
                     {
                         return 'https://example.test/s/' . $slug . '/item/' . $this->id;
@@ -64,6 +68,10 @@ final class ContentChangePingTest extends OmekaTestCase
                 };
             }
 
+            /**
+             * @param int $id
+             * @param Request|null $request
+             */
             public function findEntity($id, $request = null): object
             {
                 return $this->records[$id];

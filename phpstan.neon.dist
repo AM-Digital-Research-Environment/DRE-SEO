@@ -1,0 +1,98 @@
+# Findings that predate analysis being enforced are recorded in
+# phpstan-baseline.neon rather than fixed: 13 of them, in three groups.
+#   - Four methods with no return type, each overriding an untyped Omeka or
+#     Laminas method (Module::getConfigForm(), handleConfigForm(), and two
+#     admin actions). Adding the type is a signature change, not a fix.
+#   - Five defensive checks PHPStan proves redundant against the shim and the
+#     constant tables: method_exists() and is_array() guards on Omeka
+#     representations, and a label fallback in the citation helper. Removing
+#     them changes what an older Omeka or a future format does, which is a
+#     behaviour change.
+#   - Two vacuous assertions in CitationDataTest, kept from the old harness:
+#     build() cannot return null, so the `!== null` checks always pass.
+#
+# The point is the ratchet — level 6 applies in full to new and changed code,
+# while the standing debt stays visible and shrinkable. It is a ledger, not a
+# suppression list: delete entries as they are fixed, and never regenerate it
+# wholesale to make a new error disappear.
+#
+# Regenerating is a deliberate act. With the baseline in `includes`, its own
+# entries are already suppressed during analysis, so
+# `vendor/bin/phpstan analyse --generate-baseline=phpstan-baseline.neon`
+# run as is would write a baseline covering only the *new* errors and
+# silently drop the recorded debt. Comment the include out first, and read
+# the diff.
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 6
+
+    paths:
+        - Module.php
+        - src
+        - tests
+
+    # tests/Shim/omeka.php is *executed*: it gives the Omeka, Laminas and
+    # Doctrine classes the unit suite instantiates (representations, settings
+    # stores, a recording renderer, a DBAL connection) real bodies, guarded by
+    # class_exists() so a real Omeka always wins.
+    bootstrapFiles:
+        - tests/Shim/omeka.php
+
+    # tests/Stub/omeka-laminas.stub is only *parsed*, to declare the Omeka and
+    # Laminas supertypes the module extends or implements. It exists because
+    # "extends unknown class" is the one error PHPStan will not let
+    # ignoreErrors suppress — without it those files would have to leave
+    # analysis via excludePaths. See the file's own header.
+    #
+    # scanFiles, not stubFiles: stubs only override the PHPDoc of symbols that
+    # already exist, so they cannot introduce a class PHPStan has never seen.
+    # scanFiles is the symbol-discovery mechanism for code that is not a
+    # Composer dependency, which is exactly what Omeka is here.
+    scanFiles:
+        - tests/Stub/omeka-laminas.stub
+
+    ignoreErrors:
+        # Omeka S is not a Composer dependency, so the application boundary is
+        # opaque by construction and everything downstream of it is noise:
+        # classes and interfaces that cannot resolve, calls to methods the
+        # module inherits from them (including $view->anyHelper(), which
+        # PhpRenderer dispatches through __call()), and argument types PHPStan
+        # cannot check because it does not know Omeka's representation
+        # hierarchy — that an ItemRepresentation is an
+        # AbstractResourceEntityRepresentation is an
+        # AbstractResourceRepresentation.
+        #
+        # argument.type is the broadest of these and the one to revisit: it
+        # would also mask a genuine mismatch between two of the module's own
+        # classes. Narrowing it means stubbing the representation hierarchy,
+        # which is a large speculative surface for the return.
+        #
+        # Analysis of the module's own logic is unaffected — nullability, dead
+        # branches, unused parameters and missing array value types all still
+        # report.
+        -
+            identifiers:
+                - class.notFound
+                - interface.notFound
+                - method.notFound
+                - staticMethod.notFound
+                - argument.type
+
+        # ResourceValueReader is a trait, and PHPStan checks a private
+        # constant's use per *using* class: DATE_TERMS and ABSTRACT_TERMS are
+        # reported unused against each of its six users that reads only one of
+        # them, or neither. CitationData reads both, CitationMeta and
+        # ResourceSummary read DATE_TERMS — deleting either constant on this
+        # report's say-so would break them.
+        -
+            identifier: classConstant.unused
+            message: '#^Constant DRESeo\\Service\\[A-Za-z]+\:\:(DATE|ABSTRACT)_TERMS is unused\.$#'
+
+    # The list above is broad by necessity, and which entries match shifts with
+    # every PHPStan release. An ignore that stops matching is not worth failing
+    # a build over.
+    reportUnmatchedIgnoredErrors: false
+
+    treatPhpDocTypesAsCertain: false

@@ -8,6 +8,10 @@ use Psr\Container\ContainerInterface;
 
 final class CitationExportFactory implements FactoryInterface
 {
+    /**
+     * @param string $requestedName
+     * @param array<mixed>|null $options
+     */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): CitationExport
     {
         $config = $container->get('Config')['dre_seo']['citation'] ?? [];

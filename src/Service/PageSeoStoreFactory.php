@@ -8,6 +8,10 @@ use Psr\Container\ContainerInterface;
 
 final class PageSeoStoreFactory implements FactoryInterface
 {
+    /**
+     * @param string $requestedName
+     * @param array<mixed>|null $options
+     */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): PageSeoStore
     {
         return new PageSeoStore($container->get('Omeka\Settings\Site'));

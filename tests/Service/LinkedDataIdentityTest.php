@@ -238,22 +238,26 @@ final class LinkedDataIdentityTest extends TestCase
     public function testDatasetIsReadFromAHelperObjectThatHasItAndAFailureIsContained(): void
     {
         $helper = new class {
+            /** @return array<string,mixed> */
             public function __invoke(Resource $resource): array
             {
                 return [];
             }
 
+            /** @return array<string,mixed> */
             public function dataset(): array
             {
                 return ['uri' => LinkedDataIdentityTest::LD_BASE . '/linked-data/void#dataset'];
             }
         };
         $broken = new class {
+            /** @return array<string,mixed> */
             public function __invoke(Resource $resource): array
             {
                 return [];
             }
 
+            /** @return array<string,mixed> */
             public function dataset(): array
             {
                 throw new RuntimeException('no dump');

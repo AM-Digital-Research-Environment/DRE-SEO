@@ -1,0 +1,73 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Method DRESeo\\Module\:\:getConfigForm\(\) has no return type specified\.$#'
+			identifier: missingType.return
+			count: 1
+			path: Module.php
+
+		-
+			message: '#^Method DRESeo\\Module\:\:handleConfigForm\(\) has no return type specified\.$#'
+			identifier: missingType.return
+			count: 1
+			path: Module.php
+
+		-
+			message: '#^Method DRESeo\\Controller\\Admin\\SeoController\:\:pagesAction\(\) has no return type specified\.$#'
+			identifier: missingType.return
+			count: 1
+			path: src/Controller/Admin/SeoController.php
+
+		-
+			message: '#^Method DRESeo\\Controller\\Admin\\SeoController\:\:regenerateAction\(\) has no return type specified\.$#'
+			identifier: missingType.return
+			count: 1
+			path: src/Controller/Admin/SeoController.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Omeka\\Api\\Representation\\AbstractResourceEntityRepresentation and ''isPublic'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/ProjectResolver.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/SiteHome.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Omeka\\Api\\Representation\\SiteRepresentation and ''homepage'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/SiteHome.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Omeka\\Api\\Representation\\SiteRepresentation and ''linkedPages'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/SiteHome.php
+
+		-
+			message: '#^Offset ''bibtex''\|''csljson''\|''ris''\|''txt'' on array\{bibtex\: ''BibTeX'', ris\: ''RIS'', csljson\: ''CSL JSON'', txt\: ''Plain text''\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/View/Helper/Citation.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true and ''a journal article…'' will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Service/CitationDataTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true and ''no template still…'' will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Service/CitationDataTest.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between DRESeo\\Service\\Citation\\CitationRecord and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 2
+			path: tests/Service/CitationDataTest.php

@@ -38,17 +38,17 @@ final class ProjectRedirectTest extends OmekaTestCase
             {
             }
 
-            public function id()
+            public function id(): int
             {
                 return 30;
             }
 
-            public function isPublic()
+            public function isPublic(): bool
             {
                 return true;
             }
 
-            public function resourceClass()
+            public function resourceClass(): object
             {
                 return new class {
                     public function term(): string
@@ -58,17 +58,21 @@ final class ProjectRedirectTest extends OmekaTestCase
                 };
             }
 
-            public function siteUrl($siteSlug = null, $canonical = false)
+            /**
+             * @param string|null $siteSlug
+             * @param bool $canonical
+             */
+            public function siteUrl($siteSlug = null, $canonical = false): string
             {
                 return 'https://example.test/s/' . $siteSlug . '/item/30';
             }
         };
         $link = new class ($project) extends ValueRepresentation {
-            public function __construct(private readonly object $target)
+            public function __construct(private readonly ItemRepresentation $target)
             {
             }
 
-            public function valueResource()
+            public function valueResource(): ItemRepresentation
             {
                 return $this->target;
             }
@@ -79,12 +83,16 @@ final class ProjectRedirectTest extends OmekaTestCase
             {
             }
 
-            public function id()
+            public function id(): int
             {
                 return $this->setId;
             }
 
-            public function value($term, array $options = [])
+            /**
+             * @param string $term
+             * @param array<string,mixed> $options
+             */
+            public function value($term, array $options = []): mixed
             {
                 $values = $term === 'dcterms:isPartOf' ? $this->partOf : [];
                 return empty($options['all']) ? ($values[0] ?? null) : $values;
@@ -96,7 +104,13 @@ final class ProjectRedirectTest extends OmekaTestCase
             {
             }
 
-            public function read($resource, $id, array $data = [], array $options = [])
+            /**
+             * @param string $resource
+             * @param int|string|array<string,mixed> $id
+             * @param array<string,mixed> $data
+             * @param array<string,mixed> $options
+             */
+            public function read($resource, $id, array $data = [], array $options = []): ApiResponse
             {
                 if ($resource !== 'item_sets' || !isset($this->itemSets[$id])) {
                     throw new NotFoundException('Not found');

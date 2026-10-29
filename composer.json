@@ -36,8 +36,10 @@
     "test:integration": "@php tests/Integration/run.php --configuration phpunit.integration.xml.dist",
     "lint": "phpcs",
     "lint:fix": "phpcbf",
+    "analyse": "phpstan analyse",
     "check": [
       "@lint",
+      "@analyse",
       "@test"
     ]
   },
@@ -46,6 +48,7 @@
     "test:integration": "Run the separate suite against the Omeka installation in OMEKA_PATH.",
     "lint": "Check PSR-12 compliance.",
     "lint:fix": "Fix what PHP_CodeSniffer can fix automatically.",
+    "analyse": "Run PHPStan at level 6 against the recorded baseline.",
     "check": "Everything CI runs except the Omeka integration test."
   },
   "config": {

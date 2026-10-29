@@ -260,7 +260,11 @@ trait ResourceValueReader
         return null;
     }
 
-    /** The ORCID iD among the IRIs, if any. */
+    /**
+     * The ORCID iD among the IRIs, if any.
+     *
+     * @param array<mixed> $iris
+     */
     private static function orcidOf(array $iris): ?string
     {
         foreach ($iris as $iri) {

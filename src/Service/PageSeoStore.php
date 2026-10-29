@@ -90,7 +90,10 @@ class PageSeoStore
         $this->siteSettings->set(self::KEY, $clean);
     }
 
-    /** @return array{title?:string,description?:string,image?:int,robots?:string,jsonld?:false} */
+    /**
+     * @param array<string,mixed> $overrides
+     * @return array{title?:string,description?:string,image?:int,robots?:string,jsonld?:false}
+     */
     private function normalize(array $overrides): array
     {
         $clean = [];

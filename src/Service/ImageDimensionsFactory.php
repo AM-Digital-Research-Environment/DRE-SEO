@@ -8,6 +8,10 @@ use Psr\Container\ContainerInterface;
 
 final class ImageDimensionsFactory implements FactoryInterface
 {
+    /**
+     * @param string $requestedName
+     * @param array<mixed>|null $options
+     */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): ImageDimensions
     {
         $basePath = $container->get('Config')['file_store']['local']['base_path'] ?? null;

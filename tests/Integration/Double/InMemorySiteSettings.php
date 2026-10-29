@@ -17,24 +17,39 @@ final class InMemorySiteSettings extends SiteSettings
     {
     }
 
-    public function setTargetId($targetId)
+    /** @param int|string $targetId */
+    public function setTargetId($targetId): void
     {
         $this->currentTarget = (int) $targetId;
     }
 
-    public function get($id, $default = null, $targetId = null)
+    /**
+     * @param string $id
+     * @param mixed $default
+     * @param int|string|null $targetId
+     */
+    public function get($id, $default = null, $targetId = null): mixed
     {
         $target = $targetId === null ? $this->currentTarget : (int) $targetId;
         return $this->values[$target][strtolower((string) $id)] ?? $default;
     }
 
-    public function set($id, $value, $targetId = null)
+    /**
+     * @param string $id
+     * @param mixed $value
+     * @param int|string|null $targetId
+     */
+    public function set($id, $value, $targetId = null): void
     {
         $target = $targetId === null ? $this->currentTarget : (int) $targetId;
         $this->values[$target][strtolower((string) $id)] = $value;
     }
 
-    public function delete($id, $targetId = null)
+    /**
+     * @param string $id
+     * @param int|string|null $targetId
+     */
+    public function delete($id, $targetId = null): void
     {
         $target = $targetId === null ? $this->currentTarget : (int) $targetId;
         unset($this->values[$target][strtolower((string) $id)]);

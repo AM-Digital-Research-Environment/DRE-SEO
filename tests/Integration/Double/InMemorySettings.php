@@ -20,17 +20,26 @@ final class InMemorySettings extends Settings
         $this->values = $values;
     }
 
-    public function get($id, $default = null)
+    /**
+     * @param string $id
+     * @param mixed $default
+     */
+    public function get($id, $default = null): mixed
     {
         return $this->values[strtolower((string) $id)] ?? $default;
     }
 
-    public function set($id, $value)
+    /**
+     * @param string $id
+     * @param mixed $value
+     */
+    public function set($id, $value): void
     {
         $this->values[strtolower((string) $id)] = $value;
     }
 
-    public function delete($id)
+    /** @param string $id */
+    public function delete($id): void
     {
         unset($this->values[strtolower((string) $id)]);
     }

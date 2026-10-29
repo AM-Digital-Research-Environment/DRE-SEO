@@ -8,6 +8,10 @@ use Psr\Container\ContainerInterface;
 
 final class HeadMetadataFactory implements FactoryInterface
 {
+    /**
+     * @param string $requestedName
+     * @param array<mixed>|null $options
+     */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): HeadMetadata
     {
         return new HeadMetadata(

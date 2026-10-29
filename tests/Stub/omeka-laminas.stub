@@ -1,0 +1,76 @@
+<?php
+
+/**
+ * Type stubs for the Omeka S and Laminas supertypes this module extends or
+ * implements.
+ *
+ * Omeka is not a Composer dependency (the module ships no vendor/ and is
+ * autoloaded by the application), so when PHPStan analyses the module alone
+ * those supertypes are absent. "Extends unknown class" is the one category
+ * PHPStan refuses to let `ignoreErrors` suppress — it directs you to
+ * `excludePaths`, which would drop Module.php, every controller, both forms,
+ * the job, both view helpers and every factory out of analysis entirely.
+ * Declaring the supertypes here keeps all of them analysed.
+ *
+ * Deliberately memberless. The point is to make the inheritance resolvable,
+ * not to re-describe Omeka's API — a stub that guessed at signatures would
+ * invent errors rather than remove them. Calls to inherited methods surface
+ * as method.notFound, which phpstan.neon.dist ignores as boundary noise.
+ *
+ * Omeka\Api\Manager is here for tests/Integration, whose project-redirect
+ * test subclasses it; the rest are the module's own supertypes. The
+ * representation, settings and DBAL classes the module and the suites
+ * extend come from tests/Shim/omeka.php instead, which PHPStan executes.
+ *
+ * Not a runtime file: unlike tests/Shim/omeka.php (which is executed, and
+ * gives the classes the unit suite instantiates real bodies), this is only
+ * ever parsed by PHPStan. Hence the .stub extension — which also keeps it out
+ * of the CI `php -l` sweep and phpcs, both of which only look at .php.
+ *
+ * Wired in through `scanFiles`, not `stubFiles`, despite the extension:
+ * PHPStan's stub mechanism only overrides the PHPDoc of symbols that already
+ * exist and cannot introduce a class it has never seen. scanFiles is the
+ * symbol-discovery path for code outside Composer's autoloader.
+ */
+
+namespace Omeka\Module {
+    abstract class AbstractModule
+    {
+    }
+}
+
+namespace Omeka\Job {
+    abstract class AbstractJob
+    {
+    }
+}
+
+namespace Omeka\Api {
+    class Manager
+    {
+    }
+}
+
+namespace Laminas\Mvc\Controller {
+    abstract class AbstractActionController
+    {
+    }
+}
+
+namespace Laminas\Form {
+    class Form
+    {
+    }
+}
+
+namespace Laminas\View\Helper {
+    abstract class AbstractHelper
+    {
+    }
+}
+
+namespace Laminas\ServiceManager\Factory {
+    interface FactoryInterface
+    {
+    }
+}

@@ -40,6 +40,7 @@ final class SharedSettingsTable extends Connection
         return $this->rows[$params[0]] ?? false;
     }
 
+    /** @param array<int,mixed> $params */
     public function executeStatement(string $query, array $params = []): int
     {
         $this->rows[$params[0]] = $params[1];

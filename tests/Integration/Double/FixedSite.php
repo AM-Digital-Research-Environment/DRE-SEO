@@ -12,22 +12,22 @@ final class FixedSite extends SiteRepresentation
     {
     }
 
-    public function id()
+    public function id(): int
     {
         return 1;
     }
 
-    public function slug()
+    public function slug(): string
     {
         return 'amira';
     }
 
-    public function title()
+    public function title(): string
     {
         return 'AMIRA Smoke';
     }
 
-    public function homepage()
+    public function homepage(): ?object
     {
         return null;
     }

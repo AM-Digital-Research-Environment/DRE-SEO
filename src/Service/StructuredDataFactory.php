@@ -8,6 +8,10 @@ use Psr\Container\ContainerInterface;
 
 final class StructuredDataFactory implements FactoryInterface
 {
+    /**
+     * @param string $requestedName
+     * @param array<mixed>|null $options
+     */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): StructuredData
     {
         $config = $container->get('Config')['dre_seo']['structured_data'] ?? [];
