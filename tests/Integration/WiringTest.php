@@ -17,6 +17,7 @@ use DRESeo\Service\Controller\SitemapControllerFactory;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\HeadMetadata;
 use DRESeo\Service\ImageDimensions;
+use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\LandingPages;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\PageSeoStore;
@@ -124,11 +125,23 @@ final class WiringTest extends OmekaTestCase
             'API content-change listener was not attached.'
         );
         foreach (['Omeka\\Api\\Adapter\\ItemSetAdapter', 'Omeka\\Api\\Adapter\\SitePageAdapter'] as $adapterClass) {
-            $this->assertCount(
-                1,
-                $this->sharedEvents->getListeners([$adapterClass], 'api.delete.pre'),
-                sprintf('IndexNow delete listener was not attached to %s.', $adapterClass)
-            );
+            // The URL is noted before the delete and queued once it succeeded.
+            foreach (['api.delete.pre', 'api.delete.post'] as $eventName) {
+                $this->assertCount(
+                    1,
+                    $this->sharedEvents->getListeners([$adapterClass], $eventName),
+                    sprintf('IndexNow %s listener was not attached to %s.', $eventName, $adapterClass)
+                );
+            }
         }
+    }
+
+    /** The route serves exactly the keys the form, the queue and the job accept. */
+    public function testTheIndexNowRouteConstraintIsTheKeyDefinition(): void
+    {
+        $this->assertSame(
+            IndexNowKey::PATTERN,
+            $this->config['router']['routes']['dre-seo-indexnow']['options']['constraints']['key']
+        );
     }
 }

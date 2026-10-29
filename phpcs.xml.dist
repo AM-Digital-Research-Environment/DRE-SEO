@@ -6,6 +6,7 @@
     <file>src</file>
     <file>tests</file>
     <file>config</file>
+    <file>scripts</file>
 
     <exclude-pattern>*/vendor/*</exclude-pattern>
 

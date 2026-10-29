@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace DRESeo\Form;
 
+use DRESeo\Service\IndexNowKey;
 use Laminas\Form\Element;
 use Laminas\Form\Form;
 use Laminas\Filter\StringTrim;
 use Laminas\Validator\Regex;
-use Laminas\Validator\StringLength;
 use Omeka\Form\Element\Asset;
 
 /**
@@ -19,7 +19,7 @@ use Omeka\Form\Element\Asset;
  * Open Graph from the site), a sitemap, and robots.txt — it just has no
  * verification token, no custom description and no share image.
  *
- * The settings keys here are the module's whole persistent surface; they are
+ * The settings keys here are the module's configurable surface; they are
  * created on configure and dropped on uninstall (see Module::SETTINGS).
  */
 class ConfigForm extends Form
@@ -160,7 +160,7 @@ class ConfigForm extends Form
             'type'    => Element\Checkbox::class,
             'options' => [
                 'label' => 'Ping IndexNow when content changes', // @translate
-                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
+                'info'  => 'Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Changed URLs wait in a queue that the server’s five-minute cron (scripts/drain-indexnow.php) sends in batches of 200; a save also starts a batch at most every 15 minutes. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead).', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_ping_enabled'],
         ]);
@@ -201,9 +201,18 @@ class ConfigForm extends Form
             'name'       => 'dre_seo_indexnow_key',
             'required'   => false,
             'filters'    => [['name' => StringTrim::class]],
+            // The shape /{key}.txt serves: any other key saves, and then
+            // fails IndexNow's verification on every submission.
             'validators' => [
-                ['name' => StringLength::class, 'options' => ['min' => 8, 'max' => 128]],
-                ['name' => Regex::class, 'options' => ['pattern' => '/\A[A-Fa-f0-9]+\z/D']],
+                [
+                    'name'    => Regex::class,
+                    'options' => [
+                        'pattern'  => IndexNowKey::regex(),
+                        'messages' => [
+                            Regex::NOT_MATCH => 'The IndexNow key must be 8–128 hexadecimal characters (0-9, a-f). Generate one with: openssl rand -hex 16.', // @translate
+                        ],
+                    ],
+                ],
             ],
         ]);
     }

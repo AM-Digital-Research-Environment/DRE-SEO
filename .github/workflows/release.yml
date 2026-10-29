@@ -131,7 +131,8 @@ jobs:
           fail=0
 
           for required in DRESeo/Module.php DRESeo/config/module.ini DRESeo/composer.json \
-            DRESeo/language/template.pot DRESeo/README.md DRESeo/CHANGELOG.md DRESeo/LICENSE; do
+            DRESeo/language/template.pot DRESeo/scripts/drain-indexnow.php \
+            DRESeo/README.md DRESeo/OPERATIONS.md DRESeo/CHANGELOG.md DRESeo/LICENSE; do
             if ! grep -qxF "$required" <<< "$contents"; then
               echo "::error::${required} is missing from the archive"
               fail=1

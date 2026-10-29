@@ -4,95 +4,100 @@ declare(strict_types=1);
 namespace DRESeo\Job;
 
 use DRESeo\Service\IndexNowKey;
-use DRESeo\Service\PingQueue;
 use DRESeo\Service\Pinger;
+use DRESeo\Service\PingOutcome;
+use DRESeo\Service\PingQueue;
 use DRESeo\Service\SettingFlag;
 use Omeka\Job\AbstractJob;
 
 /**
- * Drains the pending-URL queue (filled by Module::handleContentChange when
- * public items/pages change) and submits it to IndexNow. Runs asynchronously so
- * the saving request is never blocked by the network call.
+ * Drains the IndexNow outbox (filled by Module::handleContentChange when
+ * public items, item sets and pages change) and submits it to IndexNow. Runs
+ * as a job — from the five-minute cron, or dispatched by a save — so the
+ * saving request is never blocked by the network call.
  *
- * If the queue is at the flood cap the change almost certainly came from a bulk
- * sync, so the ping is skipped — those URLs are discovered through the sitemap
- * instead, and IndexNow is reserved for genuine incremental edits.
+ * One run leases one batch of up to {@see PingQueue::CAP} URLs and submits it
+ * per origin, since IndexNow takes one host per request. Leases survive worker
+ * failures: rows a dead job leased come back when the lease runs out. Each
+ * origin's batch is settled by what IndexNow answered ({@see PingOutcome}):
+ * accepted rows are acknowledged, transient failures retried with backoff,
+ * and refusals parked as failed so they are not resent until an administrator
+ * has fixed the cause.
  */
 class PingSearchEngines extends AbstractJob
 {
     public function perform(): void
     {
         $services = $this->getServiceLocator();
-        $settings = $services->get('Omeka\Settings');
         $logger = $services->get('Omeka\Logger');
         $queue = $services->get(PingQueue::class);
-        $pending = $queue->claim();
-        $complete = true;
 
-        try {
-            if (!SettingFlag::isOn($settings, 'dre_seo_ping_enabled')) {
-                return;
-            }
-            $key = trim((string) $settings->get('dre_seo_indexnow_key', ''));
-            if (!IndexNowKey::isValid($key)) {
-                $logger->warn('DRESeo: IndexNow ping enabled but the configured key is invalid.');
-                return;
-            }
-            if ($pending === []) {
-                return;
-            }
-
-            if (count($pending) >= PingQueue::QUEUE_CAP) {
-                $logger->info(sprintf(
-                    'DRESeo: skipped IndexNow ping for a bulk change (%d URLs); the sitemap covers discovery.',
-                    count($pending)
-                ));
-                return;
-            }
-
-            $first = $pending[0];
-            $host = (string) (parse_url($first, PHP_URL_HOST) ?: '');
-            $scheme = (string) (parse_url($first, PHP_URL_SCHEME) ?: 'https');
-            if ($host === '') {
-                return;
-            }
-            $keyLocation = $scheme . '://' . $host . '/' . $key . '.txt';
-
-            try {
-                $status = $services->get(Pinger::class)->submitIndexNow($host, $key, $keyLocation, $pending);
-            } catch (\Throwable $e) {
-                $queue->requeue($pending);
-                $complete = false;
-                $logger->err('DRESeo: unexpected IndexNow submission failure; retained the batch.', [
-                    'exception' => $e,
-                ]);
-                return;
-            }
-            if (Pinger::accepted($status)) {
-                $logger->info(sprintf('DRESeo: IndexNow ping accepted for %d URL(s).', count($pending)));
-                return;
-            }
-            if (Pinger::retryable($status)) {
-                $queue->requeue($pending);
-                $complete = false;
-                $logger->info(sprintf(
-                    'DRESeo: IndexNow ping failed (HTTP %d) for %d URL(s); retained for retry.',
-                    $status,
-                    count($pending)
-                ));
-                return;
-            }
-            // A permanent refusal fails the same way every time: drop the
-            // batch rather than resend it with every later edit.
-            $logger->warn(sprintf(
-                'DRESeo: IndexNow refused %d URL(s) with HTTP %d; dropped (check the key and the host).',
-                count($pending),
-                $status
-            ));
-        } finally {
-            if ($complete) {
-                $queue->complete();
-            }
+        if (!SettingFlag::isOn($services->get('Omeka\Settings'), 'dre_seo_ping_enabled')) {
+            return;
         }
+        $key = $queue->key();
+        if (!IndexNowKey::isValid($key)) {
+            // Nothing is claimed, so the queued URLs keep their attempts and
+            // go out once a valid key is saved.
+            $logger->warn('DRESeo: IndexNow ping enabled but no valid key is configured (8–128 hexadecimal characters).');
+            return;
+        }
+
+        $batch = $queue->claim();
+        if ($batch === []) {
+            return;
+        }
+        $groups = [];
+        foreach ($batch as $row) {
+            $groups[self::origin((string) $row['url'])][] = $row;
+        }
+        foreach ($groups as $origin => $rows) {
+            $origin = (string) $origin;
+            $host = (string) parse_url($origin, PHP_URL_HOST);
+            $keyLocation = $origin . '/' . $key . '.txt';
+            $context = ['count' => count($rows), 'host' => $host];
+            try {
+                $status = $services->get(Pinger::class)->submitIndexNow(
+                    $host,
+                    $key,
+                    $keyLocation,
+                    array_column($rows, 'url')
+                );
+            } catch (\Throwable $error) {
+                $status = Pinger::NOT_SENT;
+                $logger->err(
+                    'DRESeo: IndexNow transport failed for {host}: {error}',
+                    $context + ['exception' => $error, 'error' => $error->getMessage()]
+                );
+            }
+            $outcome = PingOutcome::fromStatus($status);
+            $queue->finish($rows, $outcome);
+            $context['status'] = $status;
+            match ($outcome) {
+                PingOutcome::Accepted => $logger->info(
+                    'DRESeo: IndexNow accepted {count} URL(s) for {host} (HTTP {status}).',
+                    $context
+                ),
+                PingOutcome::Retry => $logger->info(
+                    'DRESeo: IndexNow submission of {count} URL(s) for {host} failed (HTTP {status}, 0 = no response); they will be retried with backoff.',
+                    $context
+                ),
+                PingOutcome::Refused => $logger->warn(
+                    'DRESeo: IndexNow refused {count} URL(s) for {host} with HTTP {status}. They will not be resent: check that the key is valid and served at {keyLocation}, and that the URLs belong to {host}; then re-queue them with scripts/drain-indexnow.php --retry-failed.',
+                    $context + ['keyLocation' => $keyLocation]
+                ),
+            };
+        }
+    }
+
+    /** A URL's origin, `scheme://host[:port]`: where its key file is served. */
+    private static function origin(string $url): string
+    {
+        $parts = parse_url($url);
+        $origin = ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? '');
+        if (!empty($parts['port'])) {
+            $origin .= ':' . $parts['port'];
+        }
+        return $origin;
     }
 }

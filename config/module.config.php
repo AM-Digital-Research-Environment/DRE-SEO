@@ -131,6 +131,8 @@ return [
 
             // IndexNow ownership key at /{key}.txt. Constrained to a hex key so
             // it cannot shadow robots.txt; low priority so literals match first.
+            // The constraint is Service\IndexNowKey::PATTERN, spelled out
+            // (WiringTest holds the two equal).
             'dre-seo-indexnow' => [
                 'type'     => Segment::class,
                 'priority' => -100,

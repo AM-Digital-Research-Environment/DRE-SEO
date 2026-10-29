@@ -9,6 +9,8 @@
  * @var bool $noindexSite
  * @var bool $pingEnabled
  * @var string $indexNowKey
+ * @var bool $indexNowKeyValid
+ * @var array{pending:int,failed:int}|null $queueCounts
  * @var string $sitemapUrl
  * @var string $robotsUrl
  * @var array{items:int,itemSets:int,pages:int} $counts
@@ -65,11 +67,24 @@ $configureUrl = $this->url('admin/default', ['controller' => 'module', 'action' 
                     <?php echo $pingEnabled ? $on : $off; ?>
                     <?php if ($pingEnabled && $indexNowKey === ''): ?>
                         — <span class="dre-seo-off"><?php echo $this->translate('no key set'); ?></span>
+                    <?php elseif (!$indexNowKeyValid): ?>
+                        — <span class="dre-seo-off"><?php echo $this->translate('the key is not 8–128 hexadecimal characters, so /{key}.txt cannot be served and nothing is sent'); ?></span>
                     <?php endif; ?>
                 </td>
             </tr>
         </tbody>
     </table>
+
+    <?php if ($queueCounts !== null && ($pingEnabled || $queueCounts['pending'] + $queueCounts['failed'] > 0)): ?>
+    <p><?php echo $this->escapeHtml(sprintf(
+        $this->translate('IndexNow queue: %1$s pending; %2$s failed (refused, or out of retries).'),
+        number_format($queueCounts['pending']),
+        number_format($queueCounts['failed'])
+    )); ?></p>
+        <?php if ($queueCounts['failed'] > 0): ?>
+    <p><?php echo $this->translate('Failed URLs are not resent. Once the cause is fixed (the key, the host), re-queue them by running scripts/drain-indexnow.php --retry-failed on the server; the job log says what IndexNow answered.'); ?></p>
+        <?php endif; ?>
+    <?php endif; ?>
 
     <?php if ($sitemapEnabled && $sitemapUrl): ?>
     <h2><?php echo $this->translate('Sitemap'); ?></h2>

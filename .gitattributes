@@ -21,8 +21,9 @@
 # `git archive --prefix=DRESeo/` (see .github/workflows/release.yml) builds the
 # installable module zip and honours every `export-ignore` below. What ships is
 # exactly what Omeka needs at runtime — Module.php, config/, src/, view/, asset/,
-# language/, composer.json — plus README, LICENSE and CHANGELOG for whoever
-# unpacks it. Everything else is repository furniture and stays out.
+# language/, composer.json, and the IndexNow cron's scripts/ — plus README,
+# OPERATIONS, LICENSE and CHANGELOG for whoever unpacks it. Everything else is
+# repository furniture and stays out.
 #
 # Consequence worth knowing: `composer check` / `composer test` do NOT run inside
 # an unpacked release, because tests/ and the tool configurations are excluded by

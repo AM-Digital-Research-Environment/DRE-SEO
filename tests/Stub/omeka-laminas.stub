@@ -12,13 +12,15 @@
  * the job, both view helpers and every factory out of analysis entirely.
  * Declaring the supertypes here keeps all of them analysed.
  *
- * Deliberately memberless. The point is to make the inheritance resolvable,
- * not to re-describe Omeka's API — a stub that guessed at signatures would
- * invent errors rather than remove them. Calls to inherited methods surface
- * as method.notFound, which phpstan.neon.dist ignores as boundary noise.
+ * Deliberately memberless, bar AbstractJob's constructor (see there). The
+ * point is to make the inheritance resolvable, not to re-describe Omeka's API
+ * — a stub that guessed at signatures would invent errors rather than remove
+ * them. Calls to inherited methods surface as method.notFound, which
+ * phpstan.neon.dist ignores as boundary noise.
  *
- * Omeka\Api\Manager is here for tests/Integration, whose project-redirect
- * test subclasses it; the rest are the module's own supertypes. The
+ * Omeka\Api\Manager and Laminas' HTTP test adapter are here for
+ * tests/Integration, whose project-redirect test and recording HTTP adapter
+ * subclass them; the rest are the module's own supertypes. The
  * representation, settings and DBAL classes the module and the suites
  * extend come from tests/Shim/omeka.php instead, which PHPStan executes.
  *
@@ -41,6 +43,20 @@ namespace Omeka\Module {
 
 namespace Omeka\Job {
     abstract class AbstractJob
+    {
+        /**
+         * The one member stubbed, copied from Omeka 4.2.1 rather than
+         * guessed: without it, the integration test that runs the IndexNow
+         * job directly reads as instantiating a constructor-less class.
+         */
+        public function __construct(\Omeka\Entity\Job $job, \Laminas\ServiceManager\ServiceLocatorInterface $serviceLocator)
+        {
+        }
+    }
+}
+
+namespace Laminas\Http\Client\Adapter {
+    class Test
     {
     }
 }

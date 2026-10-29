@@ -5,7 +5,9 @@ namespace DRESeo\Controller\Admin;
 
 use DRESeo\Form\PageSeoForm;
 use DRESeo\Service\DefaultSite;
+use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\PingRepository;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SitemapGenerator;
@@ -28,6 +30,7 @@ class SeoController extends AbstractActionController
         private readonly Settings $settings,
         private readonly DefaultSite $defaultSite,
         private readonly ?ProjectResolver $projects = null,
+        private readonly ?PingRepository $pingRepository = null,
     ) {
     }
 
@@ -35,6 +38,7 @@ class SeoController extends AbstractActionController
     {
         $site = $this->resolveSite();
         $hostUrl = $site ? $this->hostUrl($site) : '';
+        $indexNowKey = trim((string) $this->settings->get('dre_seo_indexnow_key', ''));
 
         $view = new ViewModel([
             'site'           => $site,
@@ -44,7 +48,11 @@ class SeoController extends AbstractActionController
             'sitemapEnabled' => $this->boolSetting('dre_seo_sitemap_enabled', true),
             'noindexSite'    => $this->boolSetting('dre_seo_noindex_site'),
             'pingEnabled'    => $this->boolSetting('dre_seo_ping_enabled'),
-            'indexNowKey'    => trim((string) $this->settings->get('dre_seo_indexnow_key', '')),
+            'indexNowKey'    => $indexNowKey,
+            // The /{key}.txt route only matches a hex key; a stored key of any
+            // other shape can never be served, so nothing is queued or sent.
+            'indexNowKeyValid' => $indexNowKey === '' || IndexNowKey::isValid($indexNowKey),
+            'queueCounts'    => $this->queueCounts(),
             'sitemapUrl'     => $hostUrl ? $hostUrl . '/sitemap.xml' : '',
             'robotsUrl'      => $hostUrl ? $hostUrl . '/robots.txt' : '',
             // The item sets the sitemap lists: less those redirecting to their project.
@@ -123,6 +131,25 @@ class SeoController extends AbstractActionController
             $host .= ':' . $parts['port'];
         }
         return $host;
+    }
+
+    /**
+     * The IndexNow outbox's pending and failed URLs, or null when it cannot be
+     * read (a database error): the dashboard then says nothing rather than
+     * failing.
+     *
+     * @return array{pending:int,failed:int}|null
+     */
+    private function queueCounts(): ?array
+    {
+        if ($this->pingRepository === null) {
+            return null;
+        }
+        try {
+            return $this->pingRepository->counts();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     private function boolSetting(string $key, bool $default = false): bool

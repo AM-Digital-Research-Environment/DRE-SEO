@@ -18,18 +18,19 @@ declare(strict_types=1);
  *     BreadcrumbList state — and 301-redirects a research project's item-set
  *     page to the project item, the project's one public page.
  *
- * Settings-only: it owns a handful of `dre_seo_*` settings and three site
- * settings (dre_seo_pages, dre_seo_landing_pages, dre_seo_project_redirect);
- * install/uninstall just create and drop those. No third-party
- * Composer dependencies, so there is no bundled vendor/ — Omeka autoloads the
- * DRESeo\ namespace from src/.
+ * It owns a handful of `dre_seo_*` settings, three site settings
+ * (dre_seo_pages, dre_seo_landing_pages, dre_seo_project_redirect), the
+ * IndexNow outbox table `dre_seo_ping` and the sitemap cache in
+ * files/dre-seo-cache; install, upgrade and uninstall create, migrate and drop
+ * those. No third-party Composer dependencies, so there is no bundled vendor/
+ * — Omeka autoloads the DRESeo\ namespace from src/ (and, while the module is
+ * inactive, loadLifecycleDependencies() does).
  */
 
 namespace DRESeo;
 
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\HeadMetadata;
-use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\LandingPages;
 use DRESeo\Service\PingQueue;
@@ -48,6 +49,7 @@ use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
+use Omeka\Api\Request as ApiRequest;
 use Omeka\Form\SiteSettingsForm;
 use Omeka\Module\AbstractModule;
 use Omeka\Permissions\Acl;
@@ -70,9 +72,23 @@ class Module extends AbstractModule
         'dre_seo_sitemap_ttl',
         'dre_seo_ping_enabled',
         'dre_seo_indexnow_key',
+        'dre_seo_ping_last',
+    ];
+
+    /** Internal bookkeeping settings — never surfaced in the config form. */
+    private const INTERNAL_SETTINGS = [
+        'dre_seo_ping_last', // when a save last dispatched the IndexNow job
+    ];
+
+    /**
+     * The IndexNow queue of 0.15 and earlier, two settings rows that the
+     * outbox table replaces. upgrade() moves the URLs into the table and
+     * deletes both; uninstall deletes them too, for a site where they were
+     * never migrated.
+     */
+    private const LEGACY_QUEUE_SETTINGS = [
         'dre_seo_ping_pending',
         'dre_seo_ping_job_queued',
-        'dre_seo_ping_last',
     ];
 
     /** Sensible defaults applied on install. */
@@ -84,6 +100,26 @@ class Module extends AbstractModule
         'dre_seo_sitemap_ttl'     => '86400',
     ];
 
+    /**
+     * What an API request's pre-events noted for its post-event, which can no
+     * longer read it: whether the record an update changes was public before,
+     * and the URL of a record a delete removes. Keyed by the request object, so
+     * an entry lives exactly as long as its request (batch operations finalize
+     * each sub-request separately).
+     *
+     * @var \WeakMap<ApiRequest,bool>
+     */
+    private \WeakMap $wasPublic;
+
+    /** @var \WeakMap<ApiRequest,string> */
+    private \WeakMap $deletedUrls;
+
+    public function __construct()
+    {
+        $this->wasPublic = new \WeakMap();
+        $this->deletedUrls = new \WeakMap();
+    }
+
     /** @return array<string,mixed> */
     public function getConfig(): array
     {
@@ -94,6 +130,7 @@ class Module extends AbstractModule
     {
         $this->loadLifecycleDependencies();
         $this->applyDefaults($services->get('Omeka\Settings'));
+        (new Service\PingRepository($services->get('Omeka\Connection')))->install();
     }
 
     /**
@@ -105,13 +142,30 @@ class Module extends AbstractModule
      * writes a default. Idempotent, and it never overwrites a value an
      * administrator has set.
      *
+     * It also creates the IndexNow outbox table, which 0.15 and earlier did
+     * not have, and moves the URLs their settings-backed queue still held into
+     * it. Every step is safe to repeat, so a retried upgrade neither fails
+     * nor queues a URL twice.
+     *
      * @param string $oldVersion
      * @param string $newVersion
      */
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
     {
         $this->loadLifecycleDependencies();
-        $this->applyDefaults($services->get('Omeka\Settings'));
+        $settings = $services->get('Omeka\Settings');
+        $this->applyDefaults($settings);
+
+        $outbox = new Service\PingRepository($services->get('Omeka\Connection'));
+        $outbox->install();
+        foreach ((array) $settings->get('dre_seo_ping_pending', []) as $url) {
+            if (is_string($url)) {
+                $outbox->push(trim($url));
+            }
+        }
+        foreach (self::LEGACY_QUEUE_SETTINGS as $key) {
+            $settings->delete($key);
+        }
     }
 
     /**
@@ -158,10 +212,11 @@ class Module extends AbstractModule
 
     public function uninstall(ServiceLocatorInterface $services): void
     {
-        // The site-setting keys below are class constants of src/.
+        // The outbox and the site-setting keys below are classes of src/.
         $this->loadLifecycleDependencies();
+        (new Service\PingRepository($services->get('Omeka\Connection')))->uninstall();
         $settings = $services->get('Omeka\Settings');
-        foreach (self::SETTINGS as $key) {
+        foreach ([...self::SETTINGS, ...self::LEGACY_QUEUE_SETTINGS] as $key) {
             $settings->delete($key);
         }
         // Remove the sitemap cache (files/dre-seo-cache). The generator is
@@ -308,7 +363,9 @@ class Module extends AbstractModule
 
         // Auto-ping on public content changes (no-op unless ping is enabled):
         // a public record created, edited, made private or deleted. The
-        // visibility a record had before an update is noted at hydrate.pre.
+        // pre-events note what the post-events can no longer read: the
+        // visibility a record had before an update, and the URL of a record
+        // being deleted.
         foreach (
             [
                 'Omeka\Api\Adapter\ItemAdapter',
@@ -317,9 +374,10 @@ class Module extends AbstractModule
             ] as $adapter
         ) {
             $sharedEventManager->attach($adapter, 'api.hydrate.pre', [$this, 'noteVisibility']);
+            $sharedEventManager->attach($adapter, 'api.delete.pre', [$this, 'noteDeletion']);
             $sharedEventManager->attach($adapter, 'api.create.post', [$this, 'handleContentChange']);
             $sharedEventManager->attach($adapter, 'api.update.post', [$this, 'handleContentChange']);
-            $sharedEventManager->attach($adapter, 'api.delete.pre', [$this, 'handleContentDelete']);
+            $sharedEventManager->attach($adapter, 'api.delete.post', [$this, 'handleContentChange']);
         }
     }
 
@@ -421,63 +479,40 @@ class Module extends AbstractModule
 
     // ─── API listener: queue IndexNow pings ─────────────────────────────────
 
-    /** @var array<string,bool> whether each record being updated was public before */
-    private array $wasPublic = [];
-
-    /** Note whether a record was public before an update changes it. */
+    /**
+     * Note whether a record was public before an update changes it, so an
+     * edit that makes it private can be pinged too. api.hydrate.pre is the
+     * last point at which the entity still holds its stored visibility.
+     */
     public function noteVisibility(EventInterface $event): void
     {
-        $entity = $event->getParam('entity');
         $request = $event->getParam('request');
+        $entity = $event->getParam('entity');
         if (
-            !is_object($entity) || !method_exists($entity, 'getId') || !method_exists($entity, 'isPublic')
-            || !$request || $request->getOperation() !== 'update'
+            !$request instanceof ApiRequest
+            || $request->getOperation() !== ApiRequest::UPDATE
+            || !is_object($entity) || !method_exists($entity, 'isPublic')
         ) {
             return;
         }
-        $this->wasPublic[get_class($entity) . ':' . $entity->getId()] = (bool) $entity->isPublic();
+        $this->wasPublic[$request] = (bool) $entity->isPublic();
     }
 
     /**
-     * Queue a created or updated record: when it is public, so engines crawl
-     * the change, and when it has just been made private, so they recrawl
-     * the page and drop it.
+     * Note the URL of a public record about to be deleted, so engines recrawl
+     * it and find it gone. By api.delete.post Doctrine has cleared the
+     * entity's id, so the URL can no longer be built. The ping itself waits
+     * for the post-event: a delete that fails pings nothing.
      */
-    public function handleContentChange(EventInterface $event): void
+    public function noteDeletion(EventInterface $event): void
     {
-        if (!$this->pingEnabled()) {
-            return;
-        }
-        $response = $event->getParam('response');
-        $entity = $response ? $response->getContent() : null;
-        if (!is_object($entity)) {
-            return;
-        }
-        $key = method_exists($entity, 'getId') ? get_class($entity) . ':' . $entity->getId() : null;
-        $wasPublic = $key !== null && ($this->wasPublic[$key] ?? false);
-        if ($key !== null) {
-            unset($this->wasPublic[$key]);
-        }
-        $isPublic = !method_exists($entity, 'isPublic') || $entity->isPublic();
-        if (!$isPublic && !$wasPublic) {
-            return;
-        }
-        $this->queuePing($this->representation($event->getTarget(), $entity));
-    }
-
-    /**
-     * Queue a public record about to be deleted, so engines recrawl its URL
-     * and find it gone. Read before the deletion: after it, Doctrine has
-     * cleared the record's id and its URL can no longer be built.
-     */
-    public function handleContentDelete(EventInterface $event): void
-    {
-        if (!$this->pingEnabled()) {
-            return;
-        }
-        $adapter = $event->getTarget();
         $request = $event->getParam('request');
-        if (!$request || !is_object($adapter) || !method_exists($adapter, 'findEntity')) {
+        $adapter = $event->getTarget();
+        if (
+            !$request instanceof ApiRequest
+            || !is_object($adapter) || !method_exists($adapter, 'findEntity')
+            || !$this->getServiceLocator()->get(PingQueue::class)->isEnabled()
+        ) {
             return;
         }
         try {
@@ -488,14 +523,54 @@ class Module extends AbstractModule
         if (!is_object($entity) || (method_exists($entity, 'isPublic') && !$entity->isPublic())) {
             return;
         }
-        $this->queuePing($this->representation($adapter, $entity));
+        $url = $this->publicUrl($adapter, $entity);
+        if ($url !== null) {
+            $this->deletedUrls[$request] = $url;
+        }
     }
 
-    private function pingEnabled(): bool
+    /**
+     * Queue a record a save changed: a created or updated one when it is
+     * public, so engines crawl the change, or when it has just been made
+     * private, so they recrawl the page and drop it; a deleted one at the URL
+     * noted before the deletion.
+     */
+    public function handleContentChange(EventInterface $event): void
     {
-        $settings = $this->getServiceLocator()->get('Omeka\Settings');
-        return Service\SettingFlag::isOn($settings, 'dre_seo_ping_enabled')
-            && IndexNowKey::isValid(trim((string) $settings->get('dre_seo_indexnow_key', '')));
+        // Read what the request's pre-events noted, whether or not a ping follows.
+        $request = $event->getParam('request');
+        $wasPublic = false;
+        $deletedUrl = null;
+        if ($request instanceof ApiRequest) {
+            $wasPublic = $this->wasPublic[$request] ?? false;
+            $deletedUrl = $this->deletedUrls[$request] ?? null;
+            unset($this->wasPublic[$request], $this->deletedUrls[$request]);
+        }
+
+        if (!$this->getServiceLocator()->get(PingQueue::class)->isEnabled()) {
+            return;
+        }
+        if ((string) $event->getName() === 'api.delete.post') {
+            $url = $deletedUrl;
+        } else {
+            $response = $event->getParam('response');
+            $entity = is_object($response) && method_exists($response, 'getContent') ? $response->getContent() : null;
+            if (!is_object($entity)) {
+                return;
+            }
+            $isPublic = !method_exists($entity, 'isPublic') || $entity->isPublic();
+            $url = $isPublic || $wasPublic ? $this->publicUrl($event->getTarget(), $entity) : null;
+        }
+        if ($url !== null) {
+            $this->queuePing($url);
+        }
+    }
+
+    /** The URL an entity is pinged at, through its API representation. */
+    private function publicUrl(mixed $adapter, object $entity): ?string
+    {
+        $resource = $this->representation($adapter, $entity);
+        return $resource ? $this->resourcePublicUrl($resource) : null;
     }
 
     /**
@@ -518,15 +593,17 @@ class Module extends AbstractModule
         }
     }
 
-    private function queuePing(?object $resource): void
+    /**
+     * Put a URL in the outbox, then start a drain job if none was started in
+     * the last quarter hour; the cron drains it in any case.
+     */
+    private function queuePing(string $url): void
     {
-        $url = $resource ? $this->resourcePublicUrl($resource) : null;
-        if ($url === null) {
-            return;
-        }
         $services = $this->getServiceLocator();
         try {
-            $services->get(PingQueue::class)->enqueue($url);
+            $queue = $services->get(PingQueue::class);
+            $queue->push($url);
+            $queue->dispatchIfDue();
         } catch (\Throwable $e) {
             // SEO bookkeeping must never make the underlying resource save fail.
             try {
@@ -622,7 +699,7 @@ class Module extends AbstractModule
 
         $data = [];
         foreach (self::SETTINGS as $key) {
-            if (in_array($key, ['dre_seo_ping_pending', 'dre_seo_ping_job_queued', 'dre_seo_ping_last'], true)) {
+            if (in_array($key, self::INTERNAL_SETTINGS, true)) {
                 continue; // internal bookkeeping, not user-facing
             }
             $data[$key] = $settings->get($key, self::DEFAULTS[$key] ?? '');
@@ -646,7 +723,7 @@ class Module extends AbstractModule
 
         $data = $form->getData();
         foreach (self::SETTINGS as $key) {
-            if (in_array($key, ['dre_seo_ping_pending', 'dre_seo_ping_job_queued', 'dre_seo_ping_last'], true)) {
+            if (in_array($key, self::INTERNAL_SETTINGS, true)) {
                 continue;
             }
             if (array_key_exists($key, $data)) {

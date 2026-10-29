@@ -4,98 +4,129 @@ declare(strict_types=1);
 namespace DRESeo\Test\Service;
 
 use DRESeo\Job\PingSearchEngines;
+use DRESeo\Service\PingOutcome;
 use DRESeo\Service\PingQueue;
+use DRESeo\Test\Double\InMemoryPingOutbox;
 use DRESeo\Test\Double\MemoryLogger;
-use DRESeo\Test\Double\SharedSettingsTable;
 use Omeka\Job\Dispatcher;
 use Omeka\Settings\Settings;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The IndexNow queue: coalescing, retries, stale-lock recovery, and two
- * requests writing the shared settings row at once.
+ * The IndexNow dispatch policy — configured-ness, throttle window, batch
+ * size — over an in-memory outbox. The durable outbox itself (dedupe, leases,
+ * retries) is exercised against a real database in
+ * tests/Integration/PingRepositoryTest.
  */
 final class PingQueueTest extends TestCase
 {
-    public function testIndexNowQueueCoalescesEditsAndSchedulesOneFollowUpBatch(): void
+    private Settings $settings;
+    private Dispatcher $dispatcher;
+    private InMemoryPingOutbox $outbox;
+    private MemoryLogger $logger;
+    private PingQueue $queue;
+    private int $now = 100000;
+
+    /** @param array<string,mixed> $values */
+    private function build(array $values = []): void
     {
-        $settings = new Settings();
-        $dispatcher = new Dispatcher();
-        $logger = new MemoryLogger();
-        $now = 1000;
-        $queue = new PingQueue($settings, $dispatcher, $logger, static fn (): int => $now);
-
-        $queue->enqueue('https://example.test/item/1');
-        $queue->enqueue('https://example.test/item/2');
-        $this->assertSame(1, count($dispatcher->dispatched));
-        $this->assertSame(PingSearchEngines::class, $dispatcher->dispatched[0]['class']);
-        $this->assertSame([
-            'https://example.test/item/1',
-            'https://example.test/item/2',
-        ], $queue->claim());
-
-        $queue->enqueue('https://example.test/item/3');
-        $this->assertSame(1, count($dispatcher->dispatched));
-        $queue->complete();
-        $this->assertSame(2, count($dispatcher->dispatched));
-        $this->assertSame(['https://example.test/item/3'], $queue->claim());
+        $this->settings = new Settings();
+        foreach ($values as $key => $value) {
+            $this->settings->set($key, $value);
+        }
+        $this->dispatcher = new Dispatcher();
+        $this->outbox = new InMemoryPingOutbox();
+        $this->logger = new MemoryLogger();
+        $this->queue = new PingQueue($this->settings, $this->dispatcher, $this->outbox, $this->logger, fn (): int => $this->now);
     }
 
-    public function testIndexNowQueueRetainsAFailedBatchUntilALaterEditRetriesIt(): void
+    protected function setUp(): void
     {
-        $settings = new Settings();
-        $dispatcher = new Dispatcher();
-        $queue = new PingQueue($settings, $dispatcher, new MemoryLogger(), static fn (): int => 1000);
-
-        $queue->enqueue('https://example.test/item/1');
-        $batch = $queue->claim();
-        $queue->requeue($batch);
-        $queue->enqueue('https://example.test/item/2');
-
-        $this->assertSame(2, count($dispatcher->dispatched));
-        $this->assertSame([
-            'https://example.test/item/1',
-            'https://example.test/item/2',
-        ], $queue->claim());
+        $this->build([
+            'dre_seo_ping_enabled' => '1',
+            'dre_seo_indexnow_key' => 'deadbeefdeadbeef',
+        ]);
     }
 
-    public function testIndexNowQueueRecoversStaleLocksAndLogsDispatchFailures(): void
+    public function testEnabledNeedsBothSwitchAndKey(): void
     {
-        $settings = new Settings();
-        $settings->set('dre_seo_ping_pending', ['https://example.test/item/1']);
-        $settings->set('dre_seo_ping_job_queued', 1000);
-        $dispatcher = new Dispatcher();
-        $logger = new MemoryLogger();
-        $queue = new PingQueue($settings, $dispatcher, $logger, static fn (): int => 2000);
+        $this->assertTrue($this->queue->isEnabled());
 
-        $queue->enqueue('https://example.test/item/2');
-        $this->assertSame(1, count($dispatcher->dispatched));
+        $this->build(['dre_seo_ping_enabled' => '1']);
+        $this->assertFalse($this->queue->isEnabled(), 'no key');
 
-        $queue->claim();
-        $queue->complete();
-        $dispatcher->fail = true;
-        $queue->enqueue('https://example.test/item/3');
-        $this->assertSame(1, count($logger->records['err'] ?? []));
-        $this->assertSame(0, $settings->get('dre_seo_ping_job_queued'));
+        $this->build(['dre_seo_indexnow_key' => 'deadbeefdeadbeef']);
+        $this->assertFalse($this->queue->isEnabled(), 'switched off');
+
+        // A key of whitespace is not a key; one with surrounding spaces is.
+        $this->build(['dre_seo_ping_enabled' => '1', 'dre_seo_indexnow_key' => '   ']);
+        $this->assertFalse($this->queue->isEnabled());
+        $this->build(['dre_seo_ping_enabled' => '1', 'dre_seo_indexnow_key' => ' deadbeefdeadbeef ']);
+        $this->assertSame('deadbeefdeadbeef', $this->queue->key());
+
+        // Nor is one IndexNow could never verify: /{key}.txt only serves hex.
+        $this->build(['dre_seo_ping_enabled' => '1', 'dre_seo_indexnow_key' => 'not-a-hex-key']);
+        $this->assertFalse($this->queue->isEnabled(), 'malformed key');
+        $this->build(['dre_seo_ping_enabled' => '1', 'dre_seo_indexnow_key' => 'abc123']);
+        $this->assertFalse($this->queue->isEnabled(), 'too short');
+
+        // The checkbox as an older release or a script may have stored it.
+        $this->build(['dre_seo_ping_enabled' => 1, 'dre_seo_indexnow_key' => 'deadbeefdeadbeef']);
+        $this->assertTrue($this->queue->isEnabled());
     }
 
-    public function testConcurrentRequestsDoNotLoseEachOthersURLs(): void
+    public function testPushGoesToTheOutboxNotToSettings(): void
     {
-        $table = new SharedSettingsTable();
-        $dispatcher = new Dispatcher();
-        // Two requests, each with its own Settings cache, saving at once.
-        $first = new PingQueue(new Settings(), $dispatcher, new MemoryLogger(), static fn (): int => 1000, $table);
-        $second = new PingQueue(new Settings(), $dispatcher, new MemoryLogger(), static fn (): int => 1000, $table);
+        $this->queue->push('https://example.org/s/amira/item/1');
 
-        $first->enqueue('https://example.test/s/amira/item/1');
-        $second->enqueue('https://example.test/s/amira/item/2');
+        $this->assertSame(['https://example.org/s/amira/item/1'], $this->outbox->pushed);
+        $this->assertNull($this->settings->get('dre_seo_ping_pending'));
+    }
 
-        $this->assertSame(1, count($dispatcher->dispatched), 'one job for both');
-        $this->assertSame(
-            ['https://example.test/s/amira/item/1', 'https://example.test/s/amira/item/2'],
-            $first->claim()
-        );
-        $this->assertSame('[]', $table->rows['dre_seo_ping_pending']);
-        $this->assertSame(['lock', 'release', 'lock', 'release', 'lock', 'release'], $table->locks, 'every write under the lock');
+    public function testClaimLeasesOneCappedBatchAndFinishPassesThrough(): void
+    {
+        $this->outbox->rows = array_map(static fn (int $i): array => ['url' => 'u' . $i], range(1, PingQueue::CAP + 5));
+
+        $batch = $this->queue->claim();
+        $this->assertSame(PingQueue::CAP, $this->outbox->lastLimit);
+        $this->assertCount(PingQueue::CAP, $batch);
+
+        $this->queue->finish($batch, PingOutcome::Refused);
+        $this->assertSame([['rows' => $batch, 'outcome' => PingOutcome::Refused]], $this->outbox->finished);
+    }
+
+    public function testDispatchIsThrottledAndStamped(): void
+    {
+        $this->queue->dispatchIfDue();
+        $this->assertSame([PingSearchEngines::class], array_column($this->dispatcher->dispatched, 'class'));
+        $this->assertSame($this->now, $this->settings->get('dre_seo_ping_last'));
+
+        // A burst of saves inside the window starts no second job.
+        $this->now += 899;
+        $this->queue->dispatchIfDue();
+        $this->assertCount(1, $this->dispatcher->dispatched);
+    }
+
+    public function testWindowReopensAfterTheInterval(): void
+    {
+        $this->settings->set('dre_seo_ping_last', $this->now - 900);
+        $this->queue->dispatchIfDue();
+        $this->assertCount(1, $this->dispatcher->dispatched);
+    }
+
+    /** A failed dispatch must not burn the window, nor escape into the save; it is logged. */
+    public function testFailedDispatchDoesNotStampTheWindowAndIsLogged(): void
+    {
+        $this->dispatcher->fail = true;
+        $this->queue->dispatchIfDue();
+
+        $this->assertSame([], $this->dispatcher->dispatched);
+        $this->assertNull($this->settings->get('dre_seo_ping_last'));
+        $this->assertCount(1, $this->logger->records['err'] ?? []);
+
+        // The next save tries again.
+        $this->dispatcher->fail = false;
+        $this->queue->dispatchIfDue();
+        $this->assertCount(1, $this->dispatcher->dispatched);
     }
 }

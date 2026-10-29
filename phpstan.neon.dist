@@ -30,6 +30,7 @@ parameters:
 
     paths:
         - Module.php
+        - scripts
         - src
         - tests
 

@@ -15,9 +15,10 @@ Google Search Console verification, and there is no `sitemap.xml` or `robots.txt
 module fills all of that in — **manually for static pages, automatically for every
 resource page** — and adds a sitemap, a robots file, and an optional IndexNow ping.
 
-It is a self-contained, settings-only module in the DRE family (alongside `DRESearch`,
-`ResourceVisualizations`, `DRE-theme`). No third-party Composer dependencies, no database
-tables, no theme edits.
+It is a self-contained module in the DRE family (alongside `DRESearch`,
+`ResourceVisualizations`, `DRE-theme`). No third-party Composer dependencies and no theme
+edits; its one database table is the IndexNow outbox. Server-side tasks — the upgrade
+step, the IndexNow cron — are in [OPERATIONS.md](OPERATIONS.md).
 
 ---
 
@@ -36,7 +37,7 @@ tables, no theme edits.
 | **robots.txt** | `/robots.txt` disallowing `/admin` and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site (and then serves no sitemap). |
 | **Google Search Console** | Paste the verification snippet in the module config; the `<meta name="google-site-verification">` tag is injected site-wide. |
 | **Project pages** | A research project's item-set page redirects (301) to the project item, its one public page; the sitemap lists the project item only. |
-| **IndexNow ping** | Optionally notifies Bing/Yandex when public items, item sets or pages are created, edited, made private or deleted. Concurrent edits coalesce into one background batch under a database lock; transient failures are retained for a later retry. |
+| **IndexNow ping** | Optionally notifies Bing/Yandex when public items, item sets or pages are created, edited, made private or deleted. Changed URLs wait in a durable queue table that a five-minute cron sends in batches; transient failures back off and retry, refusals are counted on the dashboard. |
 
 Static-page SEO is **set by hand** (a central admin table); resource-page SEO is **derived
 automatically** from each item's metadata, with the configurable defaults filling any gaps.
@@ -57,6 +58,15 @@ sideload / `EXTRA_MODULES` mechanism or the ansible-bootstrap copy). Either way,
 2. **Configure** (see below) — at minimum paste your Google Search Console snippet and pick a
    default share image.
 3. Visit `/sitemap.xml` and `/robots.txt` to confirm they render.
+4. If IndexNow is to be on, install its cron (see [OPERATIONS.md](OPERATIONS.md#the-indexnow-cron)):
+
+   ```cron
+   */5 * * * * OMEKA_PATH=/var/www/html /usr/bin/php /var/www/html/modules/DRESeo/scripts/drain-indexnow.php
+   ```
+
+A new release replaces the whole folder and then needs **Admin → Modules → DRE SEO →
+Upgrade**, which applies new defaults and migrates the module's data
+([Upgrading](OPERATIONS.md#upgrading)).
 
 No web-server changes are needed: nginx's `try_files … /index.php` already routes the
 `.xml`/`.txt` endpoints to Omeka because no such static files exist.
@@ -111,6 +121,9 @@ listed — their SEO is automatic.
 
 **Admin → SEO** shows what is configured, the sitemap/robots URLs with public-resource counts,
 and a **Regenerate** button that clears the sitemap cache so it rebuilds on the next request.
+While IndexNow is on it also counts the URLs waiting in its queue and those that failed
+(refused, or out of retries), and flags a stored key that is not 8–128 hexadecimal
+characters.
 
 ---
 
@@ -394,19 +407,35 @@ to noindex, no sitemap is served and robots.txt names none.
 
 When **Ping IndexNow** is on, a public item, item set or page that is **created**,
 **updated**, **made private** or **deleted** queues its page URL on the default site (the
-home page at its own page URL, its canonical). The first edit dispatches one background job;
-concurrent edits coalesce into that batch, and edits arriving while it runs schedule at most
-one follow-up job. On MySQL/MariaDB the queue is read and written under a named lock
-(`GET_LOCK`), straight from its settings rows, so two saves at once cannot drop a URL. A stale
-15-minute queue lock recovers automatically if a worker exits unexpectedly. Transient
-failures (no answer, 408, 429, 5xx) are retained and retried when a later content edit
-schedules the queue again; a permanent refusal (400, 403, 422) is logged and dropped.
+home page at its own page URL, its canonical); a page of another site is not pinged. An
+update's earlier visibility is noted at `api.hydrate.pre`, and a deleted record's URL at
+`api.delete.pre`, while it can still be built — it is queued at `api.delete.post`, so a
+delete that fails pings nothing.
+
+The queue is a table of its own, `dre_seo_ping`: one row per URL, so two saves at once
+never touch the same row and a record saved twice is queued once. A five-minute cron
+drains it:
+
+```cron
+*/5 * * * * OMEKA_PATH=/var/www/html /usr/bin/php /var/www/html/modules/DRESeo/scripts/drain-indexnow.php
+```
+
+A save also dispatches a drain job, at most once every 15 minutes, as a fallback for an
+installation without the cron. Each run leases up to 200 URLs and submits them per origin.
+An accepted batch (2xx) leaves the queue; a transient failure (no answer, 408, 429, 5xx)
+backs off and retries, five attempts in all; any other answer (400, 403, 422) is a refusal
+that would recur, so those URLs count as failed on the dashboard at once and wait for
+`scripts/drain-indexnow.php --retry-failed` after the cause is fixed. A worker that dies
+mid-submission loses nothing: its ten-minute lease runs out and the next run resends.
+Nothing is queued or sent while the key is not 8–128 hexadecimal characters.
+[OPERATIONS.md](OPERATIONS.md#the-indexnow-cron) has the details.
 
 > **This site's content arrives mainly through the `MongoDB2OmekaS` bulk sync, which writes
-> thousands of items.** The queue is therefore capped (200) and the job *skips* pinging when
-> it looks like a bulk change — those URLs are discovered through the sitemap instead.
-> IndexNow is meant for occasional **manual** edits. If in doubt, leave it **off** and rely on
-> the sitemap + Search Console.
+> thousands of items.** Every public item a sync saves is queued and sent, 200 URLs per run
+> (about 57,600 a day), where 0.15 and earlier skipped a batch once it reached 200 — so a
+> sync that re-saves the whole collection submits the whole collection. IndexNow is meant
+> for content that changed. If in doubt, leave it **off** and rely on the sitemap + Search
+> Console.
 
 Google is **not** pinged: its sitemap-ping endpoint was retired in 2023. Google discovers
 content via the robots.txt `Sitemap:` line and Search Console.

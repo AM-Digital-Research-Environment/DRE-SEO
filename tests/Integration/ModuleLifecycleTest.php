@@ -48,7 +48,14 @@ final class ModuleLifecycleTest extends TestCase
         foreach (['dre_seo_pages', 'dre_seo_landing_pages', 'dre_seo_project_redirect'] as $key) {
             $siteSettings->set($key, 'x');
         }
-        $settings = new InMemorySettings(['dre_seo_sitemap_ttl' => '3600', 'default_site' => '1']);
+        // The settings-backed queue of 0.15 too, as a site that never
+        // upgraded still holds it.
+        $settings = new InMemorySettings([
+            'dre_seo_sitemap_ttl' => '3600',
+            'default_site' => '1',
+            'dre_seo_ping_pending' => ['https://example.test/s/amira/item/1'],
+            'dre_seo_ping_job_queued' => 1000,
+        ]);
         $api = $this->createStub(Manager::class);
         $api->method('search')->willReturn(new Response([new FixedSite()]));
         // The sitemap cache, as a site that served its sitemap has it.
@@ -57,10 +64,13 @@ final class ModuleLifecycleTest extends TestCase
         file_put_contents($files . '/dre-seo-cache/site-1-index-0123456789ab.xml', '<sitemapindex/>');
         $logger = new Logger();
         $logger->addWriter(new Noop());
+        // The outbox, created by hand so its class is not loaded beforehand.
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $connection->executeStatement('CREATE TABLE dre_seo_ping (id CHAR(64) PRIMARY KEY)');
 
         $services = new ServiceManager();
         $services->setService('Config', ['file_store' => ['local' => ['base_path' => $files]]]);
-        $services->setService('Omeka\\Connection', DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]));
+        $services->setService('Omeka\\Connection', $connection);
         $services->setService('Omeka\\Logger', $logger);
         $services->setService('Omeka\\Settings', $settings);
         $services->setService('Omeka\\Settings\\Site', $siteSettings);
@@ -72,11 +82,14 @@ final class ModuleLifecycleTest extends TestCase
             });
 
             $this->assertNull($settings->get('dre_seo_sitemap_ttl'));
+            $this->assertNull($settings->get('dre_seo_ping_pending'));
+            $this->assertNull($settings->get('dre_seo_ping_job_queued'));
             $this->assertSame('1', $settings->get('default_site'), 'a core setting is not the module’s to drop');
             foreach (['dre_seo_pages', 'dre_seo_landing_pages', 'dre_seo_project_redirect'] as $key) {
                 $this->assertNull($siteSettings->get($key), $key);
             }
             $this->assertDirectoryDoesNotExist($files . '/dre-seo-cache', 'the sitemap cache outlived the module');
+            $this->assertFalse($connection->getSchemaManager()->tablesExist(['dre_seo_ping']), 'the outbox outlived the module');
         } finally {
             array_map('unlink', glob($files . '/dre-seo-cache/*') ?: []);
             @rmdir($files . '/dre-seo-cache');
@@ -111,14 +124,27 @@ final class ModuleLifecycleTest extends TestCase
 
     /**
      * Run install or upgrade twice, as a retried upgrade would: every default
-     * the module ships is set once, and a value an administrator chose is
-     * never overwritten.
+     * the module ships is set once, a value an administrator chose is never
+     * overwritten, and the IndexNow outbox table exists. An upgrade from 0.15
+     * also moves the URLs its settings-backed queue held into the table, once,
+     * and deletes the two settings.
      */
     private function assertDefaultsApplied(bool $upgrade): void
     {
         $settings = new InMemorySettings(['dre_seo_sitemap_ttl' => '3600', 'dre_seo_noindex_browse' => '0']);
+        if ($upgrade) {
+            $settings->set('dre_seo_ping_pending', [
+                'https://example.test/s/amira/item/1',
+                'https://example.test/s/amira/page/about',
+                '',
+                'not a URL',
+            ]);
+            $settings->set('dre_seo_ping_job_queued', 1000);
+        }
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
         $services = new ServiceManager();
         $services->setService('Omeka\\Settings', $settings);
+        $services->setService('Omeka\\Connection', $connection);
 
         $this->withoutModuleAutoloading(static function () use ($services, $upgrade): void {
             $module = new \DRESeo\Module();
@@ -136,6 +162,14 @@ final class ModuleLifecycleTest extends TestCase
         $this->assertSame('1', $settings->get('dre_seo_citation_meta'));
         $this->assertSame('3600', $settings->get('dre_seo_sitemap_ttl'), 'an administrator’s value stays');
         $this->assertSame('0', $settings->get('dre_seo_noindex_browse'), 'an administrator’s value stays');
+
+        $this->assertSame(
+            $upgrade ? ['https://example.test/s/amira/item/1', 'https://example.test/s/amira/page/about'] : [],
+            $connection->fetchFirstColumn('SELECT url FROM dre_seo_ping ORDER BY url'),
+            'the outbox holds the migrated URLs, each once'
+        );
+        $this->assertNull($settings->get('dre_seo_ping_pending'));
+        $this->assertNull($settings->get('dre_seo_ping_job_queued'));
     }
 
     /**
