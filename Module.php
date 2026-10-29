@@ -164,6 +164,14 @@ class Module extends AbstractModule
         foreach (self::SETTINGS as $key) {
             $settings->delete($key);
         }
+        // Remove the sitemap cache (files/dre-seo-cache). The generator is
+        // built from its factory: an inactive module's services are not
+        // registered, while the Omeka services the factory reads always are.
+        try {
+            (new Service\SitemapGeneratorFactory())($services, Service\SitemapGenerator::class)->destroyCache();
+        } catch (\Throwable $e) {
+            // best-effort
+        }
         // Drop the site settings too: the static-page overrides, the
         // breadcrumb landing pages and the project redirect switch.
         try {

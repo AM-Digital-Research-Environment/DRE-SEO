@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace DRESeo\Test\Integration;
 
+use Doctrine\DBAL\DriverManager;
 use DRESeo\Test\Integration\Double\FixedSite;
 use DRESeo\Test\Integration\Double\InMemorySettings;
 use DRESeo\Test\Integration\Double\InMemorySiteSettings;
+use Laminas\Log\Logger;
+use Laminas\Log\Writer\Noop;
 use Laminas\ServiceManager\ServiceManager;
 use Omeka\Api\Manager;
 use Omeka\Api\Response;
@@ -38,7 +41,7 @@ final class ModuleLifecycleTest extends TestCase
 
     #[RunInSeparateProcess]
     #[PreserveGlobalState(false)]
-    public function testUninstallWithoutActiveModuleAutoloadingDropsTheSiteSettings(): void
+    public function testUninstallWithoutActiveModuleAutoloadingLeavesNothingBehind(): void
     {
         $siteSettings = new InMemorySiteSettings();
         $siteSettings->setTargetId(1);
@@ -48,19 +51,36 @@ final class ModuleLifecycleTest extends TestCase
         $settings = new InMemorySettings(['dre_seo_sitemap_ttl' => '3600', 'default_site' => '1']);
         $api = $this->createStub(Manager::class);
         $api->method('search')->willReturn(new Response([new FixedSite()]));
+        // The sitemap cache, as a site that served its sitemap has it.
+        $files = sys_get_temp_dir() . '/dre-seo-lifecycle-' . bin2hex(random_bytes(6));
+        mkdir($files . '/dre-seo-cache', 0775, true);
+        file_put_contents($files . '/dre-seo-cache/site-1-index-0123456789ab.xml', '<sitemapindex/>');
+        $logger = new Logger();
+        $logger->addWriter(new Noop());
+
         $services = new ServiceManager();
+        $services->setService('Config', ['file_store' => ['local' => ['base_path' => $files]]]);
+        $services->setService('Omeka\\Connection', DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]));
+        $services->setService('Omeka\\Logger', $logger);
         $services->setService('Omeka\\Settings', $settings);
         $services->setService('Omeka\\Settings\\Site', $siteSettings);
         $services->setService('Omeka\\ApiManager', $api);
 
-        $this->withoutModuleAutoloading(static function () use ($services): void {
-            (new \DRESeo\Module())->uninstall($services);
-        });
+        try {
+            $this->withoutModuleAutoloading(static function () use ($services): void {
+                (new \DRESeo\Module())->uninstall($services);
+            });
 
-        $this->assertNull($settings->get('dre_seo_sitemap_ttl'));
-        $this->assertSame('1', $settings->get('default_site'), 'a core setting is not the module’s to drop');
-        foreach (['dre_seo_pages', 'dre_seo_landing_pages', 'dre_seo_project_redirect'] as $key) {
-            $this->assertNull($siteSettings->get($key), $key);
+            $this->assertNull($settings->get('dre_seo_sitemap_ttl'));
+            $this->assertSame('1', $settings->get('default_site'), 'a core setting is not the module’s to drop');
+            foreach (['dre_seo_pages', 'dre_seo_landing_pages', 'dre_seo_project_redirect'] as $key) {
+                $this->assertNull($siteSettings->get($key), $key);
+            }
+            $this->assertDirectoryDoesNotExist($files . '/dre-seo-cache', 'the sitemap cache outlived the module');
+        } finally {
+            array_map('unlink', glob($files . '/dre-seo-cache/*') ?: []);
+            @rmdir($files . '/dre-seo-cache');
+            @rmdir($files);
         }
     }
 

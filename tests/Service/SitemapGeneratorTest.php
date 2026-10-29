@@ -84,6 +84,24 @@ final class SitemapGeneratorTest extends TestCase
         }
     }
 
+    public function testDestroyingTheCacheRemovesItsDirectoryWithEverythingInIt(): void
+    {
+        $connection = new FakeConnection();
+        $connection->itemCounts = [1 => 1];
+        $cacheDir = sys_get_temp_dir() . '/dre-seo-test-' . bin2hex(random_bytes(6));
+        $logger = new MemoryLogger();
+        $generator = new SitemapGenerator($connection, self::sitemapConfig(), $cacheDir, $logger);
+
+        $generator->buildIndex('https://one.example', 1, 3600);
+        $this->assertNotSame([], glob($cacheDir . '/*.xml'), 'the index was cached');
+        file_put_contents($cacheDir . '/left-over.tmp', 'x');
+
+        $generator->destroyCache();
+
+        $this->assertDirectoryDoesNotExist($cacheDir);
+        $this->assertArrayNotHasKey('warn', $logger->records, 'a removed directory is not a failure');
+    }
+
     public function testPagesSitemapFollowsNavigationOrderAndListsTheHomePageAtItsOwnURL(): void
     {
         $connection = new FakeConnection();

@@ -286,6 +286,29 @@ class SitemapGenerator
         }
     }
 
+    /**
+     * Clear the cache and remove its directory, whatever else is in it
+     * (uninstall). A directory left behind is logged: the module is going, but
+     * a stale files/dre-seo-cache would be served again by a reinstall.
+     */
+    public function destroyCache(): void
+    {
+        $this->clearCache();
+        if ($this->cacheDir === null || !is_dir($this->cacheDir)) {
+            return;
+        }
+        foreach (glob($this->cacheDir . '/*') ?: [] as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+        if (!@rmdir($this->cacheDir)) {
+            $this->logger->warn('DRESeo: failed to remove the sitemap cache directory.', [
+                'cache_dir' => $this->cacheDir,
+            ]);
+        }
+    }
+
     /** @return array{items:int,itemSets:int,pages:int} */
     public function counts(int $siteId, bool $excludeProjectSets = false): array
     {
