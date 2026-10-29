@@ -7,7 +7,7 @@ use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\ProjectResolver;
-use DRESeo\Service\SettingFlag;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SiteHome;
 use DRESeo\Service\Sitemap\SitemapDocument;
 use DRESeo\Service\SitemapGenerator;
@@ -16,7 +16,6 @@ use Laminas\Log\LoggerInterface;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\Mvc\MvcEvent;
 use Omeka\Api\Representation\SiteRepresentation;
-use Omeka\Settings\Settings;
 
 /**
  * Public, anonymous endpoints served at the host root (the routes fall through
@@ -38,7 +37,7 @@ class SitemapController extends AbstractActionController
 {
     public function __construct(
         private readonly SitemapGenerator $generator,
-        private readonly Settings $settings,
+        private readonly SettingsGate $settings,
         private readonly DefaultSite $defaultSite,
         private readonly ?PageSeoStore $pageSeoStore = null,
         private readonly ?ProjectResolver $projects = null,
@@ -150,7 +149,7 @@ class SitemapController extends AbstractActionController
     public function robotsAction(): Response
     {
         $lines = ['User-agent: *'];
-        if (SettingFlag::isOn($this->settings, 'dre_seo_noindex_site')) {
+        if ($this->settings->isOn('dre_seo_noindex_site')) {
             $lines[] = 'Disallow: /';
         } else {
             $lines[] = 'Disallow: /admin/';
@@ -170,7 +169,7 @@ class SitemapController extends AbstractActionController
 
     public function indexNowKeyAction(): Response
     {
-        $configured = trim((string) $this->settings->get('dre_seo_indexnow_key', ''));
+        $configured = $this->settings->text('dre_seo_indexnow_key');
         $requested = (string) $this->params()->fromRoute('key', '');
         if (!IndexNowKey::isValid($configured) || !hash_equals($configured, $requested)) {
             return $this->notFound();
@@ -214,7 +213,7 @@ class SitemapController extends AbstractActionController
 
     private function ttl(): int
     {
-        return (int) $this->settings->get('dre_seo_sitemap_ttl', 86400);
+        return $this->settings->int('dre_seo_sitemap_ttl', 86400);
     }
 
     /**
@@ -224,8 +223,8 @@ class SitemapController extends AbstractActionController
      */
     private function sitemapEnabled(): bool
     {
-        return SettingFlag::isOn($this->settings, 'dre_seo_sitemap_enabled', true)
-            && !SettingFlag::isOn($this->settings, 'dre_seo_noindex_site');
+        return $this->settings->isOn('dre_seo_sitemap_enabled', true)
+            && !$this->settings->isOn('dre_seo_noindex_site');
     }
 
     /**

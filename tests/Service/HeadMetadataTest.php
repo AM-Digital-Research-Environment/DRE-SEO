@@ -11,6 +11,7 @@ use DRESeo\Service\ImageDimensions;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\ResourceSummary;
 use DRESeo\Service\SearchPage;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Service\Signposting;
 use DRESeo\Service\SiteHome;
 use DRESeo\Service\StructuredData;
@@ -51,7 +52,7 @@ final class HeadMetadataTest extends TestCase
         }
 
         return new HeadMetadata(
-            $store,
+            new SettingsGate($store),
             $structuredData,
             new CitationMeta($kinds, new CitationData($kinds)),
             $kinds,

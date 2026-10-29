@@ -6,6 +6,7 @@ namespace DRESeo\Test\Integration;
 use DRESeo\Module;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\PingQueue;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Test\Double\InMemoryPingOutbox;
 use DRESeo\Test\Integration\Double\FixedSite;
 use DRESeo\Test\Integration\Double\InMemorySettings;
@@ -67,8 +68,9 @@ final class ContentChangePingTest extends TestCase
         $services = new ServiceManager();
         $services->setService('Omeka\\Settings', $this->settings);
         $services->setService(DefaultSite::class, new DefaultSite($api, $this->settings));
+        $services->setService(SettingsGate::class, new SettingsGate($this->settings));
         $services->setService(PingQueue::class, new PingQueue(
-            $this->settings,
+            new SettingsGate($this->settings),
             $this->createStub(Dispatcher::class),
             $this->outbox,
             $logger

@@ -6,6 +6,7 @@ namespace DRESeo\Test\Service;
 use DRESeo\Job\PingSearchEngines;
 use DRESeo\Service\PingOutcome;
 use DRESeo\Service\PingQueue;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Test\Double\InMemoryPingOutbox;
 use DRESeo\Test\Double\MemoryLogger;
 use Omeka\Job\Dispatcher;
@@ -37,7 +38,7 @@ final class PingQueueTest extends TestCase
         $this->dispatcher = new Dispatcher();
         $this->outbox = new InMemoryPingOutbox();
         $this->logger = new MemoryLogger();
-        $this->queue = new PingQueue($this->settings, $this->dispatcher, $this->outbox, $this->logger, fn (): int => $this->now);
+        $this->queue = new PingQueue(new SettingsGate($this->settings), $this->dispatcher, $this->outbox, $this->logger, fn (): int => $this->now);
     }
 
     protected function setUp(): void

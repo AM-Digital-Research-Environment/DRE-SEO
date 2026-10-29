@@ -7,6 +7,7 @@ use DRESeo\Controller\SitemapController;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\ProjectResolver;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -21,7 +22,7 @@ final class SitemapControllerFactory implements FactoryInterface
     {
         return new SitemapController(
             $container->get(SitemapGenerator::class),
-            $container->get('Omeka\Settings'),
+            $container->get(SettingsGate::class),
             $container->get(DefaultSite::class),
             $container->get(PageSeoStore::class),
             $container->get(ProjectResolver::class),

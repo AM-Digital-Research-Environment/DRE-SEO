@@ -604,7 +604,7 @@ class Module extends AbstractModule
     {
         $services = $this->getServiceLocator();
         try {
-            if (!Service\SettingFlag::isOn($services->get('Omeka\Settings'), 'dre_seo_sitemap_enabled', true)) {
+            if (!$services->get(Service\SettingsGate::class)->isOn('dre_seo_sitemap_enabled', true)) {
                 return;
             }
             $services->get(SitemapGenerator::class)->clearCache();
@@ -833,7 +833,7 @@ class Module extends AbstractModule
     private function omekaJsonLdWarning(PhpRenderer $renderer): string
     {
         $services = $this->getServiceLocator();
-        if (!Service\SettingFlag::isOn($services->get('Omeka\Settings'), 'dre_seo_jsonld_enabled', true)) {
+        if (!$services->get(Service\SettingsGate::class)->isOn('dre_seo_jsonld_enabled', true)) {
             return '';
         }
         try {

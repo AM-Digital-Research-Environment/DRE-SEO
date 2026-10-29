@@ -6,7 +6,6 @@ namespace DRESeo\Service;
 use DRESeo\Job\PingSearchEngines;
 use Laminas\Log\LoggerInterface;
 use Omeka\Job\Dispatcher;
-use Omeka\Settings\Settings;
 
 /**
  * IndexNow dispatch policy over the durable outbox: whether pinging is
@@ -43,7 +42,7 @@ final class PingQueue
     private const LAST_DISPATCH = 'dre_seo_ping_last';
 
     public function __construct(
-        private readonly Settings $settings,
+        private readonly SettingsGate $settings,
         private readonly Dispatcher $dispatcher,
         private readonly PingOutboxInterface $outbox,
         private readonly LoggerInterface $logger,
@@ -59,13 +58,13 @@ final class PingQueue
      */
     public function isEnabled(): bool
     {
-        return SettingFlag::isOn($this->settings, 'dre_seo_ping_enabled') && IndexNowKey::isValid($this->key());
+        return $this->settings->isOn('dre_seo_ping_enabled') && IndexNowKey::isValid($this->key());
     }
 
     /** The IndexNow ownership key, or '' when unset. */
     public function key(): string
     {
-        return trim((string) ($this->settings->get('dre_seo_indexnow_key', '') ?? ''));
+        return $this->settings->text('dre_seo_indexnow_key');
     }
 
     /** Queue a URL for submission. */
@@ -84,7 +83,7 @@ final class PingQueue
     public function dispatchIfDue(): void
     {
         $now = $this->now();
-        if ($now - (int) $this->settings->get(self::LAST_DISPATCH, 0) < self::DISPATCH_INTERVAL) {
+        if ($now - $this->settings->int(self::LAST_DISPATCH) < self::DISPATCH_INTERVAL) {
             return;
         }
         try {

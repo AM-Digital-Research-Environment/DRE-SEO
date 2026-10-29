@@ -9,13 +9,12 @@ use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\PingRepository;
 use DRESeo\Service\ProjectResolver;
-use DRESeo\Service\SettingFlag;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
 use Omeka\Api\Manager as ApiManager;
 use Omeka\Api\Representation\SiteRepresentation;
-use Omeka\Settings\Settings;
 
 /**
  * Admin → SEO. A status dashboard (what is configured, sitemap URLs + counts,
@@ -27,7 +26,7 @@ class SeoController extends AbstractActionController
         private readonly SitemapGenerator $generator,
         private readonly PageSeoStore $pageSeoStore,
         private readonly ApiManager $api,
-        private readonly Settings $settings,
+        private readonly SettingsGate $settings,
         private readonly DefaultSite $defaultSite,
         private readonly ?ProjectResolver $projects = null,
         private readonly ?PingRepository $pingRepository = null,
@@ -38,16 +37,16 @@ class SeoController extends AbstractActionController
     {
         $site = $this->resolveSite();
         $hostUrl = $site ? $this->hostUrl($site) : '';
-        $indexNowKey = trim((string) $this->settings->get('dre_seo_indexnow_key', ''));
+        $indexNowKey = $this->settings->text('dre_seo_indexnow_key');
 
         $view = new ViewModel([
             'site'           => $site,
-            'gscConfigured'  => trim((string) $this->settings->get('dre_seo_gsc_verification', '')) !== '',
-            'jsonLdEnabled'  => $this->boolSetting('dre_seo_jsonld_enabled', true),
-            'citationEnabled' => $this->boolSetting('dre_seo_citation_meta', true),
-            'sitemapEnabled' => $this->boolSetting('dre_seo_sitemap_enabled', true),
-            'noindexSite'    => $this->boolSetting('dre_seo_noindex_site'),
-            'pingEnabled'    => $this->boolSetting('dre_seo_ping_enabled'),
+            'gscConfigured'  => $this->settings->text('dre_seo_gsc_verification') !== '',
+            'jsonLdEnabled'  => $this->settings->isOn('dre_seo_jsonld_enabled', true),
+            'citationEnabled' => $this->settings->isOn('dre_seo_citation_meta', true),
+            'sitemapEnabled' => $this->settings->isOn('dre_seo_sitemap_enabled', true),
+            'noindexSite'    => $this->settings->isOn('dre_seo_noindex_site'),
+            'pingEnabled'    => $this->settings->isOn('dre_seo_ping_enabled'),
             'indexNowKey'    => $indexNowKey,
             // The /{key}.txt route only matches a hex key; a stored key of any
             // other shape can never be served, so nothing is queued or sent.
@@ -150,10 +149,5 @@ class SeoController extends AbstractActionController
         } catch (\Throwable $e) {
             return null;
         }
-    }
-
-    private function boolSetting(string $key, bool $default = false): bool
-    {
-        return SettingFlag::isOn($this->settings, $key, $default);
     }
 }

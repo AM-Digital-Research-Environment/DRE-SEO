@@ -39,6 +39,8 @@ return [
             // resolver also decides the project item-set redirect.
             Service\LandingPages::class      => Service\LandingPagesFactory::class,
             Service\ProjectResolver::class   => Service\ProjectResolverFactory::class,
+            // The one reading of the module's settings: "on", text, integer.
+            Service\SettingsGate::class      => Service\SettingsGateFactory::class,
         ],
         'invokables' => [
             // Stateless formatter: no config, no dependencies.

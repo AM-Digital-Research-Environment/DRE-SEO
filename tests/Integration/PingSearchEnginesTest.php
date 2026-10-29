@@ -9,6 +9,7 @@ use DRESeo\Service\Pinger;
 use DRESeo\Service\PingOutcome;
 use DRESeo\Service\PingQueue;
 use DRESeo\Service\PingRepository;
+use DRESeo\Service\SettingsGate;
 use DRESeo\Test\Integration\Double\InMemorySettings;
 use DRESeo\Test\Integration\Double\RecordingHttpAdapter;
 use Laminas\Http\Client;
@@ -45,8 +46,9 @@ final class PingSearchEnginesTest extends TestCase
         $logger->addProcessor(new PsrPlaceholder());
 
         $services = new ServiceManager();
-        $services->setService('Omeka\\Settings', $this->settings);
-        $services->setService(PingQueue::class, new PingQueue($this->settings, $this->createStub(Dispatcher::class), $this->outbox, $logger));
+        $settings = new SettingsGate($this->settings);
+        $services->setService(SettingsGate::class, $settings);
+        $services->setService(PingQueue::class, new PingQueue($settings, $this->createStub(Dispatcher::class), $this->outbox, $logger));
         $services->setService(Pinger::class, new Pinger($client));
         $services->setService('Omeka\\Logger', $logger);
 

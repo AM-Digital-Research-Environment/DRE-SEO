@@ -15,7 +15,7 @@ final class HeadMetadataFactory implements FactoryInterface
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): HeadMetadata
     {
         return new HeadMetadata(
-            $container->get('Omeka\Settings'),
+            $container->get(SettingsGate::class),
             $container->get(StructuredData::class),
             $container->get(CitationMeta::class),
             $container->get(CitationKindMap::class),

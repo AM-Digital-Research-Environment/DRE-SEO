@@ -8,12 +8,11 @@ use DRESeo\Service\CitationExport;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\HttpCache;
 use DRESeo\Service\LinkedDataIdentity;
-use DRESeo\Service\SettingFlag;
+use DRESeo\Service\SettingsGate;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Omeka\Api\Manager as ApiManager;
 use Omeka\Api\Representation\ItemRepresentation;
-use Omeka\Settings\Settings;
 
 /**
  * /cite/:id/:format — single-item citation downloads (BibTeX, RIS, CSL-JSON,
@@ -41,7 +40,7 @@ class CitationController extends AbstractActionController
         private readonly CitationData $citationData,
         private readonly CitationExport $citationExport,
         private readonly ApiManager $api,
-        private readonly Settings $settings,
+        private readonly SettingsGate $settings,
         private readonly DefaultSite $defaultSite,
         private readonly ?LinkedDataIdentity $identity = null,
     ) {
@@ -49,7 +48,7 @@ class CitationController extends AbstractActionController
 
     public function indexAction(): Response
     {
-        if (!SettingFlag::isOn($this->settings, 'dre_seo_citation_meta', true)) {
+        if (!$this->settings->isOn('dre_seo_citation_meta', true)) {
             return $this->notFound();
         }
 

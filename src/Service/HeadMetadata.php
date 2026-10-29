@@ -12,7 +12,6 @@ use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\MediaRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
-use Omeka\Settings\Settings;
 
 /**
  * Computes and injects every <head> SEO signal into Omeka's request-global head
@@ -74,7 +73,7 @@ class HeadMetadata
     private bool $defaultImageResolved = false;
 
     public function __construct(
-        private readonly Settings $settings,
+        private readonly SettingsGate $settings,
         private readonly StructuredData $structuredData,
         private readonly CitationMeta $citationMeta,
         private readonly CitationKindMap $kinds,
@@ -303,7 +302,7 @@ class HeadMetadata
         // item-set pages (/item-set/{id}), which are listed in the sitemap;
         // marking them noindex made Search Console reject that sitemap.
         $hasQuery = ((string) (parse_url($current, PHP_URL_QUERY) ?? '')) !== '';
-        if ($hasQuery && $this->boolSetting('dre_seo_noindex_browse')) {
+        if ($hasQuery && $this->settings->isOn('dre_seo_noindex_browse')) {
             $this->setRobots($view, 'noindex, follow');
         }
 
@@ -355,7 +354,7 @@ class HeadMetadata
         $headMeta = $view->headMeta();
 
         // Master noindex (staging) overrides everything.
-        if ($this->boolSetting('dre_seo_noindex_site')) {
+        if ($this->settings->isOn('dre_seo_noindex_site')) {
             $this->setRobots($view, 'noindex, nofollow', true);
         }
         // Search results and query-string variants of any page stay out of
@@ -363,7 +362,7 @@ class HeadMetadata
         // record paging through its connection lists, or a URL that only
         // carries tracking parameters, is not a variant.
         if (
-            $this->boolSetting('dre_seo_noindex_browse')
+            $this->settings->isOn('dre_seo_noindex_browse')
             && ($isSearch || $this->isQueryVariant($view->serverUrl(true)))
         ) {
             $this->setRobots($view, 'noindex, follow');
@@ -373,11 +372,11 @@ class HeadMetadata
         $this->setRobots($view, 'max-image-preview:large');
 
         // Verification tags — site-wide, on every public page.
-        $gsc = $this->extractToken($this->stringSetting('dre_seo_gsc_verification'), 'google-site-verification');
+        $gsc = $this->extractToken($this->settings->raw('dre_seo_gsc_verification'), 'google-site-verification');
         if ($gsc !== '') {
             $headMeta->appendName('google-site-verification', $gsc);
         }
-        $bing = $this->extractToken($this->stringSetting('dre_seo_bing_verification'), 'msvalidate.01');
+        $bing = $this->extractToken($this->settings->raw('dre_seo_bing_verification'), 'msvalidate.01');
         if ($bing !== '') {
             $headMeta->appendName('msvalidate.01', $bing);
         }
@@ -388,14 +387,14 @@ class HeadMetadata
             $headMeta->setProperty('og:locale', $this->ogLocale($view));
         }
         $headMeta->appendName('twitter:card', 'summary_large_image');
-        $twitter = trim($this->stringSetting('dre_seo_twitter_site'));
+        $twitter = trim($this->settings->raw('dre_seo_twitter_site'));
         if ($twitter !== '') {
             $headMeta->appendName('twitter:site', $twitter);
         }
 
         // Gap-fills (only when phase 1 set nothing).
         if (!$this->isApplied('description')) {
-            $default = trim($this->stringSetting('dre_seo_default_description'));
+            $default = trim($this->settings->raw('dre_seo_default_description'));
             if ($default !== '') {
                 $this->setDescription($view, $this->truncate($default));
             }
@@ -687,7 +686,7 @@ class HeadMetadata
             return $this->defaultImageUrl;
         }
         $this->defaultImageResolved = true;
-        $assetId = (int) $this->stringSetting('dre_seo_default_share_image');
+        $assetId = (int) $this->settings->raw('dre_seo_default_share_image');
         if ($assetId > 0) {
             $this->defaultImageUrl = $this->assetUrl($view, $assetId);
         }
@@ -758,22 +757,12 @@ class HeadMetadata
 
     private function jsonLdEnabled(): bool
     {
-        return $this->boolSetting('dre_seo_jsonld_enabled', true);
+        return $this->settings->isOn('dre_seo_jsonld_enabled', true);
     }
 
     private function citationsEnabled(): bool
     {
-        return $this->boolSetting('dre_seo_citation_meta', true);
-    }
-
-    private function boolSetting(string $key, bool $default = false): bool
-    {
-        return SettingFlag::isOn($this->settings, $key, $default);
-    }
-
-    private function stringSetting(string $key): string
-    {
-        return (string) ($this->settings->get($key, '') ?? '');
+        return $this->settings->isOn('dre_seo_citation_meta', true);
     }
 
     private function markApplied(string $key): void

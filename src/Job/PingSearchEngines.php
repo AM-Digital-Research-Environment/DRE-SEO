@@ -7,7 +7,7 @@ use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\Pinger;
 use DRESeo\Service\PingOutcome;
 use DRESeo\Service\PingQueue;
-use DRESeo\Service\SettingFlag;
+use DRESeo\Service\SettingsGate;
 use Omeka\Job\AbstractJob;
 
 /**
@@ -38,7 +38,7 @@ class PingSearchEngines extends AbstractJob
         $logger = $services->get('Omeka\Logger');
         $queue = $services->get(PingQueue::class);
 
-        if (!SettingFlag::isOn($services->get('Omeka\Settings'), 'dre_seo_ping_enabled')) {
+        if (!$services->get(SettingsGate::class)->isOn('dre_seo_ping_enabled')) {
             return;
         }
         $key = $queue->key();

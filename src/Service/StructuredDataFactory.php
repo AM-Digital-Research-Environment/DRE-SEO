@@ -24,7 +24,7 @@ final class StructuredDataFactory implements FactoryInterface
                 'access_free' => (array) ($config['access_free'] ?? []),
                 // Resolved on first use, once the request's locale is set.
                 'access_statement' => static function () use ($container): string {
-                    $custom = trim((string) ($container->get('Omeka\Settings')->get('dre_seo_access_statement', '') ?? ''));
+                    $custom = $container->get(SettingsGate::class)->text('dre_seo_access_statement');
                     if ($custom !== '') {
                         return $custom;
                     }
