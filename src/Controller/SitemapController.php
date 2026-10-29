@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Controller;
 
+use DRESeo\Controller\Concern\SendsResponses;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
@@ -35,6 +36,8 @@ use Omeka\Api\Representation\SiteRepresentation;
  */
 class SitemapController extends AbstractActionController
 {
+    use SendsResponses;
+
     public function __construct(
         private readonly SitemapGenerator $generator,
         private readonly SettingsGate $settings,
@@ -53,25 +56,21 @@ class SitemapController extends AbstractActionController
             $this->logger?->err('DRESeo: the sitemap is unavailable; answered 503.', [
                 'exception' => $error,
             ]);
-            $response = $this->getResponse();
-            $response->setStatusCode(503);
-            $response->setContent('Temporarily unavailable');
-            $headers = $response->getHeaders();
-            $headers->addHeaderLine('Content-Type', 'text/plain; charset=utf-8');
-            $headers->addHeaderLine('Retry-After', '300');
-            $headers->addHeaderLine('Cache-Control', 'no-store');
-            return $response;
+            return $this->respond('Temporarily unavailable', 'text/plain; charset=utf-8', 503, [
+                'Retry-After' => '300',
+                'Cache-Control' => 'no-store',
+            ], false);
         }
     }
 
     public function indexAction(): Response
     {
         if (!$this->sitemapEnabled()) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         $site = $this->resolveSite();
         if (!$site) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         return $this->xml($this->generator->buildIndex(
             $this->hostUrl($site),
@@ -84,11 +83,11 @@ class SitemapController extends AbstractActionController
     public function pagesAction(): Response
     {
         if (!$this->sitemapEnabled()) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         $site = $this->resolveSite();
         if (!$site) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
 
         // Pass the site navigation tree + home page so the sitemap mirrors the
@@ -116,11 +115,11 @@ class SitemapController extends AbstractActionController
     public function itemSetsAction(): Response
     {
         if (!$this->sitemapEnabled()) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         $site = $this->resolveSite();
         if (!$site) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         return $this->xml($this->generator->buildItemSets(
             $this->siteUrl($site),
@@ -133,15 +132,15 @@ class SitemapController extends AbstractActionController
     public function itemsAction(): Response
     {
         if (!$this->sitemapEnabled()) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         $site = $this->resolveSite();
         if (!$site) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         $chunk = (int) $this->params()->fromRoute('chunk', 1);
         if ($chunk < 1 || $chunk > $this->generator->itemChunkCount($site->id())) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         return $this->xml($this->generator->buildItems($this->siteUrl($site), $site->id(), $chunk, $this->ttl()));
     }
@@ -172,7 +171,7 @@ class SitemapController extends AbstractActionController
         $configured = $this->settings->text('dre_seo_indexnow_key');
         $requested = (string) $this->params()->fromRoute('key', '');
         if (!IndexNowKey::isValid($configured) || !hash_equals($configured, $requested)) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
         return $this->text($configured . "\n");
     }
@@ -246,32 +245,21 @@ class SitemapController extends AbstractActionController
     }
 
     /**
-     * The document carries its own generation time, so Last-Modified is
-     * honest whether the cache served it or it was built just now.
+     * A sitemap document. It carries its own generation time, so
+     * Last-Modified is honest whether the cache served it or it was built
+     * just now.
      */
     private function xml(SitemapDocument $document): Response
     {
-        $response = $this->getResponse();
-        $response->setContent($document->xml);
-        $headers = $response->getHeaders();
-        $headers->addHeaderLine('Content-Type', 'application/xml; charset=utf-8');
-        $headers->addHeaderLine('X-Robots-Tag', 'noindex'); // don't index the sitemap file itself
-        $headers->addHeaderLine('Last-Modified', $document->lastModifiedHeader());
-        return $response;
+        // noindex: the sitemap file itself is no page to index.
+        return $this->respond($document->xml, 'application/xml; charset=utf-8', 200, [
+            'Last-Modified' => $document->lastModifiedHeader(),
+        ]);
     }
 
+    /** robots.txt and the IndexNow key file: plain text, sent without noindex as ever. */
     private function text(string $body): Response
     {
-        $response = $this->getResponse();
-        $response->setContent($body);
-        $response->getHeaders()->addHeaderLine('Content-Type', 'text/plain; charset=utf-8');
-        return $response;
-    }
-
-    private function notFound(): Response
-    {
-        $response = $this->getResponse();
-        $response->setStatusCode(404);
-        return $response;
+        return $this->respond($body, 'text/plain; charset=utf-8', 200, [], false);
     }
 }

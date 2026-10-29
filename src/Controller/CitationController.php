@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace DRESeo\Controller;
 
+use DRESeo\Controller\Concern\SendsResponses;
 use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationExport;
 use DRESeo\Service\DefaultSite;
-use DRESeo\Service\HttpCache;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\SettingsGate;
 use Laminas\Http\Response;
@@ -36,6 +36,8 @@ use Omeka\Api\Representation\ItemRepresentation;
  */
 class CitationController extends AbstractActionController
 {
+    use SendsResponses;
+
     public function __construct(
         private readonly CitationData $citationData,
         private readonly CitationExport $citationExport,
@@ -49,34 +51,37 @@ class CitationController extends AbstractActionController
     public function indexAction(): Response
     {
         if (!$this->settings->isOn('dre_seo_citation_meta', true)) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
 
         $id = (int) $this->params()->fromRoute('id', 0);
         $format = (string) $this->params()->fromRoute('format', '');
         if ($id <= 0 || !isset(CitationExport::FORMATS[$format])) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
 
         $item = $this->resolveItem($id);
         if ($item === null) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
 
         $site = $this->defaultSite->get();
         $record = $this->citationData->build($item, $this->identity?->uri($item) ?? $this->itemUrl($item), $site?->title());
         $body = $this->citationExport->serialize($record, $format);
         if ($body === null) {
-            return $this->notFound();
+            return $this->respondWithStatus(404);
         }
 
         [, $contentType] = CitationExport::FORMATS[$format];
 
-        return $this->fileResponse(
+        // Readable by scripts on other sites, 304 included; filename() is
+        // sanitised to [A-Za-z0-9._-], so it is safe unquoted here.
+        return $this->respondCacheable(
             $body,
             $contentType,
-            $this->citationExport->filename($record, $format),
-            $this->modified($item)
+            $this->modified($item),
+            ['Access-Control-Allow-Origin' => '*'],
+            ['Content-Disposition' => 'attachment; filename="' . $this->citationExport->filename($record, $format) . '"']
         );
     }
 
@@ -109,42 +114,6 @@ class CitationController extends AbstractActionController
         return $url !== '' ? $url : null;
     }
 
-    private function fileResponse(string $content, string $contentType, string $filename, ?\DateTimeInterface $modified): Response
-    {
-        $response = $this->getResponse();
-        $headers = $response->getHeaders();
-        $etag = HttpCache::etag($content);
-        $headers->addHeaderLine('Access-Control-Allow-Origin', '*');
-        $headers->addHeaderLine('Cache-Control', 'public, max-age=' . HttpCache::MAX_AGE);
-        $headers->addHeaderLine('ETag', $etag);
-        $lastModified = HttpCache::lastModified($modified);
-        if ($lastModified !== null) {
-            $headers->addHeaderLine('Last-Modified', $lastModified);
-        }
-        $headers->addHeaderLine('X-Robots-Tag', 'noindex');
-
-        $request = $this->getRequest();
-        $requestHeader = static function (string $name) use ($request): ?string {
-            if (!method_exists($request, 'getHeader')) {
-                return null;
-            }
-            $header = $request->getHeader($name);
-            return $header ? (string) $header->getFieldValue() : null;
-        };
-        if (HttpCache::notModified($etag, $modified, $requestHeader('If-None-Match'), $requestHeader('If-Modified-Since'))) {
-            $response->setStatusCode(304);
-            $response->setContent('');
-            return $response;
-        }
-
-        $response->setContent($content);
-        $headers->addHeaderLine('Content-Type', $contentType);
-        // filename() is sanitised to [A-Za-z0-9._-], so it is safe unquoted here.
-        $headers->addHeaderLine('Content-Disposition', 'attachment; filename="' . $filename . '"');
-
-        return $response;
-    }
-
     /** When the item last changed (else was created), for Last-Modified. */
     private function modified(ItemRepresentation $item): ?\DateTimeInterface
     {
@@ -154,13 +123,5 @@ class CitationController extends AbstractActionController
             return null;
         }
         return $date instanceof \DateTimeInterface ? $date : null;
-    }
-
-    private function notFound(): Response
-    {
-        $response = $this->getResponse();
-        $response->setStatusCode(404);
-
-        return $response;
     }
 }
