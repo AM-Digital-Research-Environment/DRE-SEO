@@ -98,14 +98,29 @@ final class SitemapControllerTest extends OmekaTestCase
         $this->assertContains('DRESeo: the sitemap is unavailable; answered 503.', $messages);
     }
 
-    public function testRobotsTxtIsUntouched(): void
+    /** The fixed exclusions, AMIRA's crawl rules for query variants, the sitemap. */
+    public function testRobotsTxtCarriesTheCrawlRulesAndTheSitemap(): void
     {
         $response = $this->dispatch('robots');
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(
-            "User-agent: *\nDisallow: /admin/\nDisallow: /login\nDisallow: /logout\nDisallow: /maintenance\n\nSitemap: https://example.test/sitemap.xml\n",
+            "User-agent: *\n"
+            . "Allow: /s/*/item?page=\nAllow: /s/*/item-set?page=\nAllow: /s/*/item-set/*?page=\nAllow: /s/*/media?page=\n"
+            . "Disallow: /admin/\nDisallow: /login\nDisallow: /logout\nDisallow: /maintenance\n"
+            . "Disallow: /s/*/dre-search?\nDisallow: /s/*/item?\nDisallow: /s/*/item-set?\nDisallow: /s/*/item-set/*?\nDisallow: /s/*/media?\n"
+            . "\nSitemap: https://example.test/sitemap.xml\n",
             $response->getContent()
         );
+        $this->assertSame('text/plain; charset=utf-8', $response->getHeaders()->get('Content-Type')->getFieldValue());
+        $this->assertFalse($response->getHeaders()->has('X-Robots-Tag'), 'a directive file, not a document');
+    }
+
+    /** The staging switch closes the whole site, as before, and names no sitemap. */
+    public function testAStagingSiteIsDisallowedWhole(): void
+    {
+        $this->settings->set('dre_seo_noindex_site', '1');
+
+        $this->assertSame("User-agent: *\nDisallow: /\n", $this->dispatch('robots')->getContent());
     }
 }

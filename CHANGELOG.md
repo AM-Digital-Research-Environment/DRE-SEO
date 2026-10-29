@@ -37,6 +37,15 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
 
 ### Changed
 
+- **robots.txt disallows query variants.** Google's guidance on faceted navigation is to
+  disallow filter URLs rather than rely on noindex, which a crawler can only read by
+  fetching the page. robots.txt now disallows DRE Search's results page with a query
+  (`/s/*/dre-search?`) and Omeka's item, item-set and media browse with filters or sorts,
+  an item set's landing page included (`/s/*/item?`, `/s/*/item-set?`, `/s/*/item-set/*?`,
+  `/s/*/media?`), and allows their clean `?page=` pagination. The pages themselves stay
+  `noindex, follow`; landing pages, records, every sitemap URL and DRE Search's
+  `/dre-search/api/*` endpoints stay crawlable. The rules are `dre_seo.robots` in
+  `config/instance.config.php`. The staging switch still answers `Disallow: /` alone.
 - **IndexNow URLs are queued in a table, `dre_seo_ping`, instead of two settings rows.** The
   upgrade moves the URLs still waiting in `dre_seo_ping_pending` into it and deletes
   `dre_seo_ping_pending` and `dre_seo_ping_job_queued`. One row per URL, so concurrent saves

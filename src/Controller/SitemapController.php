@@ -8,6 +8,7 @@ use DRESeo\Service\DefaultSite;
 use DRESeo\Service\IndexNowKey;
 use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\ProjectResolver;
+use DRESeo\Service\RobotsTxt;
 use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SiteHome;
 use DRESeo\Service\Sitemap\SitemapDocument;
@@ -45,6 +46,7 @@ class SitemapController extends AbstractActionController
         private readonly ?PageSeoStore $pageSeoStore = null,
         private readonly ?ProjectResolver $projects = null,
         private readonly ?LoggerInterface $logger = null,
+        private readonly RobotsTxt $robots = new RobotsTxt(),
     ) {
     }
 
@@ -147,23 +149,13 @@ class SitemapController extends AbstractActionController
 
     public function robotsAction(): Response
     {
-        $lines = ['User-agent: *'];
-        if ($this->settings->isOn('dre_seo_noindex_site')) {
-            $lines[] = 'Disallow: /';
-        } else {
-            $lines[] = 'Disallow: /admin/';
-            $lines[] = 'Disallow: /login';
-            $lines[] = 'Disallow: /logout';
-            $lines[] = 'Disallow: /maintenance';
-        }
-
+        // The staging switch closes the whole site, and then names no
+        // sitemap ({@see sitemapEnabled()}).
         $site = $this->resolveSite();
-        if ($this->sitemapEnabled() && $site) {
-            $lines[] = '';
-            $lines[] = 'Sitemap: ' . $this->hostUrl($site) . '/sitemap.xml';
-        }
-
-        return $this->text(implode("\n", $lines) . "\n");
+        return $this->text($this->robots->render(
+            $this->sitemapEnabled() && $site ? $this->hostUrl($site) . '/sitemap.xml' : null,
+            $this->settings->isOn('dre_seo_noindex_site')
+        ));
     }
 
     public function indexNowKeyAction(): Response

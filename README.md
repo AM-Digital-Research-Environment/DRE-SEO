@@ -34,7 +34,7 @@ step, the IndexNow cron — are in [OPERATIONS.md](OPERATIONS.md).
 | **Citation metadata (Zotero)** | Highwire Press `citation_*` tags for scholarly papers (articles, chapters, books, theses, reports … with an author) and Dublin Core `DC.*` for every record, so the **Zotero Connector**, Google Scholar, Mendeley and other reference managers capture each record as a properly-typed reference, and Scholar indexes only papers. |
 | **og:image** | The first image attached to an item; falls back to a site-wide default share image. Its size is declared when it is a local file. |
 | **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, each with its real `<lastmod>`; the index dates each child by its latest change; pages set to noindex are left out. No `<changefreq>`/`<priority>` by default — Google and Bing ignore them. Cached, and cleared whenever content changes. |
-| **robots.txt** | `/robots.txt` disallowing `/admin` and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site (and then serves no sitemap). |
+| **robots.txt** | `/robots.txt` disallowing `/admin`, the query variants of DRE Search's results page and of Omeka's browse pages (clean `?page=` pagination stays allowed), and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site (and then serves no sitemap). |
 | **Google Search Console** | Paste the verification snippet in the module config; the `<meta name="google-site-verification">` tag is injected site-wide. |
 | **Project pages** | A research project's item-set page redirects (301) to the project item, its one public page; the sitemap lists the project item only. |
 | **IndexNow ping** | Optionally notifies Bing/Yandex when public items, item sets or pages are created, edited, made private or deleted. Changed URLs wait in a durable queue table that a five-minute cron sends in batches; transient failures back off and retry, refusals are counted on the dashboard. |
@@ -421,6 +421,25 @@ The code is split as in IWAC SEO: `SitemapGenerator` decides which URLs go in wh
 `Sitemap\UrlsetWriter` renders the XML, `Sitemap\XmlCache` is the cache, and
 `Sitemap\SitemapDocument` is a document with its generation time.
 
+### robots.txt
+
+`/robots.txt` names the sitemap and disallows what is never worth a crawl: `/admin/`,
+`/login`, `/logout`, `/maintenance`, and the query variants AMIRA's pages generate without
+end — DRE Search's results page with a query, facets or a tab (`/s/*/dre-search?`) and
+Omeka's item, item-set and media browse with filters or sorts (`/s/*/item?`,
+`/s/*/item-set?`, an item set's landing page `/s/*/item-set/*?`, `/s/*/media?`), among them
+the `?property[…]` link every metadata value carries. Those pages already say `noindex,
+follow`, but a noindex has to be crawled to be read: Google's guidance on faceted
+navigation is to disallow such URLs instead, and the records they list are reached through
+the sitemap. Clean pagination (`?page=`) stays allowed, as a finite path to every record;
+so do the landing pages, a record paging through its connection lists, every URL the
+sitemaps list, and the `/dre-search/api/*` endpoints DRE Search's pages render from.
+
+The rules are instance data, `dre_seo.robots` in `config/instance.config.php` (`*` is any
+characters, `$` the end; the longest match wins, Allow a tie), and overridable from
+`config/local.config.php`. While **Discourage indexing** is on, robots.txt is
+`Disallow: /` alone.
+
 ---
 
 ## IndexNow ping — and the bulk-sync caveat
@@ -594,7 +613,8 @@ rule for the PHPStan baseline.
 1. `curl -s https://HOST/sitemap.xml | head` → a `<sitemapindex>`; the child sitemaps list
    `<url>` entries with `<lastmod>`. `curl -sI https://HOST/sitemap.xml` shows
    `Last-Modified`; edit a public item and the next request's is newer.
-2. `curl -s https://HOST/robots.txt` → `Disallow: /admin/` and a `Sitemap:` line.
+2. `curl -s https://HOST/robots.txt` → `Disallow: /admin/`, `Disallow: /s/*/dre-search?`
+   and the other query-variant rules, the `Allow: …?page=` lines and a `Sitemap:` line.
 3. View-source an item page (`/s/amira/item/100`): confirm `<title>`, `description`, `og:*`,
    `twitter:*`, `<link rel="canonical">` and a `application/ld+json` block. Validate the JSON-LD
    with the [Rich Results Test](https://search.google.com/test/rich-results). With DRE Linked

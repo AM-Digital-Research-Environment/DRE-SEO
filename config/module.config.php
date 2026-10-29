@@ -50,6 +50,8 @@ return $instance + [
             Service\BreadcrumbTrail::class   => Service\BreadcrumbTrailFactory::class,
             // The one reading of the module's settings: "on", text, integer.
             Service\SettingsGate::class      => Service\SettingsGateFactory::class,
+            // robots.txt: the fixed exclusions and dre_seo.robots.
+            Service\RobotsTxt::class         => Service\RobotsTxtFactory::class,
         ],
         // Dependency-free: plain instantiation. Shared, like every
         // service-manager entry — HeadWriter relies on that: its record of

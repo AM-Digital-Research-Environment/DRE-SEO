@@ -33,6 +33,38 @@ return [
             'priority'   => [],
             'changefreq' => [],
         ],
+        'robots' => [
+            // Crawl control for query variants, which the pages themselves
+            // already mark noindex. Google recommends disallowing filter URLs
+            // that need not be indexed: a noindex has to be crawled to be read.
+            // Records are reached through the sitemap instead. `*` matches any
+            // characters; the longest matching rule wins, Allow a tie.
+            'disallow' => [
+                // DRE Search's results page with a query, facets, sorts or a
+                // tab (?q=, ?f.<field>=, ?profile= …): the shareable URLs its
+                // client writes into the address bar. The clean page stays
+                // crawlable, and nothing it needs is blocked: it renders from
+                // its own HTML, the module's assets and the top-level
+                // /dre-search/api/* endpoints, none of which match.
+                '/s/*/dre-search?',
+                // Omeka browse filters and sorts — among them the
+                // ?property[…] link every metadata value carries on every
+                // page — and an item set's landing page (an item browse) with
+                // the same filters.
+                '/s/*/item?',
+                '/s/*/item-set?',
+                '/s/*/item-set/*?',
+                '/s/*/media?',
+            ],
+            'allow' => [
+                // Clean pagination stays crawlable: a finite path to every
+                // record, which its pages (noindex, follow) let crawlers follow.
+                '/s/*/item?page=',
+                '/s/*/item-set?page=',
+                '/s/*/item-set/*?page=',
+                '/s/*/media?page=',
+            ],
+        ],
         'breadcrumb' => [
             // The site page that presents each item set's kind of record,
             // named in the breadcrumb between the home page and the record:
