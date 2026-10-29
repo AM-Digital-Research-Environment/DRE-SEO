@@ -92,7 +92,63 @@ class Module extends AbstractModule
 
     public function install(ServiceLocatorInterface $services): void
     {
-        $settings = $services->get('Omeka\Settings');
+        $this->loadLifecycleDependencies();
+        $this->applyDefaults($services->get('Omeka\Settings'));
+    }
+
+    /**
+     * Re-apply any default that is still unset.
+     *
+     * Omeka calls this when the version in module.ini is newer than the one it
+     * recorded. Without it a default introduced after a site's first install
+     * would never reach that site: install() runs once, and nothing else
+     * writes a default. Idempotent, and it never overwrites a value an
+     * administrator has set.
+     *
+     * @param string $oldVersion
+     * @param string $newVersion
+     */
+    public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
+    {
+        $this->loadLifecycleDependencies();
+        $this->applyDefaults($services->get('Omeka\Settings'));
+    }
+
+    /**
+     * Make the module's own classes loadable during install, upgrade and
+     * uninstall.
+     *
+     * Omeka runs all three while the module may be inactive — always for
+     * install and upgrade, and for an uninstall after a deactivation — and an
+     * inactive module's src/ is not autoloaded: AbstractModule registers that
+     * loader only for the modules Laminas loads. A PSR-4 loader scoped to
+     * DRESeo\ resolves whatever the lifecycle touches, so a class it comes to
+     * need cannot fall off a hand-kept list. (IWAC SEO 1.1.0 shipped exactly
+     * that failure: an upgrade that stopped at "Class not found".)
+     */
+    private function loadLifecycleDependencies(): void
+    {
+        static $registered = false;
+        if ($registered) {
+            return;
+        }
+        $registered = true;
+        $src = __DIR__ . '/src/';
+        spl_autoload_register(static function (string $class) use ($src): void {
+            if (!str_starts_with($class, __NAMESPACE__ . '\\')) {
+                return;
+            }
+            $relative = substr($class, strlen(__NAMESPACE__) + 1);
+            $file = $src . str_replace('\\', '/', $relative) . '.php';
+            if (is_file($file)) {
+                require $file;
+            }
+        }, true, true);
+    }
+
+    /** Set each default that has no stored value yet. */
+    private function applyDefaults(\Omeka\Settings\Settings $settings): void
+    {
         foreach (self::DEFAULTS as $key => $value) {
             if ($settings->get($key) === null) {
                 $settings->set($key, $value);
@@ -102,6 +158,8 @@ class Module extends AbstractModule
 
     public function uninstall(ServiceLocatorInterface $services): void
     {
+        // The site-setting keys below are class constants of src/.
+        $this->loadLifecycleDependencies();
         $settings = $services->get('Omeka\Settings');
         foreach (self::SETTINGS as $key) {
             $settings->delete($key);
