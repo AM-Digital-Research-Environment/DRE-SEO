@@ -1,7 +1,8 @@
 # DRE SEO operations
 
 What the server needs beyond unpacking the module: the upgrade step, the IndexNow cron,
-and what to do when IndexNow refuses a batch. The module's settings are described in the
+what to do when IndexNow refuses a batch, the instance configuration, and what to check on
+the web server. The module's settings are described in the
 [README](README.md#configuration).
 
 ## Upgrading
@@ -27,6 +28,62 @@ created with plain SQL that MySQL/MariaDB and SQLite both accept.
 If an upgrade stops at `Class "DRESeo\…" not found`, PHP is still running the previous
 release's `Module.php`, typically from OPcache with timestamp validation off: replace the
 whole folder, restart PHP-FPM, and retry **Upgrade**.
+
+## Instance configuration
+
+What AMIRA's ids mean — the schema.org type and citation kind per resource template, the
+breadcrumb landing pages, the robots.txt rules, the citation styles — is the `dre_seo` block
+of `config/instance.config.php`, which ships with the module (0.15 and earlier kept it at
+the end of `config/module.config.php`). Override a key from Omeka's
+`config/local.config.php`, never by editing the module's files, which the next release
+replaces:
+
+```php
+// config/local.config.php
+return [
+    'dre_seo' => [
+        'citation' => ['publisher' => 'Africa Multiple Cluster of Excellence'],
+        // A map keyed by id is replaced whole (see below).
+        'breadcrumb' => ['landing_pages' => new \Laminas\Stdlib\ArrayUtils\MergeReplaceKey([
+            20 => 'research-projects',
+            29918 => 'publications',
+        ])],
+    ],
+    // … Omeka's own keys …
+];
+```
+
+Omeka merges `local.config.php` over the modules' configuration with Laminas'
+`ArrayUtils::merge()`, so an override written for 0.15 still applies. Mind its rule for
+integer keys: a string key replaces, a new id is added, but an id the module already maps
+(a template id in `template_types` or `template_kinds`, an item set in `landing_pages`) is
+*appended* under a new number rather than replaced. To change such an entry, replace the
+whole map with `MergeReplaceKey`, as above. After changing anything that reaches a sitemap,
+press **Admin → SEO → Regenerate**.
+
+## The web server
+
+**robots.txt** disallows the query variants of DRE Search's results page and of Omeka's
+browse pages and allows their clean `?page=` pagination (the rules are `dre_seo.robots`,
+described in the [README](README.md#robotstxt)). `curl -s https://HOST/robots.txt` should
+show the `Allow: /s/*/item?page=` lines, `Disallow: /s/*/dre-search?` and a `Sitemap:`
+line. Search Console's robots.txt report shows the copy Google fetched; Google rereads it
+within a day. While **Discourage indexing** is on, the file is `Disallow: /` alone.
+
+**The `Link` header.** Item, item-set and media pages repeat their FAIR Signposting links
+as an HTTP `Link` header, capped at 2 KB. nginx answers `502 Bad Gateway` when a FastCGI
+response's headers overflow `fastcgi_buffer_size` (one memory page, 4 KB on the usual Linux
+host), and Omeka's session cookie and cache headers share that buffer; links that do not
+fit stay in the page head only. If another module adds large headers of its own and record
+pages answer 502, raise the buffer in the PHP location block:
+
+```nginx
+fastcgi_buffer_size 16k;
+fastcgi_buffers 16 16k;
+```
+
+`curl -sI https://HOST/s/amira/item/{id}` shows the header; a `Link` header another module
+sets is kept beside it.
 
 ## The IndexNow cron
 

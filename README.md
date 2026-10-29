@@ -153,7 +153,18 @@ The head signals are written into Omeka's request-global head placeholder helper
   canonical without its query string.
 * **Every page** (`view.layout`): site-wide constants (`og:site_name`, `og:locale`,
   `twitter:card`, verification tags) and gap-fills for anything not already set. Resource
-  values always win because the resource listeners run before the layout listener.
+  values always win because the resource listeners run before the layout listener. The
+  same listener adds the Signposting `Link` header, once per page.
+
+`HeadMetadata` is the policy — what a record, page or listing should say — and `HeadWriter`
+does every write and remembers, across the two passes of one request, what has been set:
+the first canonical stands, a record's robots directive outranks the layout's (bar the
+staging noindex), and the description written is the one `og:description` mirrors. Both
+are shared services, one instance per request. `StructuredData::forResource()` builds a
+record's JSON-LD; the `BreadcrumbList` is `BreadcrumbTrail`'s, the trail `dreBreadcrumb()`
+returns too, and `CollectionNodes` builds the catalogue `Dataset`, an item set's
+`CollectionPage` and a Dataset record's distribution. Every `dre_seo_*` setting is read
+through `SettingsGate`, the one definition of "on".
 
 ### One identity per record
 
@@ -215,7 +226,8 @@ site setting is off.
 ### schema.org `@type` map
 
 Driven by `config/instance.config.php → dre_seo.structured_data.template_types` (overridable via
-`config/local.config.php`), keyed by Omeka resource-template id:
+`config/local.config.php`, as [OPERATIONS.md](OPERATIONS.md#instance-configuration) shows),
+keyed by Omeka resource-template id:
 
 | Template | `@type` |
 |---|---|
@@ -501,7 +513,7 @@ DRESeo/
 ├── OPERATIONS.md                    # upgrade, IndexNow cron, failed URLs
 ├── CITATION.cff                     # how to cite the module (GitHub / Zenodo read this)
 ├── LICENSE                          # GPL-3.0-or-later
-├── Module.php                       # listeners, ACL, install/upgrade/uninstall, config form
+├── Module.php                       # wiring: listeners, ACL, install/upgrade/uninstall, config form
 ├── composer.json                    # type omeka-module; PSR-4 DRESeo\ -> src/ (no runtime deps)
 ├── phpunit.xml.dist                 # unit suite
 ├── phpunit.integration.xml.dist     # integration suite (needs OMEKA_PATH)
@@ -515,13 +527,26 @@ DRESeo/
 ├── src/
 │   ├── Controller/
 │   │   ├── SitemapController.php     # /sitemap*.xml, /robots.txt, /{key}.txt
+│   │   ├── CitationController.php    # /cite/{id}/{format}
+│   │   ├── Concern/SendsResponses.php # body + headers of the public endpoints
 │   │   └── Admin/SeoController.php   # dashboard + static-page table
-│   ├── Form/{ConfigForm,PageSeoForm}.php
-│   ├── Job/PingSearchEngines.php     # drains one leased IndexNow batch
+│   ├── Form/
+│   │   ├── ConfigForm.php, PageSeoForm.php
+│   │   └── SiteSettingsElements.php  # the SEO group of the site settings
+│   ├── Listener/
+│   │   ├── ContentChanges.php        # API events: sitemap invalidation, IndexNow queue
+│   │   └── ProjectItemSetRedirect.php # 301 from a project's item set to its item
+│   ├── Job/PingSearchEngines.php     # drains one leased IndexNow batch (or skips a bulk change)
+│   ├── View/Helper/                  # dreCitation(), dreBreadcrumb()
 │   └── Service/
-│       ├── HeadMetadata.php          # computes + injects all <head> SEO
-│       ├── StructuredData.php        # schema.org JSON-LD
-│       ├── Signposting.php           # FAIR Signposting links + Link header
+│       ├── HeadMetadata.php          # what the <head> says: the policy
+│       ├── HeadWriter.php            # the head writes, and what was set this request
+│       ├── SettingsGate.php          # typed reads of the dre_seo_* settings
+│       ├── StructuredData.php        # schema.org JSON-LD of a record (forResource)
+│       ├── BreadcrumbTrail.php       # the trail: BreadcrumbList and dreBreadcrumb()
+│       ├── CollectionNodes.php       # catalogue Dataset, CollectionPage, distribution
+│       ├── RobotsTxt.php             # robots.txt, with Google's precedence for tests
+│       ├── Signposting.php           # FAIR Signposting links + Link header (2 KB)
 │       ├── LinkedDataIdentity.php    # resource URIs, sameAs, dataset from DRE Linked Data
 │       ├── SiteHome.php              # the one home-page URL
 │       ├── LandingPages.php          # item set -> landing page, for the breadcrumb

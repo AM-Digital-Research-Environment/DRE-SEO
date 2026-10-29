@@ -55,8 +55,9 @@ CI runs the syntax sweep and the unit suite on PHP 8.4 and 8.5, the translation,
 PHPStan gates at the 8.4 floor, and the integration suite against the checksum-pinned
 official Omeka S 4.2.1 release. Please run `composer check` before pushing — it runs every
 gate CI does except the `php -l` sweep and the integration suite, and saves a round trip;
-run `composer test:integration` too when a change touches `Module.php`, a factory or the
-configuration.
+run `composer test:integration` too when a change touches `Module.php`, `src/Listener/`, a
+factory, a controller or the configuration. [CLAUDE.md](CLAUDE.md) lists what bites on the
+maintainer's machine (PHP 8.5 on PATH, Composer through its phar).
 
 ## Conventions
 

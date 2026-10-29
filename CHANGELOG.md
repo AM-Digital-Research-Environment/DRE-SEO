@@ -9,8 +9,9 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
-IndexNow URLs wait in a queue table of their own, sent by a cron job, and the sitemap
-follows content changes at once. **After replacing the module folder, run Admin → Modules →
+IndexNow URLs wait in a queue table of their own, sent by a cron job (a bulk sync is
+still left to the sitemap), the sitemap follows content changes at once, and robots.txt
+keeps crawlers off search and browse variants. **After replacing the module folder, run Admin → Modules →
 DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
 [OPERATIONS.md](OPERATIONS.md#the-indexnow-cron).
 
@@ -84,7 +85,7 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
   tools: PHPUnit 13 needs PHP 8.4.1, and `config.platform.php` makes Composer resolve them
   for that floor whichever PHP runs it. The module's code is unchanged; an Omeka
   installation still on PHP 8.2 or 8.3 should stay on 0.15.0.
-- `language/template.pot` now lists every translatable string: 74, where the hand-kept
+- `language/template.pot` now lists every translatable string: 78, where the hand-kept
   template had 42 and missed most of the configuration form, the dashboard's notices and the
   Omeka JSON-LD embed warning. It is generated from the sources (`composer i18n`), and CI
   fails when it falls behind them (`composer i18n:check`).
@@ -133,6 +134,19 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
   the outbox and the drain job against SQLite, the lifecycle on an inactive module, the
   writer, the cache, the listeners, the controller's headers and 503. Characterisation tests
   pin every sitemap document byte for byte.
+- Ported from IWAC SEO and restructured, with no change to what the module emits:
+  `SettingsGate` reads every `dre_seo_*` setting (the static `SettingFlag` is gone);
+  `HeadWriter` does the head writes and keeps the request's record of them, leaving
+  `HeadMetadata` the policy; `Module.php` is wiring, its listeners' work moved to
+  `Listener\ContentChanges`, `Listener\ProjectItemSetRedirect` and
+  `Form\SiteSettingsElements`; `BreadcrumbTrail` builds the trail for both the
+  `BreadcrumbList` and `dreBreadcrumb()`, and `CollectionNodes` the Dataset and
+  CollectionPage nodes, out of `StructuredData`; AMIRA's `dre_seo` block moved to
+  `config/instance.config.php`, kept disjoint from the wiring by a test; and the public
+  controllers answer through the `SendsResponses` trait. Characterisation runs over the
+  head, JSON-LD, breadcrumb and controller output were byte-identical before and after.
+- [CLAUDE.md](CLAUDE.md) records, for coding agents, what bites on the maintainer's machine
+  and in this codebase.
 
 ## [0.15.0] — 2026-10-15
 

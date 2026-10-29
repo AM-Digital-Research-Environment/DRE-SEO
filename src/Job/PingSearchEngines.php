@@ -11,7 +11,7 @@ use DRESeo\Service\SettingsGate;
 use Omeka\Job\AbstractJob;
 
 /**
- * Drains the IndexNow outbox (filled by Module::handleContentChange when
+ * Drains the IndexNow outbox (filled by Listener\ContentChanges when
  * public items, item sets and pages change) and submits it to IndexNow. Runs
  * as a job — from the five-minute cron, or dispatched by a save — so the
  * saving request is never blocked by the network call.
