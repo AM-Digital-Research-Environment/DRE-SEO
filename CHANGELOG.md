@@ -94,6 +94,9 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
   twice), and it is capped at 2 KB
   (`Signposting::HEADER_BUDGET`): nginx answers 502 when FastCGI response headers overflow
   its default 4 KB buffer, so the links that do not fit are left to the page head.
+- A record without a resource template (a media page, as a rule) no longer raises PHP 8.5's
+  "Using null as an array offset" deprecation when its schema.org type is looked up. The
+  type is unchanged: the default, `CreativeWork`.
 - Uninstall removes the sitemap cache (`files/dre-seo-cache/`) and the queue table, and, on
   a module that was deactivated first, the three site settings too: Omeka does not
   autoload an inactive module's classes, and the "Class not found" was swallowed. Install,

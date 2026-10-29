@@ -165,12 +165,14 @@ class StructuredData
         return array_values(array_unique($sameAs));
     }
 
-    /** The schema.org @type a resource is published as, from its template. */
+    /**
+     * The schema.org @type a resource is published as, from its template. A
+     * record without one (a media, as a rule) never looks the map up: PHP 8.5
+     * deprecates null as an array key.
+     */
     public function typeFor(AbstractResourceEntityRepresentation $resource): string
     {
-        $templateId = $resource->resourceTemplate() ? $resource->resourceTemplate()->id() : null;
-
-        return $this->templateTypes[$templateId] ?? $this->defaultType;
+        return $this->mappedType($resource) ?? $this->defaultType;
     }
 
     /** @return array<mixed>|null */

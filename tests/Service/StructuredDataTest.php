@@ -440,4 +440,23 @@ final class StructuredDataTest extends TestCase
         $this->assertSame(2, count($builder->trail($view, $itemSet, $site, 'https://example.test/s/amira/item-set/29918')));
         $this->assertSame(null, $builder->trail($view, $unsorted, $site, null), 'no page in the site');
     }
+
+    /** A record without a template takes the default type, without a null array key (deprecated in PHP 8.5). */
+    public function testARecordWithoutATemplateTakesTheDefaultTypeQuietly(): void
+    {
+        $deprecations = [];
+        set_error_handler(static function (int $level, string $message) use (&$deprecations): bool {
+            $deprecations[] = $message;
+            return true;
+        }, E_DEPRECATED);
+        try {
+            $type = (new StructuredData([22 => 'VideoObject'], 'CreativeWork'))
+                ->typeFor(new MediaRepresentation('Scan 1'));
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame('CreativeWork', $type);
+        $this->assertSame([], $deprecations);
+    }
 }
