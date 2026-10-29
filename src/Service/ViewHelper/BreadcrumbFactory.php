@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Service\ViewHelper;
 
-use DRESeo\Service\StructuredData;
+use DRESeo\Service\BreadcrumbTrail;
 use DRESeo\View\Helper\Breadcrumb;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -16,6 +16,6 @@ final class BreadcrumbFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): Breadcrumb
     {
-        return new Breadcrumb($container->get(StructuredData::class));
+        return new Breadcrumb($container->get(BreadcrumbTrail::class));
     }
 }

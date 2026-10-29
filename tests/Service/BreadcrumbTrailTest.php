@@ -6,7 +6,7 @@ namespace DRESeo\Test\Service;
 use Closure;
 use DRESeo\Service\LandingPages;
 use DRESeo\Service\ProjectResolver;
-use DRESeo\Service\StructuredData;
+use DRESeo\Service\BreadcrumbTrail;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\ItemRepresentation as Item;
 use Omeka\Api\Representation\ItemSetRepresentation as ItemSet;
@@ -17,7 +17,7 @@ use Omeka\Api\Representation\ValueRepresentation as Value;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The BreadcrumbList trail StructuredData builds for a record: through its
+ * The BreadcrumbList trail BreadcrumbTrail builds for a record: through its
  * project and the landing page of its item set, over a miniature of AMIRA's
  * pages and item sets, and the site setting that maps item sets to pages.
  */
@@ -56,21 +56,16 @@ final class BreadcrumbTrailTest extends TestCase
     }
 
     /** @param array<int,string> $map */
-    private static function trailBuilder(array $map = [20 => 'research-projects', 29918 => 'publications', 18 => 'people'], ?Closure $redirect = null): StructuredData
+    private static function trailBuilder(array $map = [20 => 'research-projects', 29918 => 'publications', 18 => 'people'], ?Closure $redirect = null): BreadcrumbTrail
     {
-        return new StructuredData(
-            [],
-            'CreativeWork',
-            null,
-            null,
-            [],
+        return new BreadcrumbTrail(
             new LandingPages($map),
             new ProjectResolver(null, $redirect),
         );
     }
 
     /** @return string[] the names along a record's trail */
-    private static function trailNames(StructuredData $builder, object $resource, SiteRepresentation $site): array
+    private static function trailNames(BreadcrumbTrail $builder, object $resource, SiteRepresentation $site): array
     {
         return array_column($builder->trail(new PhpRenderer(), $resource, $site, $resource->siteUrl('amira', true)) ?? [], 'name');
     }
@@ -99,7 +94,7 @@ final class BreadcrumbTrailTest extends TestCase
         ], $trail);
 
         // The BreadcrumbList states the same trail.
-        $list = $builder->breadcrumb(new PhpRenderer(), $interview, $site, $canonical);
+        $list = $builder->breadcrumbList(new PhpRenderer(), $interview, $site, $canonical);
         $this->assertSame(array_column($trail, 'url'), array_column($list['itemListElement'], 'item'));
         $this->assertSame([1, 2, 3, 4], array_column($list['itemListElement'], 'position'));
 
@@ -135,7 +130,7 @@ final class BreadcrumbTrailTest extends TestCase
         ['site' => $site, 'project' => $project] = self::amiraWorld();
 
         // No map at all: the item set.
-        $bare = new StructuredData([]);
+        $bare = new BreadcrumbTrail();
         $this->assertSame(['AMIRA', 'Projects', 'Lagos Talks'], self::trailNames($bare, $project, $site));
 
         // The mapped page does not exist in the site.

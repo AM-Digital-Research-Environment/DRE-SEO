@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Service;
 
+use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SiteRepresentation;
 
 /**
@@ -63,5 +64,16 @@ final class SiteHome
             return null;
         }
         return $url !== '' ? $url : null;
+    }
+
+    /**
+     * The home page's URL, else — for a site with no page at all — the site
+     * root, absolute. `/s/{slug}/` — with the slash — is a 404, and the bare
+     * site root only redirects to the home page.
+     */
+    public static function absoluteUrl(PhpRenderer $view, SiteRepresentation $site): string
+    {
+        return self::url($site)
+            ?? rtrim((string) $view->url('site', ['site-slug' => $site->slug()], ['force_canonical' => true]), '/');
     }
 }

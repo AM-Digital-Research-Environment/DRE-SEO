@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Test\Service;
 
+use DRESeo\Service\BreadcrumbTrail;
 use DRESeo\Service\Licence;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\StructuredData;
@@ -391,6 +392,7 @@ final class StructuredDataTest extends TestCase
     public function testTheBreadcrumbPlacesAnItemInItsItemSetPreferringOneTheSiteUses(): void
     {
         $builder = new StructuredData([]);
+        $trail = new BreadcrumbTrail();
         $view = new PhpRenderer();
         $site = new SiteRepresentation('amira', 'AMIRA', new SitePageRepresentation());
         $thesis = new ItemRepresentation('Das Archiv als Heimat', idValue: 41980);
@@ -405,7 +407,7 @@ final class StructuredDataTest extends TestCase
             ['name' => 'AMIRA', 'url' => 'https://example.test/s/amira/page/home'],
             ['name' => 'Publications', 'url' => 'https://example.test/s/amira/item-set/29918'],
             ['name' => 'Das Archiv als Heimat', 'url' => $canonical],
-        ], $builder->trail($view, $thesis, $site, $canonical));
+        ], $trail->trail($view, $thesis, $site, $canonical));
 
         $list = $builder->breadcrumb($view, $thesis, $site, $canonical);
         $this->assertSame('BreadcrumbList', $list['@type']);
@@ -414,12 +416,13 @@ final class StructuredDataTest extends TestCase
 
         // No item set the site uses: the item's first.
         $site->siteItemSetIds = [];
-        $this->assertSame('Unused set', $builder->trail($view, $thesis, $site, $canonical)[1]['name']);
+        $this->assertSame('Unused set', $trail->trail($view, $thesis, $site, $canonical)[1]['name']);
     }
 
     public function testTheBreadcrumbPlacesAMediaInItsItemAndStopsAtTheRecordOtherwise(): void
     {
         $builder = new StructuredData([]);
+        $trail = new BreadcrumbTrail();
         $view = new PhpRenderer();
         $site = new SiteRepresentation('amira', 'AMIRA', new SitePageRepresentation());
 
@@ -427,18 +430,18 @@ final class StructuredDataTest extends TestCase
         $media->parent = new ItemRepresentation('A letter', publicUrl: 'https://example.test/s/amira/item/4', idValue: 4);
         $this->assertSame(
             ['AMIRA', 'A letter', 'Scan 1'],
-            array_column($builder->trail($view, $media, $site, 'https://example.test/s/amira/media/5'), 'name')
+            array_column($trail->trail($view, $media, $site, 'https://example.test/s/amira/media/5'), 'name')
         );
 
         $unsorted = new ItemRepresentation('Unsorted', idValue: 9);
         $this->assertSame(
             ['AMIRA', 'Unsorted'],
-            array_column($builder->trail($view, $unsorted, $site, 'https://example.test/s/amira/item/9'), 'name'),
+            array_column($trail->trail($view, $unsorted, $site, 'https://example.test/s/amira/item/9'), 'name'),
             'an item in no item set'
         );
         $itemSet = new ItemSetRepresentation('Publications', idValue: 29918);
-        $this->assertSame(2, count($builder->trail($view, $itemSet, $site, 'https://example.test/s/amira/item-set/29918')));
-        $this->assertSame(null, $builder->trail($view, $unsorted, $site, null), 'no page in the site');
+        $this->assertSame(2, count($trail->trail($view, $itemSet, $site, 'https://example.test/s/amira/item-set/29918')));
+        $this->assertSame(null, $trail->trail($view, $unsorted, $site, null), 'no page in the site');
     }
 
     /** A record without a template takes the default type, without a null array key (deprecated in PHP 8.5). */

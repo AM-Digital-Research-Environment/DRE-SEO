@@ -36,9 +36,11 @@ return [
             Service\CitationExport::class    => Service\CitationExportFactory::class,
             Service\ImageDimensions::class   => Service\ImageDimensionsFactory::class,
             // The breadcrumb's landing pages and research projects; the
-            // resolver also decides the project item-set redirect.
+            // resolver also decides the project item-set redirect. The trail
+            // is the one dreBreadcrumb() returns and the BreadcrumbList states.
             Service\LandingPages::class      => Service\LandingPagesFactory::class,
             Service\ProjectResolver::class   => Service\ProjectResolverFactory::class,
+            Service\BreadcrumbTrail::class   => Service\BreadcrumbTrailFactory::class,
             // The one reading of the module's settings: "on", text, integer.
             Service\SettingsGate::class      => Service\SettingsGateFactory::class,
         ],

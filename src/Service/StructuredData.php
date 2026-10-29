@@ -7,9 +7,6 @@ use DRESeo\Service\Citation\Creator;
 use DRESeo\Service\Concern\ResourceValueReader;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
-use Omeka\Api\Representation\ItemRepresentation;
-use Omeka\Api\Representation\ItemSetRepresentation;
-use Omeka\Api\Representation\MediaRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
 
@@ -35,6 +32,11 @@ use Omeka\Api\Representation\ValueRepresentation;
  * client dereferencing the URI see one identity. `url` stays the record page.
  * A linked record is typed as its own page types it (a research item's project
  * is a ResearchProject, not a CreativeWork), whatever role it plays here.
+ *
+ * forResource() is the entry point for a record page. The BreadcrumbList is
+ * {@see BreadcrumbTrail}'s trail, the one dreBreadcrumb() shows; the
+ * catalogue Dataset, an item set's CollectionPage and a Dataset record's
+ * distribution are built by {@see CollectionNodes}.
  */
 class StructuredData
 {
@@ -50,7 +52,7 @@ class StructuredData
     private const PERIODICAL_PARTS = ['ScholarlyArticle', 'NewsArticle', 'Article', 'BlogPosting'];
 
     /** Google Dataset Search ignores a Dataset whose description is shorter. */
-    public const DATASET_DESCRIPTION_MIN = 50;
+    public const DATASET_DESCRIPTION_MIN = CollectionNodes::DATASET_DESCRIPTION_MIN;
 
     /**
      * What a research item's conditionsOfAccess says after its access rights,
@@ -60,6 +62,10 @@ class StructuredData
 
     private ?string $resolvedAccessStatement = null;
 
+    private readonly BreadcrumbTrail $breadcrumbTrail;
+
+    private readonly CollectionNodes $collections;
+
     /**
      * @param array<int,string> $templateTypes resource template id => schema @type
      * @param array{access_free?:array<string,bool>,access_statement?:\Closure|string|null} $options
@@ -67,6 +73,8 @@ class StructuredData
      *        access_statement: the sentence a research item's conditionsOfAccess
      *        ends with (a closure is resolved on first use, so it is translated
      *        in the page's locale)
+     * @param BreadcrumbTrail|null $breadcrumbTrail the trail the BreadcrumbList
+     *        states; without one, a record is placed in its item set only
      */
     public function __construct(
         private readonly array $templateTypes,
@@ -74,9 +82,10 @@ class StructuredData
         private readonly ?CitationKindMap $kinds = null,
         private readonly ?LinkedDataIdentity $identity = null,
         private readonly array $options = [],
-        private readonly ?LandingPages $landingPages = null,
-        private readonly ?ProjectResolver $projects = null,
+        ?BreadcrumbTrail $breadcrumbTrail = null,
     ) {
+        $this->breadcrumbTrail = $breadcrumbTrail ?? new BreadcrumbTrail();
+        $this->collections = new CollectionNodes();
     }
 
     /**
@@ -175,184 +184,19 @@ class StructuredData
         return $this->mappedType($resource) ?? $this->defaultType;
     }
 
-    /** @return array<mixed>|null */
+    /**
+     * The page's BreadcrumbList: the trail {@see BreadcrumbTrail} builds, the
+     * one the theme shows through dreBreadcrumb().
+     *
+     * @return array<mixed>|null
+     */
     public function breadcrumb(
         PhpRenderer $view,
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site,
         ?string $canonical
     ): ?array {
-        $trail = $this->trail($view, $resource, $site, $canonical);
-        if ($trail === null) {
-            return null;
-        }
-        $elements = [];
-        foreach ($trail as $index => $crumb) {
-            $elements[] = [
-                '@type'    => 'ListItem',
-                'position' => $index + 1,
-                'name'     => $crumb['name'],
-                'item'     => $crumb['url'],
-            ];
-        }
-        return [
-            '@context'        => 'https://schema.org',
-            '@type'           => 'BreadcrumbList',
-            'itemListElement' => $elements,
-        ];
-    }
-
-    /**
-     * A record's place in the site, from its home page: the trail the
-     * `BreadcrumbList` states and the theme shows, through `dreBreadcrumb()`, so
-     * the two cannot disagree.
-     *
-     *     research item   Home › Research projects › its project › the item
-     *     other item      Home › its kind's landing page › the item
-     *                     (Research projects, Publications, People …)
-     *                     else Home › its item set › the item
-     *     media           Home › … › its item › the media (the item's trail)
-     *     item set        Home › its landing page › the item set
-     *     other           Home › the record
-     *
-     * A research item is one whose `dcterms:isPartOf` links to a public
-     * project ({@see ProjectResolver}); the project is placed as any item is.
-     * An item's landing page is that of the first of its item sets with one
-     * ({@see LandingPages}), the sets the site uses first. Without one, an item
-     * is placed in its item set — the first the site uses, else its first —
-     * or, when that item set's page redirects to its project, under the
-     * project. Every URL is absolute. Null when the record has no page in the
-     * site.
-     *
-     * @return array<int,array{name:string,url:string}>|null
-     */
-    public function trail(
-        PhpRenderer $view,
-        AbstractResourceEntityRepresentation $resource,
-        SiteRepresentation $site,
-        ?string $canonical
-    ): ?array {
-        if (!$canonical) {
-            return null;
-        }
-        $home = $this->homeUrl($view, $site);
-        $trail = [['name' => $site->title(), 'url' => $home]];
-        $seen = [$home => true, $canonical => true];
-        foreach ($this->trailParents($resource, $site, 0) as $crumb) {
-            // A crumb names a page once, and never the record's own page.
-            if (!isset($seen[$crumb['url']])) {
-                $seen[$crumb['url']] = true;
-                $trail[] = $crumb;
-            }
-        }
-        $trail[] = ['name' => (string) $resource->displayTitle(), 'url' => $canonical];
-
-        return $trail;
-    }
-
-    /** How deep a record's parents are followed: media › item › project › landing. */
-    private const TRAIL_DEPTH = 3;
-
-    /**
-     * The crumbs between the home page and a record.
-     *
-     * @return array<int,array{name:string,url:string}>
-     */
-    private function trailParents(AbstractResourceEntityRepresentation $resource, SiteRepresentation $site, int $depth): array
-    {
-        if ($depth > self::TRAIL_DEPTH) {
-            return [];
-        }
-        try {
-            if ($resource instanceof MediaRepresentation) {
-                return $this->under($resource->item(), $site, $depth);
-            }
-            if ($resource instanceof ItemSetRepresentation) {
-                $landing = $this->landingPages?->forItemSets([$resource], $site);
-                return $landing !== null ? [$landing] : [];
-            }
-            if (!$resource instanceof ItemRepresentation) {
-                return [];
-            }
-            $project = $this->projects?->projectOf($resource);
-            if ($project !== null) {
-                return $this->under($project, $site, $depth);
-            }
-            $itemSets = $this->itemSetsInOrder($resource, $site);
-            $landing = $this->landingPages?->forItemSets($itemSets, $site);
-            if ($landing !== null) {
-                return [$landing];
-            }
-            $collection = $itemSets[0] ?? null;
-            if ($collection === null) {
-                return [];
-            }
-            // An item set whose page redirects to its project is named by
-            // the project, so the crumb is not a redirect.
-            $project = $this->projects?->redirectTarget($collection, $site);
-            if ($project !== null && $project->id() !== $resource->id()) {
-                return $this->under($project, $site, $depth);
-            }
-            $crumb = $this->crumb($collection, $site);
-            return $crumb !== null ? [$crumb] : [];
-        } catch (\Throwable $e) {
-            return [];
-        }
-    }
-
-    /**
-     * The crumbs of a record placed under $parent: the parent's own trail,
-     * then the parent.
-     *
-     * @return array<int,array{name:string,url:string}>
-     */
-    private function under(AbstractResourceEntityRepresentation $parent, SiteRepresentation $site, int $depth): array
-    {
-        $crumb = $this->crumb($parent, $site);
-        if ($crumb === null) {
-            return [];
-        }
-        return [...$this->trailParents($parent, $site, $depth + 1), $crumb];
-    }
-
-    /** @return array{name:string,url:string}|null */
-    private function crumb(AbstractResourceEntityRepresentation $resource, SiteRepresentation $site): ?array
-    {
-        try {
-            $name = trim((string) $resource->displayTitle());
-            $url = (string) $resource->siteUrl($site->slug(), true);
-        } catch (\Throwable $e) {
-            return null;
-        }
-
-        return $name !== '' && $url !== '' ? ['name' => $name, 'url' => $url] : null;
-    }
-
-    /**
-     * An item's item sets, those the site uses first.
-     *
-     * @return ItemSetRepresentation[]
-     */
-    private function itemSetsInOrder(ItemRepresentation $item, SiteRepresentation $site): array
-    {
-        $itemSets = array_values($item->itemSets());
-        if ($itemSets === []) {
-            return [];
-        }
-        $inSite = [];
-        foreach ($site->siteItemSets() as $siteItemSet) {
-            $inSite[$siteItemSet->itemSet()->id()] = true;
-        }
-        $used = $unused = [];
-        foreach ($itemSets as $itemSet) {
-            if (isset($inSite[$itemSet->id()])) {
-                $used[] = $itemSet;
-            } else {
-                $unused[] = $itemSet;
-            }
-        }
-
-        return [...$used, ...$unused];
+        return $this->breadcrumbTrail->breadcrumbList($view, $resource, $site, $canonical);
     }
 
     /**
@@ -373,93 +217,20 @@ class StructuredData
     }
 
     /**
-     * The whole catalogue as a schema.org Dataset, for Google Dataset Search,
-     * from DRE Linked Data's description of its dataset (VoID, licence,
-     * publisher, dumps). Null when there is nothing to describe, or no
-     * description of the length Google requires can be given.
+     * The whole catalogue as a schema.org Dataset, for Google Dataset Search
+     * ({@see CollectionNodes::dataset()}).
      *
      * @param array<string,mixed> $dataset `dreLinkedData()->dataset()`
      * @return array<mixed>|null
      */
     public function dataset(PhpRenderer $view, SiteRepresentation $site, array $dataset): ?array
     {
-        $uri = is_string($dataset['uri'] ?? null) ? trim($dataset['uri']) : '';
-        if ($uri === '') {
-            return null;
-        }
-        $home = $this->homeUrl($view, $site);
-        $title = trim((string) ($dataset['title'] ?? '')) ?: (string) $site->title();
-        $description = $this->clip(trim((string) ($dataset['description'] ?? '')));
-        if (mb_strlen($description) < self::DATASET_DESCRIPTION_MIN) {
-            $description = trim($description . ' ' . sprintf(
-                '%s: the public records of %s, published as Linked Open Data in RDF.',
-                $title,
-                $site->title()
-            ));
-        }
-        if (mb_strlen($description) < self::DATASET_DESCRIPTION_MIN) {
-            return null;
-        }
-
-        $data = [
-            '@context'    => 'https://schema.org',
-            '@type'       => 'Dataset',
-            '@id'         => $uri,
-            'name'        => $title,
-            'description' => $description,
-            // The page that explains the dataset (DRE Linked Data 0.3.1+), else the home.
-            'url'         => self::httpUrl($dataset['landingPage'] ?? null) ?? $home,
-        ];
-        $licence = is_string($dataset['licence'] ?? null) ? trim($dataset['licence']) : '';
-        if ($licence !== '') {
-            $data['license'] = $licence;
-        }
-        $publisher = is_array($dataset['publisher'] ?? null) ? $dataset['publisher'] : [];
-        $publisherName = trim((string) ($publisher['name'] ?? ''));
-        if ($publisherName !== '') {
-            $organization = ['@type' => 'Organization', 'name' => $publisherName];
-            $publisherUri = is_string($publisher['uri'] ?? null) ? trim($publisher['uri']) : '';
-            if ($publisherUri !== '') {
-                $organization['sameAs'] = $publisherUri;
-            }
-            $data['creator'] = $organization;
-            $data['publisher'] = $organization;
-        }
-        $modified = is_string($dataset['modified'] ?? null) ? trim($dataset['modified']) : '';
-        if ($modified !== '') {
-            $data['dateModified'] = $modified;
-        }
-        $downloads = [];
-        foreach ((array) ($dataset['distributions'] ?? []) as $distribution) {
-            if (!is_array($distribution) || empty($distribution['url'])) {
-                continue;
-            }
-            $downloads[] = array_filter([
-                '@type'          => 'DataDownload',
-                'name'           => isset($distribution['label']) ? (string) $distribution['label'] : null,
-                'contentUrl'     => (string) $distribution['url'],
-                'encodingFormat' => isset($distribution['type']) ? (string) $distribution['type'] : null,
-                'contentSize'    => isset($distribution['bytes']) && is_numeric($distribution['bytes'])
-                    ? self::byteSize((int) $distribution['bytes'])
-                    : null,
-            ], static fn ($value) => $value !== null && $value !== '');
-        }
-        if ($downloads) {
-            $data['distribution'] = $downloads;
-        }
-        $data['includedInDataCatalog'] = ['@type' => 'DataCatalog', 'name' => $site->title(), 'url' => $home];
-        return $data;
-    }
-
-    /** An absolute http(s) URL, or null. */
-    private static function httpUrl(mixed $value): ?string
-    {
-        $url = is_string($value) ? trim($value) : '';
-        return preg_match('~^https?://~i', $url) ? $url : null;
+        return $this->collections->dataset($view, $site, $dataset);
     }
 
     /**
-     * An item set's landing page: a CollectionPage about the set.
+     * An item set's landing page: a CollectionPage about the set, which is
+     * named by its own identity — its resource URI and sameAs IRIs.
      *
      * @return array<mixed>
      */
@@ -470,28 +241,15 @@ class StructuredData
         string $url,
         string $description
     ): array {
-        $name = (string) $itemSet->displayTitle();
-        // The page is about the item set, which has an identity of its own:
-        // its resource URI, the @id DRE Linked Data describes it under.
-        $collection = array_filter([
-            '@type' => 'Collection',
-            '@id'   => $this->identity?->uri($itemSet),
-            'name'  => $name,
-        ], static fn ($value) => $value !== null);
-        $sameAs = $this->sameAsFor($itemSet);
-        if ($sameAs) {
-            $collection['sameAs'] = $sameAs;
-        }
-        return [
-            '@context'    => 'https://schema.org',
-            '@type'       => 'CollectionPage',
-            '@id'         => $url,
-            'name'        => $name,
-            'url'         => $url,
-            'description' => $this->clip($description),
-            'mainEntity'  => $collection,
-            'isPartOf'    => ['@type' => 'WebSite', 'name' => $site->title(), 'url' => $this->homeUrl($view, $site)],
-        ];
+        return $this->collections->collectionPage(
+            $view,
+            $itemSet,
+            $site,
+            $url,
+            $description,
+            $this->identity?->uri($itemSet),
+            $this->sameAsFor($itemSet)
+        );
     }
 
     // ─── @type-specific decoration ──────────────────────────────────────────
@@ -723,7 +481,7 @@ class StructuredData
             }
         }
         if ($type === 'Dataset') {
-            $this->datasetDistribution($data, $resource, $site);
+            $this->collections->distribution($data, $resource, $site);
         }
     }
 
@@ -768,44 +526,6 @@ class StructuredData
             'Book' => $data['isPartOf'] = $node('BookSeries'),
             default => $data['isPartOf'] = $node('CreativeWork'),
         };
-    }
-
-    /**
-     * A Dataset's public files as DataDownload distributions, and the AMIRA
-     * site as the catalogue it is listed in.
-     *
-     * @param array<mixed> $data
-     */
-    private function datasetDistribution(
-        array &$data,
-        AbstractResourceEntityRepresentation $resource,
-        SiteRepresentation $site
-    ): void {
-        $data['includedInDataCatalog'] = array_filter(
-            ['@type' => 'DataCatalog', 'name' => $site->title(), 'url' => SiteHome::url($site)],
-            static fn ($value) => $value !== null
-        );
-        if (!$resource instanceof ItemRepresentation) {
-            return;
-        }
-        $downloads = [];
-        foreach ($resource->media() as $media) {
-            if (method_exists($media, 'isPublic') && !$media->isPublic()) {
-                continue;
-            }
-            $url = method_exists($media, 'originalUrl') ? $media->originalUrl() : null;
-            if (!$url) {
-                continue;
-            }
-            $downloads[] = array_filter([
-                '@type' => 'DataDownload',
-                'contentUrl' => $url,
-                'encodingFormat' => method_exists($media, 'mediaType') ? $media->mediaType() : null,
-            ]);
-        }
-        if ($downloads) {
-            $data['distribution'] = $downloads;
-        }
     }
 
     // ─── Value readers ──────────────────────────────────────────────────────
@@ -910,17 +630,6 @@ class StructuredData
             return null;
         }
         return $created instanceof \DateTimeInterface ? $created->format(DATE_ATOM) : null;
-    }
-
-    /** A file size as people read it ("1.9 MB"). */
-    private static function byteSize(int $bytes): string
-    {
-        foreach (['GB' => 1_000_000_000, 'MB' => 1_000_000, 'KB' => 1_000] as $unit => $size) {
-            if ($bytes >= $size) {
-                return rtrim(rtrim(number_format($bytes / $size, 1, '.', ''), '0'), '.') . ' ' . $unit;
-            }
-        }
-        return $bytes . ' B';
     }
 
     /** The embed URL of a YouTube video, from its watch URL. */
@@ -1101,14 +810,9 @@ class StructuredData
         return $templateId !== null && isset($this->templateTypes[$templateId]) ? $this->templateTypes[$templateId] : null;
     }
 
-    /**
-     * The home page's own URL ({@see SiteHome}), the same one its canonical,
-     * the sitemap and IndexNow name. `/s/{slug}/` — with the slash — is a 404,
-     * and the bare site root only redirects there.
-     */
+    /** The home page's own URL ({@see SiteHome::absoluteUrl()}). */
     private function homeUrl(PhpRenderer $view, SiteRepresentation $site): string
     {
-        return SiteHome::url($site)
-            ?? rtrim((string) $view->url('site', ['site-slug' => $site->slug()], ['force_canonical' => true]), '/');
+        return SiteHome::absoluteUrl($view, $site);
     }
 }

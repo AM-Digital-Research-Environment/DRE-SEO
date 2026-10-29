@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\View\Helper;
 
-use DRESeo\Service\StructuredData;
+use DRESeo\Service\BreadcrumbTrail;
 use Laminas\View\Helper\AbstractHelper;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
@@ -19,16 +19,17 @@ use Omeka\Api\Representation\SiteRepresentation;
  *
  * A research item is placed under its project, which is placed under its own
  * landing page (Home › Research projects › project › item); see
- * StructuredData::trail() for the rules.
+ * {@see BreadcrumbTrail} for the rules.
  *
- * It is the trail the page's `BreadcrumbList` states (StructuredData::trail()),
- * so the visible breadcrumb and the structured data cannot disagree. The theme
+ * It is the trail the page's `BreadcrumbList` states (the same
+ * BreadcrumbTrail builds both), so the visible breadcrumb and the structured
+ * data cannot disagree. The theme
  * owns the markup. Null outside a site, or when the record has no page in it;
  * the theme then keeps its own fallback, as it does without the module.
  */
 class Breadcrumb extends AbstractHelper
 {
-    public function __construct(private readonly StructuredData $structuredData)
+    public function __construct(private readonly BreadcrumbTrail $trail)
     {
     }
 
@@ -42,7 +43,7 @@ class Breadcrumb extends AbstractHelper
             if (!$site instanceof SiteRepresentation) {
                 return null;
             }
-            return $this->structuredData->trail($view, $resource, $site, $resource->siteUrl($site->slug(), true));
+            return $this->trail->trail($view, $resource, $site, $resource->siteUrl($site->slug(), true));
         } catch (\Throwable $e) {
             return null;
         }
