@@ -9,8 +9,64 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+IndexNow URLs wait in a queue table of their own, sent by a cron job, and the sitemap
+follows content changes at once. **After replacing the module folder, run Admin → Modules →
+DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
+[OPERATIONS.md](OPERATIONS.md#the-indexnow-cron).
+
+### Added
+
+- **An IndexNow cron.** `scripts/drain-indexnow.php` sends the queued URLs, 200 per run,
+  and is meant to run every five minutes as the PHP-FPM user:
+  `*/5 * * * * OMEKA_PATH=/var/www/html /usr/bin/php /var/www/html/modules/DRESeo/scripts/drain-indexnow.php`.
+  It refuses to run outside the command line, exits quietly while the module is inactive or
+  IndexNow is off, and records an Omeka job only when a URL is due. A save still starts a
+  drain job too, at most once every 15 minutes, so a site without the cron keeps pinging,
+  only later. `--retry-failed` re-queues the URLs IndexNow refused or that ran out of
+  retries, once the cause is fixed.
+- **Admin → SEO** counts the IndexNow queue's pending and failed URLs, says how to re-queue
+  failed ones, and flags a stored key that is not 8–128 hexadecimal characters (with such a
+  key nothing is queued or sent).
+- `upgrade()`: Omeka's **Upgrade** now applies every default setting a site does not have
+  yet, so a default added after a site's first install reaches it (it never overwrites a
+  value an administrator chose), creates the queue table, and migrates the old queue (see
+  below). It is safe to run again.
+- Sitemaps are sent with `Last-Modified`, the time the document was generated, also when it
+  comes from the cache.
+- [OPERATIONS.md](OPERATIONS.md): the upgrade, the cron and what to do with failed URLs.
+
 ### Changed
 
+- **IndexNow URLs are queued in a table, `dre_seo_ping`, instead of two settings rows.** The
+  upgrade moves the URLs still waiting in `dre_seo_ping_pending` into it and deletes
+  `dre_seo_ping_pending` and `dre_seo_ping_job_queued`. One row per URL, so concurrent saves
+  no longer need a MySQL named lock to keep each other's URLs, and a record saved twice is
+  queued once. A job leases its batch for ten minutes, so a worker that dies loses nothing;
+  an edit made while its URL was in flight survives the older submission's outcome.
+- How IndexNow's answers are acted on: a transient failure (no answer, 408, 429, 5xx) is
+  retried by the next drain after a backoff of 2, 4, 8 and 16 minutes, not when the next
+  edit happens to come; a refusal (400, 403, 422 or an unfollowed 3xx) is kept and counted
+  as failed on the dashboard, not dropped, and the job log names the status and the key
+  location.
+- **A bulk change is pinged in full**, 200 URLs per drain, where a batch that reached 200
+  URLs used to be skipped as a sync. A `MongoDB2OmekaS` run that re-saves the collection
+  therefore submits all of it; leave IndexNow off if that is not wanted.
+- A deleted record's URL is noted before the deletion and queued after it, so a delete that
+  fails pings nothing. An update keeps the visibility it had before in a map keyed by its
+  own API request, so updates in flight at once (a batch) no longer read each other's.
+- **The sitemap follows content changes at once.** Creating, editing or deleting an item,
+  item set, site page, media or site clears the cached sitemap, which used to show a change
+  only after its lifetime (24 hours by default) or the dashboard's **Regenerate**. The clear
+  is a new generation stamp: cheap enough for a bulk import, and a sitemap being rebuilt
+  while content changes cannot cache the older state.
+- A sitemap that cannot be built — the database fails and no copy of the current generation
+  expired less than five minutes ago — is answered `503` with `Retry-After: 300` instead of
+  a sitemap that lists nothing, which used to be cached for the whole lifetime. Requests that
+  arrive while a sitemap is being rebuilt wait for it (up to five seconds) instead of each
+  rebuilding it. Documents are byte-for-byte what they were; `<changefreq>` and `<priority>`,
+  when configured, are now escaped like every other value.
+- The configuration form refuses an IndexNow key with the message to use 8–128 hexadecimal
+  characters, from the same definition the route, the queue and the job use.
 - **PHP 8.4 is now the minimum** (`composer.json` `require.php`, was 8.2). Production runs
   8.5, which CI keeps testing alongside the 8.4 floor. The move follows the development
   tools: PHPUnit 13 needs PHP 8.4.1, and `config.platform.php` makes Composer resolve them
@@ -23,6 +79,13 @@ GitHub release and shipped no installable asset.
 - Release notes on GitHub are the release's CHANGELOG section rather than a generated list
   of commits, with a paragraph on checking the zip against its `DRESeo.zip.sha256`. A release
   whose section is missing is not published.
+
+### Fixed
+
+- Uninstall removes the sitemap cache (`files/dre-seo-cache/`) and the queue table, and, on
+  a module that was deactivated first, the three site settings too: Omeka does not
+  autoload an inactive module's classes, and the "Class not found" was swallowed. Install,
+  upgrade and uninstall now load the module's classes themselves.
 
 ### Development
 
@@ -39,6 +102,13 @@ GitHub release and shipped no installable asset.
   integration job; it runs on pushes to `main` and on pull requests, and cancels superseded
   runs. The release job runs the same gates at the tag, and its leak check covers the new
   tool configurations. Dependabot also proposes major bumps of the development tools.
+- Ported from IWAC SEO: the IndexNow outbox (`PingRepository` behind `PingOutboxInterface`,
+  `PingOutcome`, `PingQueue` as the dispatch policy), the scoped lifecycle autoloader, and the
+  sitemap split into `Sitemap\SitemapRepository`, `UrlsetWriter`, `XmlCache` and
+  `SitemapDocument`, with the generator keeping only the policy. Their tests come along:
+  the outbox and the drain job against SQLite, the lifecycle on an inactive module, the
+  writer, the cache, the listeners, the controller's headers and 503. Characterisation tests
+  pin every sitemap document byte for byte.
 
 ## [0.15.0] — 2026-10-15
 

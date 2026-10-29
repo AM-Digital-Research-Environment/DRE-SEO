@@ -75,6 +75,21 @@ OMEKA_PATH=/var/www/html php /var/www/html/modules/DRESeo/scripts/drain-indexnow
 
 It resets the failed URLs to a fresh start and sends the first batch straight away.
 
+## The sitemap cache
+
+The sitemaps are cached in `files/dre-seo-cache/` (under Omeka's `file_store.local.base_path`),
+which the PHP-FPM user must be able to write; if it cannot, Omeka's log says so and every
+request builds the sitemap live. Besides the `*.xml` documents the directory holds a
+`generation` stamp, one `.generation` sidecar per document and the lock files; leave them to
+the module. Any create, edit or delete of an item, item set, site page, media or site clears
+the cache; **Admin → SEO → Regenerate** does the same by hand, which is only needed after a
+change that bypasses Omeka (a database import) or after editing `dre_seo.sitemap` in
+`config/local.config.php`.
+
+While the database fails, crawlers get the last copy if it expired less than five minutes
+ago, and otherwise `503 Temporarily unavailable` with `Retry-After: 300`, never an empty
+sitemap. Both are logged.
+
 ## Uninstalling
 
 Uninstall drops the `dre_seo_ping` table with any URLs still in it, every `dre_seo_*`

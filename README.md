@@ -33,7 +33,7 @@ step, the IndexNow cron — are in [OPERATIONS.md](OPERATIONS.md).
 | **FAIR Signposting** | `cite-as`, `describedby`, `type`, `author`, `license`, `item` and `collection` links on item, item-set and media pages, as `<link>` elements and as an HTTP `Link` header, for FAIR assessors such as F-UJI. |
 | **Citation metadata (Zotero)** | Highwire Press `citation_*` tags for scholarly papers (articles, chapters, books, theses, reports … with an author) and Dublin Core `DC.*` for every record, so the **Zotero Connector**, Google Scholar, Mendeley and other reference managers capture each record as a properly-typed reference, and Scholar indexes only papers. |
 | **og:image** | The first image attached to an item; falls back to a site-wide default share image. Its size is declared when it is a local file. |
-| **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, each with its real `<lastmod>`; the index dates each child by its latest change; pages set to noindex are left out. No `<changefreq>`/`<priority>` by default — Google and Bing ignore them. Cached. |
+| **XML sitemap** | `/sitemap.xml` index → `/sitemap-pages.xml`, `/sitemap-item-sets.xml`, `/sitemap-items-{n}.xml` (chunked at 50k). Public resources only, each with its real `<lastmod>`; the index dates each child by its latest change; pages set to noindex are left out. No `<changefreq>`/`<priority>` by default — Google and Bing ignore them. Cached, and cleared whenever content changes. |
 | **robots.txt** | `/robots.txt` disallowing `/admin` and pointing crawlers at the sitemap. A staging switch can `Disallow: /` the whole site (and then serves no sitemap). |
 | **Google Search Console** | Paste the verification snippet in the module config; the `<meta name="google-site-verification">` tag is injected site-wide. |
 | **Project pages** | A research project's item-set page redirects (301) to the project item, its one public page; the sitemap lists the project item only. |
@@ -96,7 +96,7 @@ install.
 | **Emit schema.org JSON-LD** | Toggle structured data. On by default. While it is on, the configuration page warns if Omeka's own JSON-LD embed is still enabled for the site (see [One identity per record](#one-identity-per-record)). |
 | **Access statement for research items** | Closes every research item's `conditionsOfAccess` (see [Research items and access](#research-items-and-access)). Blank: the default sentence, translated into the page language. |
 | **Serve /sitemap.xml & /robots.txt** | Toggle the sitemap/robots endpoints. On by default. |
-| **Sitemap cache lifetime** | Seconds before the cached sitemap is rebuilt. Default 86400 (24h). |
+| **Sitemap cache lifetime** | Seconds before the cached sitemap is rebuilt. Default 86400 (24h). A content change clears it sooner. |
 | **Ping IndexNow when content changes** | Off by default. See the caveat below. |
 | **IndexNow key** | A hex key you choose (`openssl rand -hex 16`); served at `/{key}.txt`. |
 
@@ -120,7 +120,8 @@ listed — their SEO is automatic.
 ### Admin dashboard
 
 **Admin → SEO** shows what is configured, the sitemap/robots URLs with public-resource counts,
-and a **Regenerate** button that clears the sitemap cache so it rebuilds on the next request.
+and a **Regenerate** button that clears the sitemap cache so it rebuilds on the next request —
+only needed after a change that bypasses Omeka's API, since every save clears it anyway.
 While IndexNow is on it also counts the URLs waiting in its queue and those that failed
 (refused, or out of retries), and flags a stored key that is not 8–128 hexadecimal
 characters.
@@ -396,10 +397,26 @@ back as one). The helper's `citeAs` key (`'work'` or `'entry'`) tells the theme 
 
 Resource ids + modified timestamps are read with one lean DBAL query per type (public
 resources scoped to the site), so even ~9k items render in well under a second. Omeka stores
-`modified` as a naive UTC datetime, and `<lastmod>` is written in UTC to match. Output is
-cached under `files/dre-seo-cache/`; cache failures fall back to live generation, and cache
-or database failures are recorded in Omeka's log for diagnosis. While the whole site is set
-to noindex, no sitemap is served and robots.txt names none.
+`modified` as a naive UTC datetime, and `<lastmod>` is written in UTC to match. While the
+whole site is set to noindex, no sitemap is served and robots.txt names none.
+
+Output is cached under `files/dre-seo-cache/` for the **Sitemap cache lifetime**, and the
+cache is cleared whenever an item, item set, site page, media or site is created, edited or
+deleted, so a change is listed on the next crawl. A clear writes a new generation stamp
+rather than sweeping the directory each time, so a bulk import pays for it once per request,
+and a sitemap that was being rebuilt while the content changed is not cached. One request at
+a time rebuilds an expired document; the others wait for it. Each document is sent with
+`Last-Modified`, the time it was generated.
+
+A cache directory that cannot be written is logged in Omeka's log and the sitemap built live.
+A database failure is logged too, and is never served as an empty sitemap: a copy that
+expired less than five minutes ago stands in, and otherwise the answer is `503` with
+`Retry-After: 300`, which tells a crawler to come back later.
+
+The code is split as in IWAC SEO: `SitemapGenerator` decides which URLs go in which document;
+`Sitemap\SitemapRepository` runs the queries (the project item-set exclusion among them),
+`Sitemap\UrlsetWriter` renders the XML, `Sitemap\XmlCache` is the cache, and
+`Sitemap\SitemapDocument` is a document with its generation time.
 
 ---
 
@@ -455,9 +472,10 @@ DRESeo/
 │   │   └── compile-po.php           # language/*.po -> .mo, without gettext
 │   └── dependabot.yml               # action pins and Composer dev tools, monthly
 ├── CHANGELOG.md
+├── OPERATIONS.md                    # upgrade, IndexNow cron, failed URLs
 ├── CITATION.cff                     # how to cite the module (GitHub / Zenodo read this)
 ├── LICENSE                          # GPL-3.0-or-later
-├── Module.php                       # listeners, ACL, install/uninstall, config form
+├── Module.php                       # listeners, ACL, install/upgrade/uninstall, config form
 ├── composer.json                    # type omeka-module; PSR-4 DRESeo\ -> src/ (no runtime deps)
 ├── phpunit.xml.dist                 # unit suite
 ├── phpunit.integration.xml.dist     # integration suite (needs OMEKA_PATH)
@@ -466,12 +484,13 @@ DRESeo/
 ├── config/
 │   ├── module.ini
 │   └── module.config.php            # routes, services, navigation, dre_seo defaults
+├── scripts/drain-indexnow.php       # the five-minute IndexNow cron (CLI only)
 ├── src/
 │   ├── Controller/
 │   │   ├── SitemapController.php     # /sitemap*.xml, /robots.txt, /{key}.txt
 │   │   └── Admin/SeoController.php   # dashboard + static-page table
 │   ├── Form/{ConfigForm,PageSeoForm}.php
-│   ├── Job/PingSearchEngines.php
+│   ├── Job/PingSearchEngines.php     # drains one leased IndexNow batch
 │   └── Service/
 │       ├── HeadMetadata.php          # computes + injects all <head> SEO
 │       ├── StructuredData.php        # schema.org JSON-LD
@@ -485,9 +504,18 @@ DRESeo/
 │       ├── SearchPage.php            # search results routes (noindex)
 │       ├── ImageDimensions.php       # og:image size of a local file
 │       ├── HttpCache.php             # ETag / Last-Modified for /cite
-│       ├── SitemapGenerator.php      # lean queries + XML + cache
+│       ├── SitemapGenerator.php      # sitemap policy: which URLs, in what order
+│       ├── Sitemap/
+│       │   ├── SitemapRepository.php # lean DBAL queries (+ SitemapRepositoryInterface)
+│       │   ├── UrlsetWriter.php      # the sitemaps.org XML
+│       │   ├── XmlCache.php          # TTL file cache: generation stamp, build lock
+│       │   └── SitemapDocument.php   # a document + its generation time
 │       ├── PageSeoStore.php          # per-page overrides (site setting)
+│       ├── PingRepository.php        # IndexNow outbox table (+ PingOutboxInterface)
+│       ├── PingQueue.php             # IndexNow dispatch policy
+│       ├── PingOutcome.php           # accepted / retry / refused
 │       ├── Pinger.php                # IndexNow submit
+│       ├── IndexNowKey.php           # the one key definition
 │       └── *Factory.php
 ├── view/dre-seo/admin/seo/{dashboard,pages}.phtml
 ├── asset/css/admin.css
@@ -501,8 +529,9 @@ DRESeo/
 ```
 
 `tests/` and the repository furniture are `export-ignore`d in `.gitattributes`, so the release
-zip holds only what Omeka needs at runtime plus the README, licence and changelog. Run
-`composer check` from a clone, not from an unpacked release.
+zip holds only what Omeka needs at runtime (the cron script included) plus the README,
+OPERATIONS, licence and changelog. Run `composer check` from a clone, not from an unpacked
+release.
 
 ## Development and testing
 
@@ -521,16 +550,20 @@ composer check
 against `phpstan-baseline.neon` (`composer analyse`) and runs the PHPUnit unit suite
 (`composer test`). The unit tests cover the logic that regresses most silently — the
 citation record, formatter and BibTeX/RIS/CSL-JSON serialisers, the Highwire and Dublin
-Core tags, schema.org JSON-LD and the head metadata, DRE Linked Data identities, sitemap XML
-and caching, per-page overrides, the Africa Multiple template mapping, breadcrumbs and
-project resolution, and IndexNow key validation and batching — on minimal stand-ins in
+Core tags, schema.org JSON-LD and the head metadata, DRE Linked Data identities, the
+sitemap's policy, XML and cache (every document pinned byte for byte), per-page overrides,
+the Africa Multiple template mapping, breadcrumbs and project resolution, and the IndexNow
+key, dispatch policy and answer classification — on minimal stand-ins in
 `tests/Shim/omeka.php`.
 
 The integration suite runs the module against the real framework: its service and
 controller factories, shared event listeners, configuration and site-settings forms, the
-project item-set redirect, IndexNow from API events, Laminas head helpers and the sitemap
-SQL on a DBAL connection. Point `OMEKA_PATH` at an installed Omeka S 4.2.1 (the official
-release zip, or a checkout after `composer install --no-dev`):
+project item-set redirect, IndexNow and sitemap invalidation from API events, the IndexNow
+outbox and its drain job on SQLite, the IndexNow submission through Laminas' HTTP client,
+install, upgrade and uninstall on an inactive module, Laminas head helpers, the sitemap SQL
+on a DBAL connection, and the sitemap controller's headers and 503. Point `OMEKA_PATH` at an
+installed Omeka S 4.2.1 (the official release zip, or a checkout after
+`composer install --no-dev`):
 
 ```bash
 OMEKA_PATH=/path/to/omeka-s composer test:integration
@@ -551,7 +584,8 @@ rule for the PHPStan baseline.
 ## Verifying a deployment
 
 1. `curl -s https://HOST/sitemap.xml | head` → a `<sitemapindex>`; the child sitemaps list
-   `<url>` entries with `<lastmod>`.
+   `<url>` entries with `<lastmod>`. `curl -sI https://HOST/sitemap.xml` shows
+   `Last-Modified`; edit a public item and the next request's is newer.
 2. `curl -s https://HOST/robots.txt` → `Disallow: /admin/` and a `Sitemap:` line.
 3. View-source an item page (`/s/amira/item/100`): confirm `<title>`, `description`, `og:*`,
    `twitter:*`, `<link rel="canonical">` and a `application/ld+json` block. Validate the JSON-LD
@@ -568,6 +602,9 @@ rule for the PHPStan baseline.
    lists it. A research item's `BreadcrumbList` reads Home › Research projects › project ›
    record.
 7. In Search Console: add the property, verify via the meta tag, submit `/sitemap.xml`.
+8. With IndexNow on: edit a public item, and **Admin → SEO** counts one pending URL until the
+   next cron run (or the save's own job) sends it; **Admin → Jobs** then shows the job, whose
+   log names IndexNow's answer.
 
 ---
 
@@ -587,8 +624,11 @@ rule for the PHPStan baseline.
 
 ## Uninstalling
 
-Removes every `dre_seo_*` global setting and the per-site `dre_seo_pages` overrides. The
-sitemap cache directory (`files/dre-seo-cache/`) can be deleted manually if desired.
+Removes every `dre_seo_*` global setting (the 0.15 queue settings included), the per-site
+settings (`dre_seo_pages`, `dre_seo_landing_pages`, `dre_seo_project_redirect`), the IndexNow
+queue table `dre_seo_ping` with any URLs still in it, and the sitemap cache directory
+`files/dre-seo-cache/` — also on a module that was deactivated first. Remove the IndexNow cron
+line too; until then it exits quietly.
 
 ---
 
