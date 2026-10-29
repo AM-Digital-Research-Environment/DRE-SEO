@@ -10,8 +10,9 @@ use Omeka\Settings\Settings;
 
 /**
  * IndexNow dispatch policy over the durable outbox: whether pinging is
- * configured, how often a save may start a drain job, and the batch size a
- * job leases. The outbox itself (dedupe, leases, retries) is
+ * configured, how often a save may start a drain job, the batch size a job
+ * leases, and when a drain takes its URLs for a bulk change that is left to
+ * the sitemap. The outbox itself (dedupe, leases, retries) is
  * {@see PingRepository}; the five-minute cron drains it independently of
  * saves (scripts/drain-indexnow.php), and the save-triggered job is the
  * fallback for an installation without the cron.
@@ -20,6 +21,21 @@ final class PingQueue
 {
     /** URLs leased per job. */
     public const CAP = 200;
+
+    /**
+     * More URLs waiting for their first submission than this, and a drain
+     * takes them for a bulk change rather than editing, and sends none.
+     *
+     * Drains come five minutes apart (the cron) or at most a quarter hour
+     * apart (a save's dispatch). Editors working by hand do not change more
+     * public records than one drain sends in that time; a MongoDB2OmekaS
+     * sync re-saves thousands through the API, most of them unchanged.
+     * IndexNow is for URLs whose content changed, and every record a sync
+     * touches is in the sitemap, whose cache that same save cleared. The
+     * figure is one drain's batch, which is also the flood cap at which 0.15
+     * and earlier skipped a ping.
+     */
+    public const BULK_THRESHOLD = self::CAP;
 
     /** How often (seconds) a save may dispatch a drain job. */
     private const DISPATCH_INTERVAL = 900;
@@ -79,6 +95,23 @@ final class PingQueue
                 'exception' => $e,
             ]);
         }
+    }
+
+    /**
+     * Settle a bulk change without sending it: when more URLs wait for their
+     * first submission than {@see BULK_THRESHOLD}, acknowledge them all as
+     * handled. URLs being retried, or re-queued after failing, were each
+     * submitted before as part of an incremental batch, so they are neither
+     * counted nor removed, and go out as usual.
+     *
+     * @return int how many URLs were discarded; 0 when the change is not bulk
+     */
+    public function discardBulk(): int
+    {
+        if ($this->outbox->countUnsent() <= self::BULK_THRESHOLD) {
+            return 0;
+        }
+        return $this->outbox->discardUnsent();
     }
 
     /**

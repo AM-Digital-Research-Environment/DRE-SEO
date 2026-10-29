@@ -448,11 +448,15 @@ Nothing is queued or sent while the key is not 8–128 hexadecimal characters.
 [OPERATIONS.md](OPERATIONS.md#the-indexnow-cron) has the details.
 
 > **This site's content arrives mainly through the `MongoDB2OmekaS` bulk sync, which writes
-> thousands of items.** Every public item a sync saves is queued and sent, 200 URLs per run
-> (about 57,600 a day), where 0.15 and earlier skipped a batch once it reached 200 — so a
-> sync that re-saves the whole collection submits the whole collection. IndexNow is meant
-> for content that changed. If in doubt, leave it **off** and rely on the sitemap + Search
-> Console.
+> thousands of items.** When a run finds more than 200 URLs waiting for their first
+> submission — more than one run sends, five minutes after the last — it takes them for a
+> bulk change: it removes them from the queue **without pinging**, and logs how many it
+> skipped. Those URLs are discovered through the sitemap instead, whose cache the same saves
+> cleared, and IndexNow is kept for genuine incremental edits, as it is meant to be. A URL
+> being retried, or re-queued with `--retry-failed`, was submitted before and is sent
+> whatever the count. A sync slow enough to stay under 200 URLs between two runs is sent
+> like editing; if that is not wanted, leave IndexNow **off** and rely on the sitemap +
+> Search Console.
 
 Google is **not** pinged: its sitemap-ping endpoint was retired in 2023. Google discovers
 content via the robots.txt `Sitemap:` line and Search Console.

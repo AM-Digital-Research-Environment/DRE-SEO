@@ -149,6 +149,58 @@ final class PingRepositoryTest extends TestCase
         self::assertCount(1, $this->queue->claim(now: $now + 722));
     }
 
+    /**
+     * The bulk guard weighs only URLs no drain has sent since their last
+     * edit: not one leased by a running job, nor one backing off after a
+     * failure, nor one retryFailed() put back. A new edit makes any of them
+     * unsent again.
+     */
+    public function testOnlyNeverSubmittedDueUrlsAreUnsent(): void
+    {
+        for ($i = 1; $i <= 5; $i++) {
+            $this->queue->push('https://example.test/item/' . $i);
+        }
+        $now = time() + 1;
+        self::assertSame(5, $this->queue->countUnsent($now));
+
+        // Two URLs leased by a running job, a third backing off after a
+        // failure. Five minutes on, its backoff is over, the lease is not.
+        $leased = $this->queue->claim(2, $now);
+        self::assertSame(3, $this->queue->countUnsent($now), 'a leased URL is being sent');
+        $retrying = $this->queue->claim(1, $now);
+        $this->queue->finish($retrying, PingOutcome::Retry, $now);
+        $later = $now + 300;
+        self::assertTrue($this->queue->hasDue($later));
+        self::assertSame(2, $this->queue->countUnsent($later), 'a retry was sent before');
+
+        // A refused URL put back by hand is no new arrival either.
+        $this->queue->finish($leased, PingOutcome::Refused, $now);
+        $this->queue->retryFailed();
+        self::assertSame(['pending' => 5, 'failed' => 0], $this->queue->counts());
+        self::assertSame(2, $this->queue->countUnsent($later));
+
+        // Edited again: unsent.
+        $this->queue->push((string) $leased[0]['url']);
+        self::assertSame(3, $this->queue->countUnsent($later));
+    }
+
+    public function testDiscardUnsentRemovesOnlyTheUnsentUrls(): void
+    {
+        for ($i = 1; $i <= 4; $i++) {
+            $this->queue->push('https://example.test/item/' . $i);
+        }
+        $now = time() + 1;
+        $leased = $this->queue->claim(1, $now);
+        $retrying = $this->queue->claim(1, $now);
+        $this->queue->finish($retrying, PingOutcome::Retry, $now);
+
+        self::assertSame(2, $this->queue->discardUnsent($now));
+        self::assertSame(0, $this->queue->countUnsent($now));
+        self::assertSame(['pending' => 2, 'failed' => 0], $this->queue->counts(), 'the leased and the retrying URL remain');
+        $this->queue->finish($leased, PingOutcome::Accepted, $now);
+        self::assertSame(['pending' => 1, 'failed' => 0], $this->queue->counts());
+    }
+
     public function testAClaimLeasesAtMostTwoHundredUrls(): void
     {
         for ($i = 1; $i <= 205; $i++) {

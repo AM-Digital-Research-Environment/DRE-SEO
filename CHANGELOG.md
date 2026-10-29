@@ -48,9 +48,12 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
   edit happens to come; a refusal (400, 403, 422 or an unfollowed 3xx) is kept and counted
   as failed on the dashboard, not dropped, and the job log names the status and the key
   location.
-- **A bulk change is pinged in full**, 200 URLs per drain, where a batch that reached 200
-  URLs used to be skipped as a sync. A `MongoDB2OmekaS` run that re-saves the collection
-  therefore submits all of it; leave IndexNow off if that is not wanted.
+- **A bulk change is still not pinged**, now measured on the outbox: a drain that finds more
+  than 200 URLs waiting for their first submission (`PingQueue::BULK_THRESHOLD`, one
+  drain's batch, the old flood cap) removes them unsent and logs the count, leaving their
+  discovery to the sitemap, as a batch that reached 200 URLs was skipped before. URLs being
+  retried, or re-queued with `--retry-failed`, were sent before and go out whatever their
+  number.
 - A deleted record's URL is noted before the deletion and queued after it, so a delete that
   fails pings nothing. An update keeps the visibility it had before in a map keyed by its
   own API request, so updates in flight at once (a batch) no longer read each other's.

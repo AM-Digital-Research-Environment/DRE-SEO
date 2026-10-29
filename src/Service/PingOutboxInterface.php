@@ -22,6 +22,21 @@ interface PingOutboxInterface
     public function claim(int $limit = 200): array;
 
     /**
+     * How many due URLs no drain has submitted since they were queued: what
+     * the bulk-change guard weighs. A URL being retried, or re-queued after
+     * failing, was submitted before and is not counted.
+     */
+    public function countUnsent(): int;
+
+    /**
+     * Acknowledge every due, never-submitted URL without sending it — a bulk
+     * change the sitemap announces instead.
+     *
+     * @return int how many URLs were removed
+     */
+    public function discardUnsent(): int;
+
+    /**
      * Settle leased rows by what IndexNow made of them: delete accepted rows,
      * release retryable ones for a later attempt, and mark refused ones
      * exhausted, so they are counted as failed and wait for an explicit

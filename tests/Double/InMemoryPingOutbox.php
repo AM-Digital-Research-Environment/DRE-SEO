@@ -20,6 +20,12 @@ final class InMemoryPingOutbox implements PingOutboxInterface
     /** @var array<int,array{rows:array<int,array<string,mixed>>,outcome:PingOutcome}> */
     public array $finished = [];
 
+    /** How many due URLs have never been submitted, as countUnsent() reports it. */
+    public int $unsent = 0;
+
+    /** How often discardUnsent() was called. */
+    public int $discards = 0;
+
     public function push(string $url): void
     {
         $this->pushed[] = $url;
@@ -29,6 +35,19 @@ final class InMemoryPingOutbox implements PingOutboxInterface
     {
         $this->lastLimit = $limit;
         return array_slice($this->rows, 0, $limit);
+    }
+
+    public function countUnsent(): int
+    {
+        return $this->unsent;
+    }
+
+    public function discardUnsent(): int
+    {
+        $this->discards++;
+        $discarded = $this->unsent;
+        $this->unsent = 0;
+        return $discarded;
     }
 
     public function finish(array $rows, PingOutcome $outcome): void

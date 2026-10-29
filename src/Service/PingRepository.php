@@ -46,6 +46,13 @@ final class PingRepository implements PingOutboxInterface
     /** The most rows one claim leases. */
     private const MAX_CLAIM = 200;
 
+    /**
+     * Due rows no drain has submitted since their last push: attempts still
+     * at zero, and not re-queued by retryFailed(), which marks the rows it
+     * resets with available_at = 0 (a push always stamps the time).
+     */
+    private const UNSENT_DUE = 'available_at <= :now AND lease_until <= :now AND attempts = 0 AND available_at > 0';
+
     public function __construct(private readonly Connection $connection)
     {
     }
@@ -118,6 +125,26 @@ final class PingRepository implements PingOutboxInterface
         return $claimed;
     }
 
+    public function countUnsent(?int $now = null): int
+    {
+        return (int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM dre_seo_ping WHERE ' . self::UNSENT_DUE,
+            ['now' => $now ?? time()]
+        );
+    }
+
+    /**
+     * Deleted as an accepted row is, in one statement. Rows another job holds
+     * are not due and stay; a push that lands after $now stays too.
+     */
+    public function discardUnsent(?int $now = null): int
+    {
+        return (int) $this->connection->executeStatement(
+            'DELETE FROM dre_seo_ping WHERE ' . self::UNSENT_DUE,
+            ['now' => $now ?? time()]
+        );
+    }
+
     /**
      * Every write is conditioned on the lease's token and the row's version,
      * so a URL edited again while its batch was in flight keeps the newer
@@ -167,7 +194,12 @@ final class PingRepository implements PingOutboxInterface
         ];
     }
 
-    /** Re-queue every failed URL — after fixing whatever made it fail. */
+    /**
+     * Re-queue every failed URL — after fixing whatever made it fail. Each
+     * was submitted before, so available_at = 0 marks it as no new arrival:
+     * the bulk-change guard neither counts nor discards it, however many
+     * there are.
+     */
     public function retryFailed(): void
     {
         $this->connection->executeStatement(

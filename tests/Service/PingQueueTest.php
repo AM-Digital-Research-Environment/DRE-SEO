@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The IndexNow dispatch policy — configured-ness, throttle window, batch
- * size — over an in-memory outbox. The durable outbox itself (dedupe, leases,
+ * size, the bulk-change threshold — over an in-memory outbox. The durable outbox itself (dedupe, leases,
  * retries) is exercised against a real database in
  * tests/Integration/PingRepositoryTest.
  */
@@ -93,6 +93,26 @@ final class PingQueueTest extends TestCase
 
         $this->queue->finish($batch, PingOutcome::Refused);
         $this->assertSame([['rows' => $batch, 'outcome' => PingOutcome::Refused]], $this->outbox->finished);
+    }
+
+    /** One drain's worth of new URLs is editing, and goes out. */
+    public function testAtTheThresholdNothingIsDiscarded(): void
+    {
+        $this->outbox->unsent = PingQueue::BULK_THRESHOLD;
+
+        $this->assertSame(0, $this->queue->discardBulk());
+        $this->assertSame(0, $this->outbox->discards);
+        $this->assertSame(PingQueue::BULK_THRESHOLD, $this->outbox->unsent);
+    }
+
+    /** One more, and the drain takes it for a sync: all of it is acknowledged unsent. */
+    public function testAboveTheThresholdEveryUnsentUrlIsDiscarded(): void
+    {
+        $this->outbox->unsent = PingQueue::BULK_THRESHOLD + 1;
+
+        $this->assertSame(PingQueue::BULK_THRESHOLD + 1, $this->queue->discardBulk());
+        $this->assertSame(1, $this->outbox->discards);
+        $this->assertSame(0, $this->outbox->unsent);
     }
 
     public function testDispatchIsThrottledAndStamped(): void

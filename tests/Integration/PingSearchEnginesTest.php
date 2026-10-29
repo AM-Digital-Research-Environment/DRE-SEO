@@ -6,6 +6,7 @@ namespace DRESeo\Test\Integration;
 use Doctrine\DBAL\DriverManager;
 use DRESeo\Job\PingSearchEngines;
 use DRESeo\Service\Pinger;
+use DRESeo\Service\PingOutcome;
 use DRESeo\Service\PingQueue;
 use DRESeo\Service\PingRepository;
 use DRESeo\Test\Integration\Double\InMemorySettings;
@@ -134,6 +135,69 @@ final class PingSearchEnginesTest extends TestCase
         self::assertSame(['pending' => 2, 'failed' => 0], $this->outbox->counts());
         self::assertFalse($this->outbox->hasDue(), 'backing off');
         self::assertSame([], $this->messages('WARN'));
+    }
+
+    /** Queue URLs item/3, item/4, … until $total are waiting. */
+    private function fillTo(int $total): void
+    {
+        for ($i = 3; $i <= $total; $i++) {
+            $this->outbox->push('https://' . self::HOST . '/s/amira/item/' . $i);
+        }
+    }
+
+    /** One drain's batch is incremental editing: sent as usual, in one request. */
+    public function testAtTheBulkThresholdTheBatchIsSent(): void
+    {
+        $this->fillTo(PingQueue::BULK_THRESHOLD);
+        $this->adapter->setResponse("HTTP/1.1 202 Accepted\r\n\r\n");
+        $this->drain();
+
+        self::assertCount(1, $this->adapter->bodies);
+        self::assertCount(PingQueue::BULK_THRESHOLD, json_decode($this->adapter->bodies[0], true)['urlList']);
+        self::assertSame(['pending' => 0, 'failed' => 0], $this->outbox->counts());
+        self::assertSame(['DRESeo: IndexNow accepted 200 URL(s) for ' . self::HOST . ' (HTTP 202).'], $this->messages('INFO'));
+    }
+
+    /**
+     * More than one drain sends is a sync: nothing goes to IndexNow, the URLs
+     * leave the queue as handled (the sitemap announces them), and the log
+     * says so with the count.
+     */
+    public function testAboveTheBulkThresholdNothingIsSentAndTheUrlsAreAcknowledged(): void
+    {
+        $this->fillTo(PingQueue::BULK_THRESHOLD + 1);
+        $this->adapter->setNextRequestWillFail(true);
+        $this->drain();
+
+        self::assertSame([], $this->adapter->bodies);
+        self::assertSame(['pending' => 0, 'failed' => 0], $this->outbox->counts());
+        self::assertSame(
+            ['DRESeo: skipped IndexNow for a bulk change of 201 URL(s), most likely a sync; the sitemap covers their discovery.'],
+            $this->messages('INFO')
+        );
+        self::assertSame([], $this->messages('WARN'));
+    }
+
+    /**
+     * URLs re-queued with --retry-failed were each sent before; however many
+     * there are, they go out 200 per drain, not discarded as a bulk change.
+     */
+    public function testRequeuedFailedUrlsAreSentWhateverTheirNumber(): void
+    {
+        $this->fillTo(PingQueue::BULK_THRESHOLD + 50);
+        $now = time() + 1;
+        foreach ([$this->outbox->claim(now: $now), $this->outbox->claim(now: $now)] as $refused) {
+            $this->outbox->finish($refused, PingOutcome::Refused, $now);
+        }
+        self::assertSame(['pending' => 0, 'failed' => 250], $this->outbox->counts());
+        $this->outbox->retryFailed();
+
+        $this->adapter->setResponse("HTTP/1.1 202 Accepted\r\n\r\n");
+        $this->drain();
+
+        self::assertCount(1, $this->adapter->bodies);
+        self::assertCount(PingQueue::CAP, json_decode($this->adapter->bodies[0], true)['urlList']);
+        self::assertSame(['pending' => 50, 'failed' => 0], $this->outbox->counts());
     }
 
     /** Nothing is claimed, so the URLs go out untouched once a valid key is saved. */

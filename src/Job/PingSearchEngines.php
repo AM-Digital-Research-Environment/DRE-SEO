@@ -16,6 +16,12 @@ use Omeka\Job\AbstractJob;
  * as a job — from the five-minute cron, or dispatched by a save — so the
  * saving request is never blocked by the network call.
  *
+ * When more URLs wait for their first submission than one run sends
+ * ({@see PingQueue::BULK_THRESHOLD}), the change almost certainly came from a
+ * bulk sync, so they are acknowledged without a ping — those URLs are
+ * discovered through the sitemap instead, and IndexNow is reserved for
+ * genuine incremental edits. Retries and re-queued failures still go out.
+ *
  * One run leases one batch of up to {@see PingQueue::CAP} URLs and submits it
  * per origin, since IndexNow takes one host per request. Leases survive worker
  * failures: rows a dead job leased come back when the lease runs out. Each
@@ -41,6 +47,14 @@ class PingSearchEngines extends AbstractJob
             // go out once a valid key is saved.
             $logger->warn('DRESeo: IndexNow ping enabled but no valid key is configured (8–128 hexadecimal characters).');
             return;
+        }
+
+        $skipped = $queue->discardBulk();
+        if ($skipped > 0) {
+            $logger->info(
+                'DRESeo: skipped IndexNow for a bulk change of {count} URL(s), most likely a sync; the sitemap covers their discovery.',
+                ['count' => $skipped]
+            );
         }
 
         $batch = $queue->claim();

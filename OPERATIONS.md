@@ -56,9 +56,25 @@ IndexNow's answer:
 
 A job that dies mid-submission loses nothing: its lease runs out after ten minutes and
 the next run sends the URLs again. A URL edited again while its batch was in flight keeps
-the newer edit, whatever the older submission's outcome. A bulk change — a sync that saves
-thousands of items — is queued in full and sent 200 URLs per run, about 57,600 a day at
-the five-minute schedule.
+the newer edit, whatever the older submission's outcome.
+
+### Bulk changes are not pinged
+
+A `MongoDB2OmekaS` sync re-saves thousands of records through the API, most of them
+unchanged. When a run finds more than 200 URLs waiting for their first submission (more
+than it can send, `PingQueue::BULK_THRESHOLD`), it takes them for such a sync: it removes
+them from the queue without contacting IndexNow and logs one line in the job log,
+`skipped IndexNow for a bulk change of N URL(s), most likely a sync; the sitemap covers
+their discovery`. The sitemap lists every one of them, and the same saves cleared its
+cache. URLs being retried after a transient failure, and those re-queued with
+`--retry-failed`, were submitted before and go out 200 per run however many there are.
+
+The guard weighs what accumulated since the previous run, so it depends on the schedule:
+at five minutes it catches a sync that saves more than 200 public records in that time, and
+a slower one is sent like editing. Without the cron, the next run comes with a save at
+least 15 minutes after the last dispatch, and the first few URLs of a sync go out before
+the rest is skipped. A skipped URL is gone from the queue; edit the record again (or wait
+for the crawler to reach it through the sitemap) to have it pinged.
 
 ## Failed URLs
 
