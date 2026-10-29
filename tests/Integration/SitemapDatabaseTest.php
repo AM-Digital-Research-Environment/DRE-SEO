@@ -52,6 +52,56 @@ final class SitemapDatabaseTest extends OmekaTestCase
         $this->assertNoSitemapQueryFailed();
     }
 
+    /**
+     * Every document over the fixture, byte for byte: the SQL's answers as
+     * crawlers are served them, pinned against a refactoring of the queries.
+     */
+    public function testTheDocumentsOverTheFixtureByteForByte(): void
+    {
+        $generator = $this->generator();
+        $site = 'https://example.test/s/amira';
+        $head = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        $urlset = $head . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+
+        $this->assertSame(
+            $head . '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n"
+            . '  <sitemap><loc>https://example.test/sitemap-pages.xml</loc><lastmod>2026-01-03T00:00:00+00:00</lastmod></sitemap>' . "\n"
+            . '  <sitemap><loc>https://example.test/sitemap-item-sets.xml</loc><lastmod>2026-01-02T00:00:00+00:00</lastmod></sitemap>' . "\n"
+            . '  <sitemap><loc>https://example.test/sitemap-items-1.xml</loc><lastmod>2026-01-01T00:00:00+00:00</lastmod></sitemap>' . "\n"
+            . '</sitemapindex>' . "\n",
+            (string) $generator->buildIndex('https://example.test', 1, 0, true)
+        );
+        $this->assertSame(
+            $urlset . '  <url><loc>' . $site . '/page/home</loc><lastmod>2026-01-03T00:00:00+00:00</lastmod></url>' . "\n" . '</urlset>' . "\n",
+            (string) $generator->buildPages($site, 1, 0, [], 10)
+        );
+        $this->assertSame(
+            $urlset
+            . '  <url><loc>' . $site . '/item-set/3</loc><lastmod>2026-01-02T00:00:00+00:00</lastmod></url>' . "\n"
+            . '  <url><loc>' . $site . '/item-set/22</loc></url>' . "\n"
+            . '</urlset>' . "\n",
+            (string) $generator->buildItemSets($site, 1, 0, true)
+        );
+        $this->assertSame(
+            $urlset
+            . '  <url><loc>' . $site . '/item-set/3</loc><lastmod>2026-01-02T00:00:00+00:00</lastmod></url>' . "\n"
+            . '  <url><loc>' . $site . '/item-set/20</loc></url>' . "\n"
+            . '  <url><loc>' . $site . '/item-set/21</loc></url>' . "\n"
+            . '  <url><loc>' . $site . '/item-set/22</loc></url>' . "\n"
+            . '</urlset>' . "\n",
+            (string) $generator->buildItemSets($site, 1, 0)
+        );
+        $this->assertSame(
+            $urlset
+            . '  <url><loc>' . $site . '/item/1</loc><lastmod>2026-01-01T00:00:00+00:00</lastmod></url>' . "\n"
+            . '  <url><loc>' . $site . '/item/2</loc></url>' . "\n"
+            . '</urlset>' . "\n",
+            (string) $generator->buildItems($site, 1, 1, 0)
+        );
+        $this->assertSame(1, $generator->itemChunkCount(1));
+        $this->assertNoSitemapQueryFailed();
+    }
+
     public function testTheIndexIsValidXmlAndTheItemsSitemapListsOnlyPublicItems(): void
     {
         $generator = $this->generator();
