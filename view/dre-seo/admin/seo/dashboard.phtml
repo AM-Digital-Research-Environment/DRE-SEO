@@ -108,7 +108,7 @@ $configureUrl = $this->url('admin/default', ['controller' => 'module', 'action' 
             '<strong>' . number_format($counts['pages']) . '</strong>'
         ); ?>
     </p>
-    <p><?php echo $this->translate('The sitemap is cached. Clear the cache to rebuild it immediately after a large content change.'); ?></p>
+    <p><?php echo $this->translate('The sitemap is cached, and saving, editing or deleting a record, page, media or site clears the cache. Clear it by hand after a change that bypasses Omeka (a database import, say), or after editing config/local.config.php.'); ?></p>
     <?php
     $confirmForm->setAttribute('action', $this->url('admin/dre-seo/regenerate'));
     echo $this->form($confirmForm);

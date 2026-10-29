@@ -289,7 +289,7 @@ msgid "The page that presents each item set’s records, named in the breadcrumb
 msgstr ""
 
 #: view/dre-seo/admin/seo/dashboard.phtml
-msgid "The sitemap is cached. Clear the cache to rebuild it immediately after a large content change."
+msgid "The sitemap is cached, and saving, editing or deleting a record, page, media or site clears the cache. Clear it by hand after a change that bypasses Omeka (a database import, say), or after editing config/local.config.php."
 msgstr ""
 
 #: view/dre-seo/admin/seo/pages.phtml

@@ -54,6 +54,8 @@ final class ContentChangePingTest extends TestCase
             'default_site' => 1,
             'dre_seo_ping_enabled' => '1',
             'dre_seo_indexnow_key' => 'a1b2c3d4e5f60718',
+            // Invalidation is SitemapInvalidationTest's.
+            'dre_seo_sitemap_enabled' => '0',
         ]);
         $logger = new Logger();
         $logger->addWriter(new Noop());

@@ -36,6 +36,7 @@ use DRESeo\Service\LandingPages;
 use DRESeo\Service\PingQueue;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\Signposting;
+use DRESeo\Service\SitemapGenerator;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Http\Header\GenericMultiHeader;
@@ -361,11 +362,14 @@ class Module extends AbstractModule
         // Every public page — site-wide constants + verification + gap-fill.
         $sharedEventManager->attach('*', 'view.layout', [$this, 'handleLayout']);
 
-        // Auto-ping on public content changes (no-op unless ping is enabled):
-        // a public record created, edited, made private or deleted. The
-        // pre-events note what the post-events can no longer read: the
-        // visibility a record had before an update, and the URL of a record
-        // being deleted.
+        // Sitemap invalidation + auto-ping on content changes. Items, item
+        // sets and pages are sitemap URLs of their own: any create, update or
+        // delete can change a sitemap's URL set or a <lastmod> (and an item's
+        // visibility decides whether its project's item set is listed), so it
+        // clears the cache, and a public record created, edited, made private
+        // or deleted is pinged (no-op unless ping is enabled). The pre-events
+        // note what the post-events can no longer read: the visibility a
+        // record had before an update, and the URL of a record being deleted.
         foreach (
             [
                 'Omeka\Api\Adapter\ItemAdapter',
@@ -378,6 +382,19 @@ class Module extends AbstractModule
             $sharedEventManager->attach($adapter, 'api.create.post', [$this, 'handleContentChange']);
             $sharedEventManager->attach($adapter, 'api.update.post', [$this, 'handleContentChange']);
             $sharedEventManager->attach($adapter, 'api.delete.post', [$this, 'handleContentChange']);
+        }
+
+        // Changes that can alter a sitemap without being a sitemap URL of
+        // their own clear the cache and queue no IndexNow ping. A site's
+        // navigation and homepage order the pages sitemap, and its item pool
+        // and item sets decide which records the other sitemaps list. A media
+        // reaches no DRE sitemap document today (the items sitemap carries no
+        // image entries, as IWAC SEO's does), but its visibility would the day
+        // one does, and a clear costs one rebuild.
+        foreach (['Omeka\Api\Adapter\MediaAdapter', 'Omeka\Api\Adapter\SiteAdapter'] as $adapter) {
+            $sharedEventManager->attach($adapter, 'api.create.post', [$this, 'handleSitemapChange']);
+            $sharedEventManager->attach($adapter, 'api.update.post', [$this, 'handleSitemapChange']);
+            $sharedEventManager->attach($adapter, 'api.delete.post', [$this, 'handleSitemapChange']);
         }
     }
 
@@ -530,10 +547,11 @@ class Module extends AbstractModule
     }
 
     /**
-     * Queue a record a save changed: a created or updated one when it is
-     * public, so engines crawl the change, or when it has just been made
-     * private, so they recrawl the page and drop it; a deleted one at the URL
-     * noted before the deletion.
+     * A record a save changed: invalidate the sitemap, then queue the record
+     * for IndexNow — a created or updated one when it is public, so engines
+     * crawl the change, or when it has just been made private, so they
+     * recrawl the page and drop it; a deleted one at the URL noted before the
+     * deletion.
      */
     public function handleContentChange(EventInterface $event): void
     {
@@ -546,6 +564,8 @@ class Module extends AbstractModule
             $deletedUrl = $this->deletedUrls[$request] ?? null;
             unset($this->wasPublic[$request], $this->deletedUrls[$request]);
         }
+
+        $this->invalidateSitemap();
 
         if (!$this->getServiceLocator()->get(PingQueue::class)->isEnabled()) {
             return;
@@ -563,6 +583,33 @@ class Module extends AbstractModule
         }
         if ($url !== null) {
             $this->queuePing($url);
+        }
+    }
+
+    /** A change that reshapes a sitemap without being one of its URLs: invalidate only. */
+    public function handleSitemapChange(EventInterface $event): void
+    {
+        $this->invalidateSitemap();
+    }
+
+    /**
+     * Invalidate the sitemap cache so a change shows on the next crawl
+     * instead of after the cache lifetime (24 hours by default) or the
+     * dashboard's Regenerate button. Any create, update or delete can affect
+     * the URL set or a <lastmod>, a public→private edit included, so there is
+     * no public check. A failure is the generator's to log; it must never
+     * break the save.
+     */
+    private function invalidateSitemap(): void
+    {
+        $services = $this->getServiceLocator();
+        try {
+            if (!Service\SettingFlag::isOn($services->get('Omeka\Settings'), 'dre_seo_sitemap_enabled', true)) {
+                return;
+            }
+            $services->get(SitemapGenerator::class)->clearCache();
+        } catch (\Throwable $e) {
+            // never let SEO bookkeeping break a save
         }
     }
 
