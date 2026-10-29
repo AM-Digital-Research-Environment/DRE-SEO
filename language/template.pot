@@ -1,6 +1,7 @@
 # DRE SEO – translation template
 #
 # This file is distributed under the same license as the DRE SEO module.
+# Regenerate with: composer i18n
 #
 msgid ""
 msgstr ""
@@ -12,125 +13,306 @@ msgstr ""
 "Language: \n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "SEO"
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "150–160 characters"
 msgstr ""
 
-msgid "Static pages"
+#: src/Form/ConfigForm.php
+msgid "A 8–128 character hex key you choose. The module serves it at /{key}.txt so IndexNow can verify ownership. Generate one with: openssl rand -hex 16."
 msgstr ""
 
-msgid "Static-page SEO"
-msgstr ""
-
-msgid "Status"
-msgstr ""
-
-msgid "Feature"
-msgstr ""
-
-msgid "State"
-msgstr ""
-
-msgid "On"
-msgstr ""
-
-msgid "Off"
-msgstr ""
-
-msgid "Google Search Console verification"
-msgstr ""
-
-msgid "schema.org JSON-LD"
-msgstr ""
-
-msgid "XML sitemap & robots.txt"
-msgstr ""
-
-msgid "IndexNow ping"
-msgstr ""
-
-msgid "Sitemap"
-msgstr ""
-
-msgid "Edit per-page SEO"
-msgstr ""
-
-msgid "Configure defaults & verification"
-msgstr ""
-
-msgid "Page"
-msgstr ""
-
-msgid "Meta title"
-msgstr ""
-
-msgid "Meta description"
-msgstr ""
-
-msgid "Share image (asset ID)"
-msgstr ""
-
-msgid "Indexing"
-msgstr ""
-
-msgid "Default (indexable)"
-msgstr ""
-
-msgid "Index, follow"
-msgstr ""
-
-msgid "Noindex"
-msgstr ""
-
-msgid "Save"
-msgstr ""
-
-msgid "Sitemap cache cleared — it will be rebuilt on the next request."
-msgstr ""
-
-msgid "Static-page SEO saved."
-msgstr ""
-
-msgid "Invalid form submission."
-msgstr ""
-
-msgid "JSON-LD"
-msgstr ""
-
-msgid "Override the title, description, share image, indexing and JSON-LD for individual static pages. Leave a field blank to fall back to the page’s own content and the site-wide defaults set in Configure. Resource (item) pages derive their SEO automatically and are not listed here."
-msgstr ""
-
-msgid "Access statement for research items"
-msgstr ""
-
-msgid "Closes the schema.org conditionsOfAccess of every research item (an item that is part of a project), after its recorded access rights. Leave blank for the default, translated into the page language: “AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record.”"
-msgstr ""
-
-msgid "AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record."
-msgstr ""
-
-msgid "Noindex filtered / paginated browse pages"
-msgstr ""
-
-msgid "Keeps faceted and paginated browse URLs, search results pages (Omeka’s site search and DRE Search) and any other URL with a query string out of the index — they add little and dilute crawl budget — while crawlers still follow their links to the resource pages. A record paging through its connection lists stays indexable. Recommended."
-msgstr ""
-
-msgid "Ping IndexNow when content changes"
-msgstr ""
-
-msgid "Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead)."
-msgstr ""
-
-msgid "Redirect a project’s item set page to the project"
-msgstr ""
-
+#: Module.php
 msgid "A research project is both an item and the item set of its collection. When on, the item set’s page answers with a permanent redirect (301) to the project item, which is then the project’s one page in search engines and the sitemap. An item set is a project’s when its “Is Part Of” links to the public project item, or the public project item has the same dre:id."
 msgstr ""
 
+#: src/Service/StructuredData.php
+msgid "AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Access statement for research items"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Adds Highwire Press (citation_*) and Dublin Core (DC.*) <meta> tags to resource pages so the Zotero Connector, Google Scholar and reference managers capture each item as a proper reference. Also powers the formatted Chicago/APA/MLA citations shown on record pages and the BibTeX/RIS/CSL-JSON downloads at /cite. Recommended."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Adds structured data (Person, Place, Organization, CreativeWork/Dataset, scholarly types …) to resource pages for richer search results and Google Dataset Search. With DRE Linked Data installed, each record is identified by its permanent /resource/{id} URI. Recommended. Omeka embeds a second JSON-LD block of its own that contradicts this one; switch it off in the site’s settings (“Disable JSON-LD embed”)."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Bing Webmaster verification"
+msgstr ""
+
+#: Module.php
 msgid "Breadcrumb landing pages"
 msgstr ""
 
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Citation tags (Zotero / Scholar)"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Closes the schema.org conditionsOfAccess of every research item (an item that is part of a project), after its recorded access rights. Leave blank for the default, translated into the page language: “AMIRA holds the description of this material, not the material itself. Requests for access go to the research project named in the record.”"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Configure defaults & verification"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Covering %1$s public items, %2$s item sets and %3$s pages."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Default (indexable)"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Default meta description"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Default social share image"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Discourage search engines from indexing the whole site"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Edit per-page SEO"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Emit citations (Zotero / Google Scholar / record page)"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Emit schema.org JSON-LD"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Feature"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Generates a sitemap index plus per-type child sitemaps for all public resources, and a robots.txt that points at it."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Google Search Console verification"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "How long a generated sitemap is cached before it is rebuilt on the next request. Default 86400 (24h). Use the “Regenerate now” button on the SEO admin page to rebuild immediately."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Index, follow"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "IndexNow key"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "IndexNow ping"
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Indexing"
+msgstr ""
+
+#: src/Controller/Admin/SeoController.php
+msgid "Invalid form submission."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "JSON-LD"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Keeps faceted and paginated browse URLs, search results pages (Omeka’s site search and DRE Search) and any other URL with a query string out of the index — they add little and dilute crawl budget — while crawlers still follow their links to the resource pages. A record paging through its connection lists stays indexable. Recommended."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Meta description"
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Meta title"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "No"
+msgstr ""
+
+#: src/Controller/Admin/SeoController.php
+msgid "No site found."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Noindex"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Noindex filtered / paginated browse pages"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Notifies Bing/Yandex (and other IndexNow engines) when a public item, item set or page is added, edited, made private or deleted, so the change is crawled sooner. Concurrent edits are coalesced into one background batch; very large batches are left to the sitemap. Google is not pinged (its ping endpoint was retired — Google uses robots.txt + Search Console instead)."
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Off"
+msgstr ""
+
+#: Module.php
+msgid "Omeka still embeds its own JSON-LD in every record page of “%s”. It describes the record under a different identity (the API URL), includes every value (a thesis’s full text too), and contradicts the schema.org block this module emits. Turn it off under Sites → %s → Settings → “Disable JSON-LD embed”."
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "On"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Optional. Paste the <meta name=\"msvalidate.01\" …> tag or its token from Bing Webmaster Tools."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Optional. The site account, e.g. @AfricaMultiple — emitted as twitter:site."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Override the title, description, share image, indexing and JSON-LD for individual static pages. Leave a field blank to fall back to the page’s own content and the site-wide defaults set in Configure. Resource (item) pages derive their SEO automatically and are not listed here."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Page"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Paste the HTML-tag snippet Google gives you (the whole <meta name=\"google-site-verification\" …> tag) or just the token. It is injected into the <head> of every public page so Google can verify ownership. Then add the site at search.google.com/search-console and submit /sitemap.xml."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Ping IndexNow when content changes"
+msgstr ""
+
+#: Module.php
+msgid "Redirect a project’s item set page to the project"
+msgstr ""
+
+#: Module.php
+#: config/module.config.php
+#: view/dre-seo/admin/seo/dashboard.phtml
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "SEO"
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Save"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Serve /sitemap.xml and /robots.txt"
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Share image (asset ID)"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Site-wide “discourage indexing” is ON — every page is marked noindex and robots.txt disallows everything. Turn it off in Configure for production."
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Sitemap"
+msgstr ""
+
+#: src/Controller/Admin/SeoController.php
+msgid "Sitemap cache cleared — it will be rebuilt on the next request."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Sitemap cache lifetime (seconds)"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Staging switch. When on, every page gets robots \"noindex, nofollow\" and robots.txt disallows everything. Turn OFF in production."
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "State"
+msgstr ""
+
+#: config/module.config.php
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Static pages"
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "Static-page SEO"
+msgstr ""
+
+#: src/Controller/Admin/SeoController.php
+msgid "Static-page SEO saved."
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Status"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "The og:image / Twitter card image used when a page (or an item with no media) is shared. A landscape image around 1200×630 works best."
+msgstr ""
+
+#: Module.php
 msgid "The page that presents each item set’s records, named in the breadcrumb between the home page and the record: one “item set id = page slug” per line. A line replaces the module’s default for that item set, and “id =” with no slug removes it. A page that does not exist or is private is skipped. Blank: the defaults shown."
 msgstr ""
 
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "The sitemap is cached. Clear the cache to rebuild it immediately after a large content change."
+msgstr ""
+
+#: view/dre-seo/admin/seo/pages.phtml
+msgid "This site has no pages yet."
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Twitter / X @handle"
+msgstr ""
+
+#: src/Form/ConfigForm.php
+msgid "Used on pages that have no description of their own (the home page, browse and search pages). Resource pages derive their own description from the item metadata. Aim for 150–160 characters."
+msgstr ""
+
+#: Module.php
 msgid "Write one “item set id = page slug” per line, for example “29918 = publications”."
 msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "XML sitemap & robots.txt"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "Yes"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "no key set"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "paste your snippet in Configure"
+msgstr ""
+
+#: view/dre-seo/admin/seo/dashboard.phtml
+msgid "schema.org JSON-LD"
+msgstr ""
+

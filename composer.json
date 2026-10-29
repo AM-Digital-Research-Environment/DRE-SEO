@@ -37,7 +37,13 @@
     "lint": "phpcs",
     "lint:fix": "phpcbf",
     "analyse": "phpstan analyse",
+    "i18n": [
+      "@php .github/scripts/extract-strings.php",
+      "@php .github/scripts/compile-po.php"
+    ],
+    "i18n:check": "@php .github/scripts/extract-strings.php --check",
     "check": [
+      "@i18n:check",
       "@lint",
       "@analyse",
       "@test"
@@ -49,6 +55,8 @@
     "lint": "Check PSR-12 compliance.",
     "lint:fix": "Fix what PHP_CodeSniffer can fix automatically.",
     "analyse": "Run PHPStan at level 6 against the recorded baseline.",
+    "i18n": "Regenerate language/template.pot and compile any language/*.po.",
+    "i18n:check": "Fail when language/template.pot no longer matches the sources.",
     "check": "Everything CI runs except the Omeka integration test."
   },
   "config": {
