@@ -1,8 +1,12 @@
+# Dependabot watches the only two things in this repo that can go stale on
+# their own: the action pins in the workflows, and the three development tools
+# in composer.json. There are no runtime dependencies and vendor/ is never
+# committed, so none of this is about security patches — it is about learning
+# that a new major exists, on a branch where CI can say whether it breaks the
+# gate.
 version: 2
 
 updates:
-  # The module ships no third-party Composer dependencies, so Actions are the only
-  # moving parts worth watching.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -11,5 +15,18 @@ updates:
       prefix: ci
     groups:
       actions:
-        patterns:
-          - '*'
+        patterns: ['*']
+
+  # composer.lock is deliberately not committed, so Dependabot can only rewrite
+  # the constraint in composer.json, and only when a release falls outside it —
+  # in practice a major bump of PHPUnit, PHPStan or PHP_CodeSniffer. Grouped so
+  # that two landing in the same month stay a single PR.
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: dev
+    groups:
+      dev-tools:
+        patterns: ['*']

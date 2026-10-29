@@ -4,6 +4,15 @@ name: Release
 # GitHub release, so every tagged version ships an asset an admin can drop straight
 # into `modules/`. The archive comes from `git archive`, which honours the
 # `export-ignore` rules in .gitattributes — tests and repository furniture stay out.
+#
+# The tag is tested before anything is built: a tag is not retractable, so one that
+# cannot pass its own checks must not ship an asset. The checks are CI's `quality`
+# gates plus PHPUnit, at the 8.4 floor — the CI matrix is what covers production 8.5.
+#
+# Run manually with an existing tag to rebuild its zip and checksum and replace the
+# assets of its release. The checks are those of the tag's own composer.json, so a
+# tag from before the development toolchain (0.15.0 and earlier) has no `analyse` or
+# `i18n:check` script to run and fails here; re-upload those by hand.
 
 on:
   push:
@@ -17,12 +26,15 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     name: Build and publish DRESeo.zip
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
 
     steps:
       - name: Resolve tag
@@ -38,24 +50,9 @@ jobs:
         with:
           ref: ${{ steps.tag.outputs.tag }}
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: dom, json, mbstring
-          coverage: none
-          tools: composer:v2
-
-      # A tag that cannot pass its own test suite must not ship an asset.
-      - name: Validate Composer metadata
-        run: composer validate --strict
-
-      - name: Install development tools
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Lint and test
-        run: composer check
-
+      # The version lives in two files that nothing else keeps in step with the
+      # tag. Disagreement fails the build rather than shipping a zip whose
+      # module.ini contradicts its release.
       - name: Check declared versions match the tag
         shell: bash
         env:
@@ -80,8 +77,43 @@ jobs:
           fi
           echo "module.ini and CITATION.cff both declare ${VERSION}."
 
+      # 8.4 is the floor declared in composer.json, as in CI's quality job.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, json, mbstring
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install development tools
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      # As in CI, each check runs even when an earlier one fails, so a bad tag
+      # reports every category at once. Any failure still stops the build: the
+      # steps after these run only when all of them passed.
+      - name: Translation template is current
+        run: composer i18n:check
+
+      - name: Coding standard (PSR-12)
+        if: ${{ !cancelled() }}
+        run: composer lint
+
+      - name: Static analysis (PHPStan level 6)
+        if: ${{ !cancelled() }}
+        run: composer analyse
+
+      - name: Run tests
+        if: ${{ !cancelled() }}
+        run: vendor/bin/phpunit
+
       # The folder name inside the zip must be exactly `DRESeo` — Omeka matches the
-      # module directory against the PHP namespace.
+      # module directory against the PHP namespace. The checksum is written beside
+      # the zip under the zip's own name, so `sha256sum -c` run in the download
+      # directory verifies it as is.
       - name: Build DRESeo.zip
         shell: bash
         run: |
@@ -89,43 +121,83 @@ jobs:
           sha256sum DRESeo.zip > DRESeo.zip.sha256
           cat DRESeo.zip.sha256
 
+      # export-ignore is silent when it is wrong: a rule that stops matching (a
+      # renamed dev file, a new tool configuration) leaks without any error, and
+      # the zip just quietly grows. These assertions turn that into a failed build.
       - name: Verify archive contents
         shell: bash
         run: |
           contents="$(unzip -Z1 DRESeo.zip)"
           fail=0
 
-          for required in DRESeo/Module.php DRESeo/config/module.ini DRESeo/composer.json DRESeo/LICENSE; do
+          for required in DRESeo/Module.php DRESeo/config/module.ini DRESeo/composer.json \
+            DRESeo/language/template.pot DRESeo/README.md DRESeo/CHANGELOG.md DRESeo/LICENSE; do
             if ! grep -qxF "$required" <<< "$contents"; then
               echo "::error::${required} is missing from the archive"
               fail=1
             fi
           done
 
-          # export-ignore regressions are silent otherwise — the zip just quietly grows.
-          if grep -qE '^DRESeo/(tests/|\.github/|\.git)' <<< "$contents"; then
+          leaks='^DRESeo/(tests/|\.github/|\.git|\.editorconfig|\.phpunit\.cache/|vendor/|composer\.lock|phpunit[^/]*\.xml(\.dist)?$|phpstan[^/]*$|phpcs\.xml(\.dist)?$|CLAUDE\.md$)'
+          if grep -qE "$leaks" <<< "$contents"; then
             echo "::error::development files leaked into the archive:"
-            grep -E '^DRESeo/(tests/|\.github/|\.git)' <<< "$contents"
+            grep -E "$leaks" <<< "$contents"
             fail=1
           fi
+
+          sha256sum -c DRESeo.zip.sha256 || fail=1
 
           echo "Archive holds $(grep -vc '/$' <<< "$contents") files."
           exit "$fail"
 
+      # A new release takes its notes from the matching CHANGELOG section, so the
+      # release page and the file in the repository cannot tell different stories.
+      # A re-run for an existing release replaces its assets and leaves its notes.
       - name: Publish release assets
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
         run: |
+          set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG exists — replacing its assets."
             gh release upload "$TAG" DRESeo.zip DRESeo.zip.sha256 --clobber
-          else
-            prerelease=''
-            case "$TAG" in *-*) prerelease='--prerelease' ;; esac
-            gh release create "$TAG" DRESeo.zip DRESeo.zip.sha256 \
-              --title "$TAG" \
-              --generate-notes \
-              $prerelease
+            exit 0
           fi
+
+          # Headings read `## [0.15.0] — 2026-10-15`; index() rather than a regex,
+          # so the dots in the version are not wildcards.
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 || $0 == "## " v || index($0, "## " v " ") == 1 { found = 1; next }
+            /^## / && found { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error file=CHANGELOG.md::no '## [${VERSION}]' section to take the release notes from."
+            exit 1
+          fi
+
+          # Quoted delimiter: the backticks below are Markdown, not commands.
+          cat >> notes.md <<'EOF'
+
+          ## Installing
+
+          Download `DRESeo.zip` below and unzip it into your Omeka S `modules/`
+          directory — it already unpacks to a correctly named `DRESeo/` folder. Then
+          **Admin → Modules → DRE SEO → Install** (or **Upgrade**). To check the
+          download first, save `DRESeo.zip.sha256` beside it and run
+          `sha256sum -c DRESeo.zip.sha256` (on macOS, `shasum -a 256 -c DRESeo.zip.sha256`).
+
+          Do not use the "Source code" archives: they unpack to a folder named after
+          the repository, which the namespace will not resolve.
+          EOF
+
+          prerelease=''
+          case "$TAG" in *-*) prerelease='--prerelease' ;; esac
+          gh release create "$TAG" DRESeo.zip DRESeo.zip.sha256 \
+            --title "$TAG" \
+            --notes-file notes.md \
+            $prerelease

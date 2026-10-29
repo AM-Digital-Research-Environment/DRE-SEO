@@ -1,30 +1,88 @@
 name: CI
 
+# Branch pushes are covered by the pull_request trigger, so restricting push to
+# main keeps a PR from running every job twice — once for its branch and once
+# for the PR. Dependabot's branches live in this repo, which would make the
+# duplication routine rather than occasional. workflow_dispatch stays for a
+# run on demand.
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
+      # 8.4 is the floor declared in composer.json; 8.5 is what
+      # data.africamultiple.uni-bayreuth.de actually runs. Both ends of the
+      # supported range need to stay covered.
       matrix:
         php: ['8.4', '8.5']
-
+    name: PHP ${{ matrix.php }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
+          extensions: dom, json, mbstring
+          coverage: none
+          tools: composer:v2
+
+      - name: Locate Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      # Every PHP file and template, on both versions: the unit suite does not
+      # load the .phtml views, so this is what catches a syntax error there.
+      - name: Syntax check
+        run: |
+          find . -path ./vendor -prune -o \( -name '*.php' -o -name '*.phtml' \) -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Install development tools
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+  # The rest of `composer check`. Kept off the matrix: the translation
+  # template, PSR-12 compliance and the PHPStan result do not vary across
+  # 8.4–8.5, so running them twice would double the wall clock for no extra
+  # signal.
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Lint & analyse
+    steps:
+      - uses: actions/checkout@v7
+
+      # 8.4 is the module's declared floor, and phpstan.neon.dist sets no
+      # phpVersion — PHPStan reports against the version it runs on, so
+      # analysing at the floor is what would catch a violation of it. The
+      # matrix above is what covers 8.5, the deployed version.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
           extensions: dom, json, mbstring
           coverage: none
           tools: composer:v2
@@ -32,44 +90,104 @@ jobs:
       - name: Validate Composer metadata
         run: composer validate --strict
 
+      - name: Locate Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
       - name: Install development tools
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Syntax check
-        run: |
-          find . -path ./vendor -prune -o \( -name '*.php' -o -name '*.phtml' \) -print0 \
-            | xargs -0 -n1 -P4 php -l > /dev/null
+      # Each check runs even when an earlier one fails, so a push reports every
+      # category at once rather than revealing them one re-run at a time. The
+      # job still fails if any of them does.
+      - name: Translation template is current
+        id: i18n
+        if: ${{ !cancelled() }}
+        run: composer i18n:check
 
-      - name: Lint and test
-        run: composer check
+      - name: Coding standard (PSR-12)
+        if: ${{ !cancelled() }}
+        run: composer lint
 
-  omeka-smoke:
-    name: Omeka S 4.2.1 / PHP 8.5
+      - name: Static analysis (PHPStan level 6)
+        if: ${{ !cancelled() }}
+        run: composer analyse
+
+      # A stale template is fixed by regenerating it, which needs PHP. So that
+      # a contributor without it can still commit the fix, regenerate the
+      # template here and publish it as an artefact. The gate only fires when
+      # the set of translatable strings changes — its `#:` references carry no
+      # line numbers — so this is not noise from code that merely moved.
+      #
+      # Deliberately not doing the same for phpstan-baseline.neon: with the
+      # baseline in `includes`, its own entries are already suppressed during
+      # analysis, so regenerating here would emit a baseline covering only the
+      # *new* errors and silently drop the recorded debt. Regenerating it is a
+      # deliberate act — see the header of phpstan.neon.dist.
+      - name: Regenerate the translation template
+        if: ${{ failure() && steps.i18n.outcome == 'failure' }}
+        run: composer i18n
+
+      - name: Upload the regenerated template
+        if: ${{ failure() && steps.i18n.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: language
+          path: language/
+          if-no-files-found: error
+
+  # Deliberately separate from the fast unit matrix. Omeka owns the Laminas,
+  # Doctrine and PSR runtime, so the suite runs against the official release
+  # zip — the very files an administrator installs, verified against the
+  # published checksum — and loads its vendor tree before the module's
+  # development-only one. It checks framework contracts and wiring without
+  # growing tests/Shim/omeka.php.
+  integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Omeka S 4.2.1 / PHP 8.5
     env:
       OMEKA_VERSION: '4.2.1'
       OMEKA_SHA256: cc27d1c7aca0209523d19aa285f4a08e29e34950dcc446951a7c1311de348e82
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
           extensions: dom, json, mbstring, pdo_sqlite
           coverage: none
           tools: composer:v2
 
-      - name: Download official Omeka S release
+      - name: Download the official Omeka S release
         shell: bash
         run: |
+          set -euo pipefail
           archive="$RUNNER_TEMP/omeka-s.zip"
           curl -fsSL "https://github.com/omeka/omeka-s/releases/download/v${OMEKA_VERSION}/omeka-s-${OMEKA_VERSION}.zip" -o "$archive"
           echo "${OMEKA_SHA256}  ${archive}" | sha256sum -c -
           unzip -q "$archive" -d "$RUNNER_TEMP"
           echo "OMEKA_PATH=$RUNNER_TEMP/omeka-s" >> "$GITHUB_ENV"
+
+      - name: Locate Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
 
       - name: Install module development tools
         run: composer install --prefer-dist --no-interaction --no-progress
