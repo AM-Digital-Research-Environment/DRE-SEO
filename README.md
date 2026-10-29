@@ -214,7 +214,7 @@ site setting is off.
 
 ### schema.org `@type` map
 
-Driven by `config/module.config.php → dre_seo.structured_data.template_types` (overridable via
+Driven by `config/instance.config.php → dre_seo.structured_data.template_types` (overridable via
 `config/local.config.php`), keyed by Omeka resource-template id:
 
 | Template | `@type` |
@@ -295,7 +295,7 @@ item-set sitemap leaves those item sets out (one query, two correlated subquerie
 | Item set | Home › *its landing page* › item set |
 
 A landing page is the site page mapped to one of the item's item sets (those the site uses
-first) — `dre_seo.breadcrumb.landing_pages` in `config/module.config.php` for AMIRA, the
+first) — `dre_seo.breadcrumb.landing_pages` in `config/instance.config.php` for AMIRA, the
 site setting **Breadcrumb landing pages** over it. The crumb is the page's title and URL,
 and counts only when the page exists in the site and is public. A project is placed as any
 item is: the Projects item set maps to *Research projects*.
@@ -327,7 +327,7 @@ vocabularies Zotero's *Embedded Metadata* translator reads:
   video's speakers).
 
 The Highwire item-type mapping lives in `dre_seo.citation.template_kinds`
-(`config/module.config.php`) and is overridable. The thesis templates (doctoral 16,
+(`config/instance.config.php`) and is overridable. The thesis templates (doctoral 16,
 habilitation 30, master's 31, bachelor's 32) share the `thesis` kind; the degree comes from the
 item's FaBiO class, so only a `fabio:DoctoralThesis` is cited as a PhD dissertation, and the
 habilitation's plain `fabio:Thesis` reads as "Thesis".
@@ -490,7 +490,8 @@ DRESeo/
 ├── phpcs.xml.dist                   # PSR-12
 ├── config/
 │   ├── module.ini
-│   └── module.config.php            # routes, services, navigation, dre_seo defaults
+│   ├── module.config.php            # wiring: routes, services, controllers, navigation
+│   └── instance.config.php          # AMIRA data: the dre_seo block (template maps, landing pages …)
 ├── scripts/drain-indexnow.php       # the five-minute IndexNow cron (CLI only)
 ├── src/
 │   ├── Controller/

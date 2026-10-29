@@ -9,7 +9,8 @@ use DRESeo\Service\CitationFormatter;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Contracts of config/module.config.php and composer.json: every template
+ * Contracts of the merged configuration (config/module.config.php over
+ * config/instance.config.php) and composer.json: every template
  * AMIRA defines (tests/Fixture/amira-templates.php) is mapped, and the
  * citation stack is wired end to end.
  */

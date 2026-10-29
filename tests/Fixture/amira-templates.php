@@ -6,7 +6,7 @@ declare(strict_types=1);
  * them (checked 2026-10-06; MongoDB2OmekaS pins the same ids in
  * config/profiles/amira.json).
  *
- * Both template maps in config/module.config.php are keyed by these ids, and a
+ * Both template maps in config/instance.config.php are keyed by these ids, and a
  * template either map does not name falls back silently to a generic
  * CreativeWork / 'item' — which is how the publication templates 24-32 went
  * live unmapped. When the site gains a template, add it here: the

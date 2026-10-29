@@ -130,7 +130,8 @@ jobs:
           contents="$(unzip -Z1 DRESeo.zip)"
           fail=0
 
-          for required in DRESeo/Module.php DRESeo/config/module.ini DRESeo/composer.json \
+          for required in DRESeo/Module.php DRESeo/config/module.ini DRESeo/config/module.config.php \
+            DRESeo/config/instance.config.php DRESeo/composer.json \
             DRESeo/language/template.pot DRESeo/scripts/drain-indexnow.php \
             DRESeo/README.md DRESeo/OPERATIONS.md DRESeo/CHANGELOG.md DRESeo/LICENSE; do
             if ! grep -qxF "$required" <<< "$contents"; then

@@ -1,0 +1,171 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * AMIRA instance data.
+ *
+ * What the Africa Multiple DRE instance's ids *mean* — the schema.org @type
+ * and the citation kind per resource template, the item sets' breadcrumb
+ * landing pages, the publisher cited for authority records, the citation
+ * styles and downloads offered, the sitemap's chunk size — kept apart from
+ * module.config.php, which is framework wiring only (services, routes,
+ * controllers, forms), so that:
+ *
+ *   • remapping a template or adding a landing page is an edit to data, not
+ *     to plumbing;
+ *   • another Omeka instance can adopt the module by replacing this one file.
+ *
+ * The template and item-set ids are pinned in
+ * MongoDB2OmekaS/config/profiles/amira.json. Every key is overridable, key by
+ * key, from config/local.config.php.
+ */
+
+namespace DRESeo;
+
+return [
+    'dre_seo' => [
+        'sitemap' => [
+            'item_chunk_size' => 50000,
+            // <priority> and <changefreq> per URL kind (home, section, item,
+            // page, browse). Empty by default: Google and Bing both document
+            // that they ignore them and read only an accurate <lastmod>. Fill
+            // these from config/local.config.php for a consumer that wants them.
+            'priority'   => [],
+            'changefreq' => [],
+        ],
+        'breadcrumb' => [
+            // The site page that presents each item set's kind of record,
+            // named in the breadcrumb between the home page and the record:
+            // item set id => page slug (AMIRA's sets, pinned in
+            // MongoDB2OmekaS/config/profiles/amira.json). A page that does not
+            // exist or is private in the site is skipped, and the breadcrumb
+            // names the item set instead. A site overrides this, line by line,
+            // in its settings (SEO → Breadcrumb landing pages).
+            'landing_pages' => [
+                20    => 'research-projects', // Projects
+                17    => 'research-sections', // Research Sections
+                18    => 'people',            // Persons
+                110   => 'organisations',     // Institutions
+                29918 => 'publications',      // Publications
+                39095 => 'podcasts',          // Podcasts
+                39192 => 'youtube-videos',    // YouTube videos
+                1852  => 'subjects-tags',     // Subjects
+                1851  => 'locations',         // Locations
+                19    => 'languages',         // Languages
+                21    => 'genres',            // Genres
+                41268 => '',                  // Journals: no page of their own
+                45028 => '',                  // Series: no page of their own
+            ],
+        ],
+        'structured_data' => [
+            // schema.org @type per Omeka resource template id (pinned in
+            // MongoDB2OmekaS/config/profiles/amira.json; the list in
+            // tests/Fixture/amira-templates.php fails the suite when a site
+            // template is missing here).
+            'default_type'   => 'CreativeWork',
+            // dcterms:accessRights label => whether that access is free, for a
+            // research item's isAccessibleForFree. A label not listed (AMIRA's
+            // "No Raw Data") decides nothing, and the property is left out.
+            'access_free'    => [
+                'Public'     => true,
+                'Group'      => false,
+                'Individual' => false,
+            ],
+            'template_types' => [
+                2  => 'Organization',     // organisation (foaf:Organization)
+                3  => 'Place',            // location
+                4  => 'Person',           // persons
+                5  => 'ResearchProject',  // projects
+                6  => 'DefinedTerm',      // authority resource: subjects, languages, genres, tags
+                7  => 'ResearchProject',  // research sections (frapo:ResearchGroup, with members)
+                10 => 'CreativeWork',     // research items
+                11 => 'ScholarlyArticle', // article (fabio:JournalArticle)
+                12 => 'CreativeWork',     // working paper
+                13 => 'ScholarlyArticle', // conference paper
+                14 => 'Chapter',          // book chapter
+                15 => 'Book',             // book
+                16 => 'Thesis',           // doctoral thesis
+                17 => 'PublicationIssue', // journal issue
+                18 => 'ScholarlyArticle', // book review (not schema.org Review: scholarly reviews carry no reviewRating, so Google rejects the Review type)
+                19 => 'BlogPosting',      // online post
+                20 => 'Dataset',          // research data
+                21 => 'PodcastEpisode',   // podcasts (fabio:AudioDocument)
+                22 => 'VideoObject',      // YouTube video (bibo:AudioVisualDocument)
+                23 => 'Periodical',       // journal (bibo:Journal), a venue rather than a work
+                24 => 'ScholarlyArticle', // preprint (fabio:Preprint)
+                25 => 'NewsArticle',      // newspaper article (fabio:NewspaperArticle)
+                26 => 'Chapter',          // legal commentary (fabio:Entry): an entry in a commentary volume
+                27 => 'Chapter',          // encyclopedia entry (fabio:ReferenceEntry): schema.org has no entry type
+                28 => 'Book',             // translation (bibo:Document)
+                29 => 'CreativeWorkSeries', // series editorship (fabio:Series): a book series or a journal
+                30 => 'Thesis',           // habilitation (fabio:Thesis)
+                31 => 'Thesis',           // master's thesis
+                32 => 'Thesis',           // bachelor's thesis
+            ],
+        ],
+        'citation' => [
+            // Highwire Press citation kind per resource template id. Entity
+            // kinds (person/place/organization/project/section) emit Dublin Core
+            // only; the rest emit kind-specific citation_* tags for Zotero.
+            'default_kind'   => 'item',
+            // Templates whose kind is scholarly but whose items are not papers:
+            // they carry Dublin Core only, no Highwire citation_* tags.
+            'highwire_excluded_templates' => [
+                17, // journal issue: the issue, not an article in it
+                29, // series editorship: a book series or a journal
+            ],
+            // Who publishes the database, named in the entry citation of an
+            // authority record ("Aas, Norbert." Person record. AMIRA. <publisher>.).
+            'publisher'      => 'Africa Multiple Cluster of Excellence, University of Bayreuth',
+            'template_kinds' => [
+                2  => 'organization', // organisation
+                3  => 'place',        // location
+                4  => 'person',       // persons
+                5  => 'project',      // projects
+                6  => 'authority',    // subjects, languages, genres, sponsors, …
+                7  => 'section',      // research sections
+                10 => 'item',         // research items (generic document)
+                11 => 'article',      // journal article
+                12 => 'report',       // working paper
+                13 => 'conference',   // conference paper
+                14 => 'chapter',      // book chapter
+                15 => 'book',         // book
+                16 => 'thesis',       // doctoral thesis
+                17 => 'article',      // journal issue
+                18 => 'article',      // book review
+                19 => 'post',         // online post
+                20 => 'dataset',      // research data
+                21 => 'podcast',      // podcast episode
+                22 => 'video',        // YouTube video
+                23 => 'journal',      // publication venue, not a work
+                24 => 'report',       // preprint: an unpublished manuscript, cited like a working paper
+                25 => 'article',      // newspaper article (the newspaper is the journal title)
+                26 => 'chapter',      // legal commentary: an entry in a commentary volume
+                27 => 'chapter',      // encyclopedia entry: an entry in an edited reference work
+                28 => 'book',         // translation
+                29 => 'book',         // series editorship (the editors stand as "eds.")
+                // The thesis templates share one kind; CitationData reads the
+                // degree from the FaBiO class, so only 16 is cited as a PhD.
+                30 => 'thesis',       // habilitation
+                31 => 'thesis',       // master's thesis
+                32 => 'thesis',       // bachelor's thesis
+            ],
+
+            // The formatted citations offered in the record rail, in the order
+            // the theme shows them. A hand-entered dcterms:bibliographicCitation
+            // is prepended by the view helper as the 'curated' style and takes
+            // precedence over `default_style`.
+            'default_style' => 'chicago',
+            'styles'        => [
+                'chicago' => 'Chicago',
+                'apa'     => 'APA',
+                'mla'     => 'MLA',
+            ],
+            'curated_label' => 'As catalogued',
+
+            // Download serialisations offered at /cite/{id}/{format}; `txt` is
+            // the default style's citation as plain text.
+            'formats' => ['bibtex', 'ris', 'csljson', 'txt'],
+        ],
+    ],
+];
