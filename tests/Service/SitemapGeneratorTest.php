@@ -7,9 +7,14 @@ use Doctrine\DBAL\Connection;
 use DOMDocument;
 use DOMXPath;
 use DRESeo\Service\PageSeoStore;
+use DRESeo\Service\Sitemap\SitemapRepository;
+use DRESeo\Service\Sitemap\UrlsetWriter;
+use DRESeo\Service\Sitemap\XmlCache;
 use DRESeo\Service\SitemapGenerator;
 use DRESeo\Test\Double\FakeConnection;
+use DRESeo\Test\Double\InMemorySitemapRepository;
 use DRESeo\Test\Double\MemoryLogger;
+use Laminas\Log\LoggerInterface;
 use Omeka\Settings\SiteSettings;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -41,6 +46,21 @@ final class SitemapGeneratorTest extends TestCase
         ];
     }
 
+    /**
+     * The generator as its factory assembles it, over $connection.
+     *
+     * @param array<string,mixed> $config
+     */
+    private static function generator(Connection $connection, array $config, ?string $cacheDir, LoggerInterface $logger): SitemapGenerator
+    {
+        return new SitemapGenerator(
+            new SitemapRepository($connection, $logger),
+            new UrlsetWriter(),
+            new XmlCache($cacheDir, $logger),
+            $config
+        );
+    }
+
     /** @return string[] the <loc> of every $element in a sitemap document */
     private static function xmlLocations(string $xml, string $element): array
     {
@@ -62,12 +82,12 @@ final class SitemapGeneratorTest extends TestCase
         $connection = new FakeConnection();
         $connection->itemCounts = [1 => 1, 2 => 5];
         $cacheDir = sys_get_temp_dir() . '/dre-seo-test-' . bin2hex(random_bytes(6));
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), $cacheDir, new MemoryLogger());
+        $generator = self::generator($connection, self::sitemapConfig(), $cacheDir, new MemoryLogger());
 
         try {
-            $siteOne = $generator->buildIndex('https://one.example', 1, 3600);
-            $siteTwo = $generator->buildIndex('https://two.example', 2, 3600);
-            $movedHost = $generator->buildIndex('https://moved.example', 1, 3600);
+            $siteOne = $generator->buildIndex('https://one.example', 1, 3600)->xml;
+            $siteTwo = $generator->buildIndex('https://two.example', 2, 3600)->xml;
+            $movedHost = $generator->buildIndex('https://moved.example', 1, 3600)->xml;
 
             $this->assertSame([
                 'https://one.example/sitemap-pages.xml',
@@ -77,10 +97,7 @@ final class SitemapGeneratorTest extends TestCase
             $this->assertSame(5, count(self::xmlLocations($siteTwo, 'sitemap')));
             $this->assertSame('https://moved.example/sitemap-pages.xml', self::xmlLocations($movedHost, 'sitemap')[0]);
         } finally {
-            $generator->clearCache();
-            if (is_dir($cacheDir)) {
-                rmdir($cacheDir);
-            }
+            $generator->destroyCache();
         }
     }
 
@@ -90,7 +107,7 @@ final class SitemapGeneratorTest extends TestCase
         $connection->itemCounts = [1 => 1];
         $cacheDir = sys_get_temp_dir() . '/dre-seo-test-' . bin2hex(random_bytes(6));
         $logger = new MemoryLogger();
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), $cacheDir, $logger);
+        $generator = self::generator($connection, self::sitemapConfig(), $cacheDir, $logger);
 
         $generator->buildIndex('https://one.example', 1, 3600);
         $this->assertNotSame([], glob($cacheDir . '/*.xml'), 'the index was cached');
@@ -111,7 +128,7 @@ final class SitemapGeneratorTest extends TestCase
             ['id' => 3, 'slug' => 'team', 'modified' => null],
             ['id' => 4, 'slug' => 'hidden', 'modified' => null],
         ];
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), null, new MemoryLogger());
+        $generator = self::generator($connection, self::sitemapConfig(), null, new MemoryLogger());
         $navigation = [[
             'type' => 'page',
             'data' => ['id' => 2],
@@ -127,7 +144,7 @@ final class SitemapGeneratorTest extends TestCase
             0,
             $navigation,
             1
-        );
+        )->xml;
 
         // `/` and `/s/amira` only redirect to the home page; it is listed at the
         // URL its canonical names.
@@ -152,9 +169,9 @@ final class SitemapGeneratorTest extends TestCase
             ['id' => 3, 'modified' => '2026-06-07 08:09:10'],
             ['id' => 4, 'modified' => null],
         ];
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), null, new MemoryLogger());
+        $generator = self::generator($connection, self::sitemapConfig(), null, new MemoryLogger());
 
-        $xml = $generator->buildItems('https://example.test/s/amira', 1, 2, 0);
+        $xml = $generator->buildItems('https://example.test/s/amira', 1, 2, 0)->xml;
 
         $this->assertSame([
             'https://example.test/s/amira/item/3',
@@ -180,7 +197,7 @@ final class SitemapGeneratorTest extends TestCase
             }
         };
         $logger = new MemoryLogger();
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), null, $logger);
+        $generator = self::generator($connection, self::sitemapConfig(), null, $logger);
 
         $this->assertSame(['items' => 0, 'itemSets' => 0, 'pages' => 0], $generator->counts(42));
         $this->assertSame(3, count($logger->records['err'] ?? []));
@@ -193,9 +210,9 @@ final class SitemapGeneratorTest extends TestCase
         $connection = new FakeConnection();
         $connection->itemCounts = [1 => 1];
         $connection->latest = ['pages' => '2026-06-25 08:52:27', 'item-sets' => null, 'items' => '2026-10-07 12:00:00'];
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), null, new MemoryLogger());
+        $generator = self::generator($connection, self::sitemapConfig(), null, new MemoryLogger());
 
-        $xml = $generator->buildIndex('https://example.test', 1, 0);
+        $xml = $generator->buildIndex('https://example.test', 1, 0)->xml;
 
         $this->assertTrue(str_contains($xml, 'sitemap-pages.xml</loc><lastmod>2026-06-25T08:52:27+00:00</lastmod>'), 'pages dated by their latest edit');
         $this->assertTrue(str_contains($xml, 'sitemap-items-1.xml</loc><lastmod>2026-10-07T12:00:00+00:00</lastmod>'), 'items dated by their latest edit');
@@ -208,9 +225,9 @@ final class SitemapGeneratorTest extends TestCase
         $config = require __DIR__ . '/../../config/module.config.php';
         $connection = new FakeConnection();
         $connection->items[1] = [['id' => 5, 'modified' => '2026-01-01 00:00:00']];
-        $generator = new SitemapGenerator($connection, $config['dre_seo']['sitemap'], null, new MemoryLogger());
+        $generator = self::generator($connection, $config['dre_seo']['sitemap'], null, new MemoryLogger());
 
-        $xml = $generator->buildItems('https://example.test/s/amira', 1, 1, 0);
+        $xml = $generator->buildItems('https://example.test/s/amira', 1, 1, 0)->xml;
 
         $this->assertTrue(!str_contains($xml, '<priority>') && !str_contains($xml, '<changefreq>'));
         $this->assertTrue(str_contains($xml, '<lastmod>2026-01-01T00:00:00+00:00</lastmod>'));
@@ -224,9 +241,9 @@ final class SitemapGeneratorTest extends TestCase
             ['id' => 2, 'slug' => 'imprint', 'modified' => null],
             ['id' => 3, 'slug' => 'team', 'modified' => null],
         ];
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), null, new MemoryLogger());
+        $generator = self::generator($connection, self::sitemapConfig(), null, new MemoryLogger());
 
-        $xml = $generator->buildPages('https://example.test/s/amira', 1, 0, [], 1, [2]);
+        $xml = $generator->buildPages('https://example.test/s/amira', 1, 0, [], 1, [2])->xml;
 
         $this->assertSame([
             'https://example.test/s/amira/page/home',
@@ -252,16 +269,16 @@ final class SitemapGeneratorTest extends TestCase
             ['id' => 29918, 'modified' => null],
         ];
         $connection->projectSetIds = [6259];
-        $generator = new SitemapGenerator($connection, self::sitemapConfig(), null, new MemoryLogger());
+        $generator = self::generator($connection, self::sitemapConfig(), null, new MemoryLogger());
 
         $this->assertSame([
             'https://example.test/s/amira/item-set/20',
             'https://example.test/s/amira/item-set/29918',
-        ], self::xmlLocations($generator->buildItemSets('https://example.test/s/amira', 1, 0, true), 'url'));
+        ], self::xmlLocations($generator->buildItemSets('https://example.test/s/amira', 1, 0, true)->xml, 'url'));
         $this->assertSame(2, $generator->counts(1, true)['itemSets']);
 
         // The site keeps its item-set pages: every public item set is listed.
-        $this->assertSame(3, count(self::xmlLocations($generator->buildItemSets('https://example.test/s/amira', 1, 0), 'url')));
+        $this->assertSame(3, count(self::xmlLocations($generator->buildItemSets('https://example.test/s/amira', 1, 0)->xml, 'url')));
         $this->assertSame(3, $generator->counts(1)['itemSets']);
 
         // One query per sitemap, the exclusion inside it.
@@ -270,5 +287,92 @@ final class SitemapGeneratorTest extends TestCase
         foreach ($exclusions as $query) {
             $this->assertTrue(str_contains($query, "c.local_name = 'Project'") && str_contains($query, "sp.local_name = 'id'"));
         }
+    }
+
+    // ─── The policy alone, over an in-memory repository ─────────────────────
+
+    /** @param array<string,mixed> $config */
+    private static function policy(InMemorySitemapRepository $repository, array $config = []): SitemapGenerator
+    {
+        return new SitemapGenerator($repository, new UrlsetWriter(), new XmlCache(null, new MemoryLogger()), $config);
+    }
+
+    public function testTheIndexListsOneChildPerItemChunkDatedByItsOwnRows(): void
+    {
+        $repository = new InMemorySitemapRepository();
+        $repository->items = [
+            ['id' => 1, 'modified' => '2026-01-01 00:00:00'],
+            ['id' => 2, 'modified' => '2026-03-01 00:00:00'],
+            ['id' => 3, 'modified' => null],
+            ['id' => 4, 'modified' => '2026-02-01 00:00:00'],
+            ['id' => 5, 'modified' => null],
+        ];
+
+        $xml = self::policy($repository, ['item_chunk_size' => 2])->buildIndex('https://example.test', 7, 0)->xml;
+
+        $this->assertSame([
+            'https://example.test/sitemap-pages.xml',
+            'https://example.test/sitemap-item-sets.xml',
+            'https://example.test/sitemap-items-1.xml',
+            'https://example.test/sitemap-items-2.xml',
+            'https://example.test/sitemap-items-3.xml',
+        ], self::xmlLocations($xml, 'sitemap'));
+        $this->assertStringContainsString('sitemap-items-1.xml</loc><lastmod>2026-03-01T00:00:00+00:00</lastmod>', $xml);
+        $this->assertStringContainsString('sitemap-items-2.xml</loc><lastmod>2026-02-01T00:00:00+00:00</lastmod>', $xml);
+        $this->assertStringContainsString('sitemap-items-3.xml</loc></sitemap>', $xml, 'nothing dated, no lastmod');
+    }
+
+    public function testAnItemsChunkReadsItsOwnSliceOfTheRepository(): void
+    {
+        $repository = new InMemorySitemapRepository();
+        $repository->items = [['id' => 1, 'modified' => null], ['id' => 2, 'modified' => null], ['id' => 3, 'modified' => null]];
+
+        $xml = self::policy($repository, ['item_chunk_size' => 2])->buildItems('https://example.test/s/amira', 7, 2, 0)->xml;
+
+        $this->assertSame(['siteId' => 7, 'offset' => 2, 'limit' => 2], $repository->lastItemFetch);
+        $this->assertSame(['https://example.test/s/amira/item/3'], self::xmlLocations($xml, 'url'));
+    }
+
+    /** An out-of-range chunk size falls back to the protocol's 50,000. */
+    public function testTheChunkSizeStaysWithinTheProtocol(): void
+    {
+        $repository = new InMemorySitemapRepository();
+        $repository->itemCount = 120000;
+
+        $this->assertSame(3, self::policy($repository, ['item_chunk_size' => 0])->itemChunkCount(1));
+        $this->assertSame(3, self::policy($repository, ['item_chunk_size' => 60000])->itemChunkCount(1));
+        $this->assertSame(12, self::policy($repository, ['item_chunk_size' => 10000])->itemChunkCount(1));
+        $repository->itemCount = 0;
+        $this->assertSame(1, self::policy($repository)->itemChunkCount(1), 'chunk 1 always exists');
+    }
+
+    /**
+     * A database outage is not an empty collection: the build fails, so
+     * the cache serves its last copy or the controller answers 503, instead
+     * of a sitemap listing nothing being served and cached for a day.
+     */
+    public function testARepositoryFailureFailsTheBuildRatherThanEmptyingTheSitemap(): void
+    {
+        $repository = new InMemorySitemapRepository();
+        $repository->failure = new RuntimeException('Database unavailable.');
+        $generator = self::policy($repository);
+
+        foreach (
+            [
+                static fn () => $generator->buildIndex('https://example.test', 1, 0),
+                static fn () => $generator->buildPages('https://example.test/s/amira', 1, 0),
+                static fn () => $generator->buildItemSets('https://example.test/s/amira', 1, 0),
+                static fn () => $generator->buildItems('https://example.test/s/amira', 1, 1, 0),
+            ] as $build
+        ) {
+            try {
+                $build();
+                $this->fail('An empty sitemap was built from a failed query.');
+            } catch (RuntimeException $e) {
+                $this->assertSame('Database unavailable.', $e->getMessage());
+            }
+        }
+        // The dashboard still renders.
+        $this->assertSame(['items' => 0, 'itemSets' => 0, 'pages' => 0], $generator->counts(1));
     }
 }

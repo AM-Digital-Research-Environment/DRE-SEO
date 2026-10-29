@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace DRESeo\Test\Service;
 
+use DRESeo\Service\Sitemap\SitemapRepository;
+use DRESeo\Service\Sitemap\UrlsetWriter;
+use DRESeo\Service\Sitemap\XmlCache;
 use DRESeo\Service\SitemapGenerator;
 use DRESeo\Test\Double\FakeConnection;
 use DRESeo\Test\Double\MemoryLogger;
@@ -64,11 +67,12 @@ final class SitemapOutputTest extends TestCase
     /** @param array<string,mixed>|null $config */
     private function generator(bool $cached, ?array $config = null): SitemapGenerator
     {
+        $logger = new MemoryLogger();
         return new SitemapGenerator(
-            $this->connection,
-            $config ?? self::hints(),
-            $cached ? $this->cacheDir : null,
-            new MemoryLogger()
+            new SitemapRepository($this->connection, $logger),
+            new UrlsetWriter(),
+            new XmlCache($cached ? $this->cacheDir : null, $logger),
+            $config ?? self::hints()
         );
     }
 
@@ -99,7 +103,7 @@ final class SitemapOutputTest extends TestCase
             </sitemapindex>
 
             XML,
-            static fn (SitemapGenerator $generator, int $ttl): string => (string) $generator->buildIndex('https://example.test', 1, $ttl, true)
+            static fn (SitemapGenerator $generator, int $ttl): string => $generator->buildIndex('https://example.test', 1, $ttl, true)->xml
         );
     }
 
@@ -121,7 +125,7 @@ final class SitemapOutputTest extends TestCase
             </urlset>
 
             XML,
-            static fn (SitemapGenerator $generator, int $ttl): string => (string) $generator->buildPages('https://example.test/s/amira', 1, $ttl, $navigation, 1, [5])
+            static fn (SitemapGenerator $generator, int $ttl): string => $generator->buildPages('https://example.test/s/amira', 1, $ttl, $navigation, 1, [5])->xml
         );
     }
 
@@ -135,7 +139,7 @@ final class SitemapOutputTest extends TestCase
             </urlset>
 
             XML,
-            static fn (SitemapGenerator $generator, int $ttl): string => (string) $generator->buildItemSets('https://example.test/s/amira', 1, $ttl, true)
+            static fn (SitemapGenerator $generator, int $ttl): string => $generator->buildItemSets('https://example.test/s/amira', 1, $ttl, true)->xml
         );
     }
 
@@ -150,7 +154,7 @@ final class SitemapOutputTest extends TestCase
             </urlset>
 
             XML,
-            static fn (SitemapGenerator $generator, int $ttl): string => (string) $generator->buildItems('https://example.test/s/a&b', 1, 1, $ttl)
+            static fn (SitemapGenerator $generator, int $ttl): string => $generator->buildItems('https://example.test/s/a&b', 1, 1, $ttl)->xml
         );
     }
 
@@ -169,7 +173,7 @@ final class SitemapOutputTest extends TestCase
             </urlset>
 
             XML,
-            (string) $this->generator(false, $config)->buildItems('https://example.test/s/amira', 1, 1, 0)
+            $this->generator(false, $config)->buildItems('https://example.test/s/amira', 1, 1, 0)->xml
         );
         $this->assertSame(
             <<<'XML'
@@ -178,7 +182,7 @@ final class SitemapOutputTest extends TestCase
             </urlset>
 
             XML,
-            (string) $this->generator(false, $config)->buildItems('https://example.test/s/amira', 1, 2, 0)
+            $this->generator(false, $config)->buildItems('https://example.test/s/amira', 1, 2, 0)->xml
         );
     }
 }

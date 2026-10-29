@@ -9,9 +9,12 @@ use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingFlag;
 use DRESeo\Service\SiteHome;
+use DRESeo\Service\Sitemap\SitemapDocument;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\Http\Response;
+use Laminas\Log\LoggerInterface;
 use Laminas\Mvc\Controller\AbstractActionController;
+use Laminas\Mvc\MvcEvent;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Settings\Settings;
 
@@ -25,6 +28,11 @@ use Omeka\Settings\Settings;
  *   /sitemap-items-{n}.xml     items, chunked at 50k
  *   /robots.txt                points crawlers at the sitemap
  *   /{indexnow-key}.txt        IndexNow ownership key
+ *
+ * A sitemap that cannot be built — the database is down and no recent copy
+ * is cached, or another request is still rebuilding it — is answered 503 with
+ * a Retry-After, which tells a crawler to come back rather than that the
+ * sitemap is gone or empty.
  */
 class SitemapController extends AbstractActionController
 {
@@ -34,7 +42,27 @@ class SitemapController extends AbstractActionController
         private readonly DefaultSite $defaultSite,
         private readonly ?PageSeoStore $pageSeoStore = null,
         private readonly ?ProjectResolver $projects = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {
+    }
+
+    public function onDispatch(MvcEvent $e): mixed
+    {
+        try {
+            return parent::onDispatch($e);
+        } catch (\Throwable $error) {
+            $this->logger?->err('DRESeo: the sitemap is unavailable; answered 503.', [
+                'exception' => $error,
+            ]);
+            $response = $this->getResponse();
+            $response->setStatusCode(503);
+            $response->setContent('Temporarily unavailable');
+            $headers = $response->getHeaders();
+            $headers->addHeaderLine('Content-Type', 'text/plain; charset=utf-8');
+            $headers->addHeaderLine('Retry-After', '300');
+            $headers->addHeaderLine('Cache-Control', 'no-store');
+            return $response;
+        }
     }
 
     public function indexAction(): Response
@@ -218,13 +246,18 @@ class SitemapController extends AbstractActionController
         }
     }
 
-    private function xml(string $body): Response
+    /**
+     * The document carries its own generation time, so Last-Modified is
+     * honest whether the cache served it or it was built just now.
+     */
+    private function xml(SitemapDocument $document): Response
     {
         $response = $this->getResponse();
-        $response->setContent($body);
+        $response->setContent($document->xml);
         $headers = $response->getHeaders();
         $headers->addHeaderLine('Content-Type', 'application/xml; charset=utf-8');
         $headers->addHeaderLine('X-Robots-Tag', 'noindex'); // don't index the sitemap file itself
+        $headers->addHeaderLine('Last-Modified', $document->lastModifiedHeader());
         return $response;
     }
 

@@ -9,8 +9,9 @@ use DRESeo\Service\SitemapGenerator;
 /**
  * The sitemap generator's SQL against a real DBAL connection (SQLite, in
  * memory, holding the fixture in OmekaTestCase), and the documents it builds.
- * Every test ends by checking that no query failed: the generator logs a
- * failure and degrades to an empty answer, which a count alone could miss.
+ * Every test ends by checking that no query failed: the repository logs a
+ * failure before it propagates, and a caller that degrades (the dashboard
+ * counts) would hide it from a count alone.
  */
 final class SitemapDatabaseTest extends OmekaTestCase
 {
@@ -41,7 +42,7 @@ final class SitemapDatabaseTest extends OmekaTestCase
     public function testTheProjectItemSetsLeaveTheSitemapInSql(): void
     {
         // The project item sets redirect, so the sitemap leaves them out.
-        $itemSetsXml = $this->generator()->buildItemSets('https://example.test/s/amira', 1, 0, true);
+        $itemSetsXml = $this->generator()->buildItemSets('https://example.test/s/amira', 1, 0, true)->xml;
 
         $message = "The item-set sitemap did not leave out the project item sets:\n" . $itemSetsXml;
         $this->assertStringContainsString('/item-set/3<', $itemSetsXml, $message);
@@ -69,18 +70,18 @@ final class SitemapDatabaseTest extends OmekaTestCase
             . '  <sitemap><loc>https://example.test/sitemap-item-sets.xml</loc><lastmod>2026-01-02T00:00:00+00:00</lastmod></sitemap>' . "\n"
             . '  <sitemap><loc>https://example.test/sitemap-items-1.xml</loc><lastmod>2026-01-01T00:00:00+00:00</lastmod></sitemap>' . "\n"
             . '</sitemapindex>' . "\n",
-            (string) $generator->buildIndex('https://example.test', 1, 0, true)
+            $generator->buildIndex('https://example.test', 1, 0, true)->xml
         );
         $this->assertSame(
             $urlset . '  <url><loc>' . $site . '/page/home</loc><lastmod>2026-01-03T00:00:00+00:00</lastmod></url>' . "\n" . '</urlset>' . "\n",
-            (string) $generator->buildPages($site, 1, 0, [], 10)
+            $generator->buildPages($site, 1, 0, [], 10)->xml
         );
         $this->assertSame(
             $urlset
             . '  <url><loc>' . $site . '/item-set/3</loc><lastmod>2026-01-02T00:00:00+00:00</lastmod></url>' . "\n"
             . '  <url><loc>' . $site . '/item-set/22</loc></url>' . "\n"
             . '</urlset>' . "\n",
-            (string) $generator->buildItemSets($site, 1, 0, true)
+            $generator->buildItemSets($site, 1, 0, true)->xml
         );
         $this->assertSame(
             $urlset
@@ -89,14 +90,14 @@ final class SitemapDatabaseTest extends OmekaTestCase
             . '  <url><loc>' . $site . '/item-set/21</loc></url>' . "\n"
             . '  <url><loc>' . $site . '/item-set/22</loc></url>' . "\n"
             . '</urlset>' . "\n",
-            (string) $generator->buildItemSets($site, 1, 0)
+            $generator->buildItemSets($site, 1, 0)->xml
         );
         $this->assertSame(
             $urlset
             . '  <url><loc>' . $site . '/item/1</loc><lastmod>2026-01-01T00:00:00+00:00</lastmod></url>' . "\n"
             . '  <url><loc>' . $site . '/item/2</loc></url>' . "\n"
             . '</urlset>' . "\n",
-            (string) $generator->buildItems($site, 1, 1, 0)
+            $generator->buildItems($site, 1, 1, 0)->xml
         );
         $this->assertSame(1, $generator->itemChunkCount(1));
         $this->assertNoSitemapQueryFailed();
@@ -108,8 +109,8 @@ final class SitemapDatabaseTest extends OmekaTestCase
         $generator->buildIndex('https://example.test', 1, 0, true);
         $this->assertNoSitemapQueryFailed();
 
-        $indexXml = $generator->buildIndex('https://example.test', 1, 60);
-        $itemsXml = $generator->buildItems('https://example.test/s/amira', 1, 1, 60);
+        $indexXml = $generator->buildIndex('https://example.test', 1, 60)->xml;
+        $itemsXml = $generator->buildItems('https://example.test/s/amira', 1, 1, 60)->xml;
         $document = new DOMDocument();
         $this->assertTrue($document->loadXML($indexXml), 'Sitemap index is invalid XML.');
         $this->assertStringContainsString('/item/1', $itemsXml, 'Public items are missing.');

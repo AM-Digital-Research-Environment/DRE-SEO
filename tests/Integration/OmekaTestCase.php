@@ -122,15 +122,14 @@ abstract class OmekaTestCase extends TestCase
 
     protected function tearDown(): void
     {
-        // The sitemap cache lives under the temporary file store set up above;
-        // clearing a cache nothing wrote to is a no-op.
+        // The sitemap cache lives under the temporary file store set up above,
+        // with its locks and generation stamp; removing a cache nothing wrote
+        // to is a no-op.
         if (isset($this->services)) {
-            $this->services->get(SitemapGenerator::class)->clearCache();
+            $this->services->get(SitemapGenerator::class)->destroyCache();
         }
-        foreach ([$this->cacheBase . '/dre-seo-cache', $this->cacheBase] as $dir) {
-            if (is_dir($dir)) {
-                @rmdir($dir);
-            }
+        if (is_dir($this->cacheBase)) {
+            @rmdir($this->cacheBase);
         }
     }
 

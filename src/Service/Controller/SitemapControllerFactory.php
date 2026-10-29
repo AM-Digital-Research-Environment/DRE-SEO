@@ -25,6 +25,7 @@ final class SitemapControllerFactory implements FactoryInterface
             $container->get(DefaultSite::class),
             $container->get(PageSeoStore::class),
             $container->get(ProjectResolver::class),
+            $container->get('Omeka\Logger'),
         );
     }
 }
