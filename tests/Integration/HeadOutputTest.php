@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Test\Integration;
 
-use DRESeo\Service\HeadMetadata;
+use DRESeo\Service\HeadWriter;
 use DRESeo\Test\Integration\Double\CurrentSiteHelper;
 use DRESeo\Test\Integration\Double\FixedSite;
 use Laminas\EventManager\Event;
@@ -77,7 +77,7 @@ final class HeadOutputTest extends OmekaTestCase
     public function testJsonLdGoesThroughHeadScriptAndCannotCloseItsElement(): void
     {
         $view = $this->browsePage();
-        $this->services->get(HeadMetadata::class)->addJsonLd($view, [
+        $this->services->get(HeadWriter::class)->jsonLd($view, [
             '@context' => 'https://schema.org',
             'name' => '</script>',
         ]);

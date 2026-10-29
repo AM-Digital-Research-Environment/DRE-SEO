@@ -14,9 +14,10 @@ use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 
 /**
- * Computes and injects every <head> SEO signal into Omeka's request-global head
- * placeholder helpers (headTitle / headMeta / headLink / headScript). The
- * theme echoes those helpers in <head>, so nothing here needs a theme edit.
+ * Decides every <head> SEO signal of a public page and has {@see HeadWriter}
+ * put it into Omeka's request-global head placeholder helpers (headTitle /
+ * headMeta / headLink / headScript). The theme echoes those helpers in
+ * <head>, so nothing here needs a theme edit.
  *
  * One shared instance lives for the whole request (registered shared in the
  * service manager). The Module's listeners call it in two phases:
@@ -27,8 +28,11 @@ use Omeka\Api\Representation\SiteRepresentation;
  *      the site-wide constants (og:site_name, verification tags, …) and
  *      gap-fills anything the first phase did not set.
  *
- * The $applied set records which signals phase 1 produced so phase 2 only fills
- * gaps and never clobbers a resource value.
+ * Which signals phase 1 produced is tracked by {@see HeadWriter}, which also
+ * performs every write, so phase 2 only fills gaps and never clobbers a
+ * resource value. This class is the policy — what a record, page or listing
+ * should say — and keeps only what that policy needs across the two phases:
+ * whether phase 1 described a record, and the memoised default share image.
  */
 class HeadMetadata
 {
@@ -59,14 +63,6 @@ class HeadMetadata
         'es' => 'es_ES', 'sw' => 'sw_KE', 'ar' => 'ar_AR',
     ];
 
-    /** @var array<string,bool> Signals already emitted this request. */
-    private array $applied = [];
-
-    /** @var array<int,array{rel:string,href:string,type?:string}> The page's Signposting links. */
-    private array $signposts = [];
-
-    private ?string $description = null;
-
     /** Whether phase 1 described a record page (item, item set or media). */
     private bool $recordPage = false;
     private ?string $defaultImageUrl = null;
@@ -74,6 +70,7 @@ class HeadMetadata
 
     public function __construct(
         private readonly SettingsGate $settings,
+        private readonly HeadWriter $head,
         private readonly StructuredData $structuredData,
         private readonly CitationMeta $citationMeta,
         private readonly CitationKindMap $kinds,
@@ -98,16 +95,16 @@ class HeadMetadata
         $canonical = $this->absoluteResourceUrl($resource, $site);
         $ownImage = $this->resourceImage($view, $resource);
 
-        $this->setOpenGraph($view, [
+        $this->head->openGraph($view, [
             'og:type'  => $this->ogType($resource),
             'og:title' => $title,
             'og:url'   => $canonical,
         ]);
-        $this->setDescription($view, $description);
-        $this->setOpenGraph($view, ['og:description' => $description]);
+        $this->head->description($view, $description);
+        $this->head->openGraph($view, ['og:description' => $description]);
         $this->ogTypeDetails($view, $resource);
         if ($canonical !== null) {
-            $this->setCanonical($view, $canonical);
+            $this->head->canonical($view, $canonical);
         }
         // A link preview may fall back to the site's share image; the
         // structured data may not, or it would say the logo depicts the record.
@@ -115,22 +112,22 @@ class HeadMetadata
         if ($image !== null) {
             $this->setImage($view, $image, $title);
         }
-        $this->markApplied('og:title');
+        $this->head->mark('og:title');
 
         // A media page shows one file of an item, whose own page is the one to
         // index; the media page stays crawlable so its links are followed.
         if ($resource instanceof MediaRepresentation) {
-            $this->setRobots($view, 'noindex, follow');
+            $this->head->robots($view, 'noindex, follow');
         }
 
         if ($this->jsonLdEnabled()) {
-            $this->addJsonLd(
+            $this->head->jsonLd(
                 $view,
                 $this->structuredData->forResource($resource, $site, $canonical, $ownImage, $fullDescription)
             );
             $breadcrumb = $this->structuredData->breadcrumb($view, $resource, $site, $canonical);
             if ($breadcrumb !== null) {
-                $this->addJsonLd($view, $breadcrumb);
+                $this->head->jsonLd($view, $breadcrumb);
             }
         }
 
@@ -154,23 +151,20 @@ class HeadMetadata
         }
     }
 
-    /** Emit the record's Signposting links, and keep them for the HTTP Link header. */
+    /** Emit the record's Signposting links, kept for the HTTP Link header too. */
     private function signpost(
         PhpRenderer $view,
         AbstractResourceEntityRepresentation $resource,
         string $canonical,
         ?string $collection = null
     ): void {
-        $this->signposts = $this->signposting->links(
+        $this->head->signposts($view, $this->signposting->links(
             $resource,
             $canonical,
             $view->serverUrl(),
             $this->citationsEnabled(),
             $collection
-        );
-        foreach ($this->signposts as $link) {
-            $view->headLink($link);
-        }
+        ));
     }
 
     /**
@@ -181,7 +175,7 @@ class HeadMetadata
      */
     public function signposts(): array
     {
-        return $this->signposts;
+        return $this->head->writtenSignposts();
     }
 
     // ─── Phase 1: static site pages ─────────────────────────────────────────
@@ -202,7 +196,7 @@ class HeadMetadata
         // there would name a redirect chain. The sitemap, IndexNow and the
         // WebSite node use the same URL ({@see SiteHome}).
         $canonical = $page->siteUrl($site->slug(), true);
-        $this->setCanonical($view, $canonical);
+        $this->head->canonical($view, $canonical);
 
         // The home page is the site: its link preview carries the site's
         // name, not the page title ("Home").
@@ -213,15 +207,14 @@ class HeadMetadata
         // first so the page's default title segment is replaced, not appended);
         // the theme appends the site + installation suffix afterwards.
         if (isset($overrides['title']) && $overrides['title'] !== '') {
-            $view->headTitle()->getContainer()->exchangeArray([]);
-            $view->headTitle()->append($overrides['title']);
+            $this->head->title($view, $overrides['title']);
         }
 
         $description = isset($overrides['description']) && $overrides['description'] !== ''
             ? $this->truncate($overrides['description'])
             : null;
         if ($description !== null) {
-            $this->setDescription($view, $description);
+            $this->head->description($view, $description);
         }
 
         $image = null;
@@ -232,22 +225,22 @@ class HeadMetadata
             $this->setImage($view, $image, $title);
         }
 
-        $this->setOpenGraph($view, array_filter([
+        $this->head->openGraph($view, array_filter([
             'og:type'        => 'website',
             'og:title'       => $title,
             'og:url'         => $canonical,
             'og:description' => $description,
         ], static fn ($v) => $v !== null && $v !== ''));
-        $this->markApplied('og:title');
+        $this->head->mark('og:title');
 
         if (!empty($overrides['robots'])) {
-            $this->setRobots($view, (string) $overrides['robots']);
+            $this->head->robots($view, (string) $overrides['robots']);
         }
 
         // An editor can switch a page's JSON-LD off (the per-page override).
         if ($this->jsonLdEnabled() && ($overrides['jsonld'] ?? true) !== false) {
             if ($isHomepage) {
-                $this->addJsonLd($view, $this->structuredData->webSite($view, $site));
+                $this->head->jsonLd($view, $this->structuredData->webSite($view, $site));
             }
             // The catalogue as a Dataset, for Google Dataset Search, when DRE
             // Linked Data describes it: on the dataset's landing page (the
@@ -257,7 +250,7 @@ class HeadMetadata
             if ($dataset && self::isDatasetPage($dataset, $canonical, $isHomepage)) {
                 $node = $this->structuredData->dataset($view, $site, $dataset);
                 if ($node !== null) {
-                    $this->addJsonLd($view, $node);
+                    $this->head->jsonLd($view, $node);
                 }
             }
         }
@@ -295,7 +288,7 @@ class HeadMetadata
         // content while staying safe for paginated pages (no collapsing page
         // 2 onto page 1).
         $current = self::withoutTracking($view->serverUrl(true));
-        $this->setCanonical($view, $current);
+        $this->head->canonical($view, $current);
 
         // Only noindex faceted / paginated / sorted variants (which carry a
         // query string). Clean landing pages stay indexable — crucially the
@@ -303,7 +296,7 @@ class HeadMetadata
         // marking them noindex made Search Console reject that sitemap.
         $hasQuery = ((string) (parse_url($current, PHP_URL_QUERY) ?? '')) !== '';
         if ($hasQuery && $this->settings->isOn('dre_seo_noindex_browse')) {
-            $this->setRobots($view, 'noindex, follow');
+            $this->head->robots($view, 'noindex, follow');
         }
 
         if ($itemSet === null) {
@@ -311,8 +304,8 @@ class HeadMetadata
         }
         $title = (string) $itemSet->displayTitle();
         $description = $this->summary->describe($itemSet, $site->title());
-        $this->setDescription($view, $this->truncate($description));
-        $this->setOpenGraph($view, [
+        $this->head->description($view, $this->truncate($description));
+        $this->head->openGraph($view, [
             'og:type'        => 'website',
             'og:title'       => $title,
             'og:url'         => $current,
@@ -323,7 +316,7 @@ class HeadMetadata
             $this->setImage($view, $image, $title);
         }
         if (!$hasQuery && $this->jsonLdEnabled()) {
-            $this->addJsonLd($view, $this->structuredData->collectionPage($view, $itemSet, $site, $current, $description));
+            $this->head->jsonLd($view, $this->structuredData->collectionPage($view, $itemSet, $site, $current, $description));
             // The trail the theme shows above the item set (dreBreadcrumb()),
             // ending at the item set's own page URL as the helper's does.
             try {
@@ -332,7 +325,7 @@ class HeadMetadata
                 $breadcrumb = null;
             }
             if ($breadcrumb !== null) {
-                $this->addJsonLd($view, $breadcrumb);
+                $this->head->jsonLd($view, $breadcrumb);
             }
         }
         // The landing page is the item set's page: it is signposted like a
@@ -351,11 +344,9 @@ class HeadMetadata
      */
     public function applyGlobals(PhpRenderer $view, ?SiteRepresentation $site, bool $isSearch = false): void
     {
-        $headMeta = $view->headMeta();
-
         // Master noindex (staging) overrides everything.
         if ($this->settings->isOn('dre_seo_noindex_site')) {
-            $this->setRobots($view, 'noindex, nofollow', true);
+            $this->head->robots($view, 'noindex, nofollow', true);
         }
         // Search results and query-string variants of any page stay out of
         // the index; crawlers still follow their links to the records. A
@@ -365,41 +356,41 @@ class HeadMetadata
             $this->settings->isOn('dre_seo_noindex_browse')
             && ($isSearch || $this->isQueryVariant($view->serverUrl(true)))
         ) {
-            $this->setRobots($view, 'noindex, follow');
+            $this->head->robots($view, 'noindex, follow');
         }
         // An indexable page lets Google show its image at full width in Search
         // and Discover, where the default is a small thumbnail.
-        $this->setRobots($view, 'max-image-preview:large');
+        $this->head->robots($view, 'max-image-preview:large');
 
         // Verification tags — site-wide, on every public page.
         $gsc = $this->extractToken($this->settings->raw('dre_seo_gsc_verification'), 'google-site-verification');
         if ($gsc !== '') {
-            $headMeta->appendName('google-site-verification', $gsc);
+            $this->head->appendName($view, 'google-site-verification', $gsc);
         }
         $bing = $this->extractToken($this->settings->raw('dre_seo_bing_verification'), 'msvalidate.01');
         if ($bing !== '') {
-            $headMeta->appendName('msvalidate.01', $bing);
+            $this->head->appendName($view, 'msvalidate.01', $bing);
         }
 
         // Open Graph / Twitter constants.
         if ($site !== null) {
-            $headMeta->setProperty('og:site_name', $site->title());
-            $headMeta->setProperty('og:locale', $this->ogLocale($view));
+            $this->head->property($view, 'og:site_name', $site->title());
+            $this->head->property($view, 'og:locale', $this->ogLocale($view));
         }
-        $headMeta->appendName('twitter:card', 'summary_large_image');
-        $twitter = trim($this->settings->raw('dre_seo_twitter_site'));
+        $this->head->appendName($view, 'twitter:card', 'summary_large_image');
+        $twitter = $this->settings->text('dre_seo_twitter_site');
         if ($twitter !== '') {
-            $headMeta->appendName('twitter:site', $twitter);
+            $this->head->appendName($view, 'twitter:site', $twitter);
         }
 
         // Gap-fills (only when phase 1 set nothing).
-        if (!$this->isApplied('description')) {
-            $default = trim($this->settings->raw('dre_seo_default_description'));
+        if (!$this->head->has('description')) {
+            $default = $this->settings->text('dre_seo_default_description');
             if ($default !== '') {
-                $this->setDescription($view, $this->truncate($default));
+                $this->head->description($view, $this->truncate($default));
             }
         }
-        if (!$this->isApplied('image')) {
+        if (!$this->head->has('image')) {
             $img = $this->resolveDefaultImage($view);
             if ($img !== null) {
                 $this->setImage($view, $img, $site ? $site->title() : null);
@@ -407,109 +398,36 @@ class HeadMetadata
         }
         // A page nothing else described (a search page, another module's page)
         // is canonical without its query string.
-        if (!$this->isApplied('canonical')) {
-            $this->setCanonical($view, self::withoutQuery($view->serverUrl(true)));
+        if (!$this->head->has('canonical')) {
+            $this->head->canonical($view, self::withoutQuery($view->serverUrl(true)));
         }
-        if (!$this->isApplied('og:title')) {
+        if (!$this->head->has('og:title')) {
             // Mirror the rendered <title>'s leading segment as og/twitter title.
-            $titleParts = $view->headTitle()->getContainer()->getArrayCopy();
-            $title = $titleParts[0] ?? ($site ? $site->title() : '');
+            $title = $this->head->leadingTitle($view) ?? ($site ? $site->title() : '');
             if ($title !== '') {
-                $this->setOpenGraph($view, ['og:title' => (string) $title, 'og:type' => 'website']);
+                $this->head->openGraph($view, ['og:title' => (string) $title, 'og:type' => 'website']);
             }
         }
         // Mirror description → og/twitter description if still missing.
-        if ($this->description !== null && !$this->isApplied('og:description')) {
-            $this->setOpenGraph($view, ['og:description' => $this->description]);
+        $description = $this->head->writtenDescription();
+        if ($description !== null && !$this->head->has('og:description')) {
+            $this->head->openGraph($view, ['og:description' => $description]);
         }
-        if (!$this->isApplied('og:url')) {
-            $headMeta->setProperty('og:url', self::withoutQuery($view->serverUrl(true)));
+        if (!$this->head->has('og:url')) {
+            $this->head->property($view, 'og:url', self::withoutQuery($view->serverUrl(true)));
         }
     }
 
-    // ─── Low-level setters (track what was applied) ─────────────────────────
+    // ─── The share image ────────────────────────────────────────────────────
 
-    public function setDescription(PhpRenderer $view, string $description): void
-    {
-        $view->headMeta()->setName('description', $description);
-        // Twitter reads og:description, but set the explicit one too for clarity.
-        $view->headMeta()->setName('twitter:description', $description);
-        $this->description = $description;
-        $this->markApplied('description');
-    }
-
-    public function setCanonical(PhpRenderer $view, ?string $url): void
-    {
-        if ($url === null || $url === '' || $this->isApplied('canonical')) {
-            return;
-        }
-        $view->headLink(['rel' => 'canonical', 'href' => $url]);
-        $this->markApplied('canonical');
-    }
-
+    /**
+     * The share image, with its size when it is a local file: a preview can
+     * then be laid out before it loads. Unknown sizes are left out, never
+     * guessed.
+     */
     public function setImage(PhpRenderer $view, string $url, ?string $alt = null): void
     {
-        $this->setOpenGraph($view, ['og:image' => $url]);
-        // The size, when the image is a local file: a preview can then be laid
-        // out before it loads. Unknown sizes are left out, never guessed.
-        $size = $this->imageDimensions?->of($url);
-        if ($size !== null) {
-            $view->headMeta()->setProperty('og:image:width', (string) $size[0]);
-            $view->headMeta()->setProperty('og:image:height', (string) $size[1]);
-        }
-        $view->headMeta()->setName('twitter:image', $url);
-        if ($alt !== null && trim($alt) !== '') {
-            $view->headMeta()->setProperty('og:image:alt', $alt);
-            $view->headMeta()->setName('twitter:image:alt', $alt);
-        }
-        $this->markApplied('image');
-    }
-
-    public function setRobots(PhpRenderer $view, string $value, bool $force = false): void
-    {
-        if (!$force && $this->isApplied('robots')) {
-            return;
-        }
-        $view->headMeta()->setName('robots', $value);
-        $this->markApplied('robots');
-    }
-
-    /** @param array<string,string|null> $tags og property => content */
-    public function setOpenGraph(PhpRenderer $view, array $tags): void
-    {
-        $headMeta = $view->headMeta();
-        foreach ($tags as $property => $content) {
-            if ($content === '' || $content === null) {
-                continue;
-            }
-            $headMeta->setProperty($property, $content);
-            // Twitter falls back to og:* for most fields; mirror title only.
-            if ($property === 'og:title') {
-                $headMeta->setName('twitter:title', $content);
-            }
-            $this->markApplied($property);
-        }
-    }
-
-    /** @param array<mixed> $data A JSON-LD document. */
-    public function addJsonLd(PhpRenderer $view, array $data): void
-    {
-        // Compact: nobody reads the inline block, and on a record with a long
-        // abstract the indentation is a measurable share of the page.
-        $json = json_encode(
-            $data,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
-        );
-        if ($json === false) {
-            return;
-        }
-        // Emit the document as raw JSON. The `noescape` attribute suppresses the
-        // `//<!-- … //-->` comment guard HeadScript wraps every inline script
-        // body in — that guard is invalid inside application/ld+json. (Laminas'
-        // setAutoEscape() governs only attribute/type escaping, not the guard,
-        // so the previous call left the wrapper in place.) JSON_HEX_TAG already
-        // escapes `<`/`>`, so a `</script>` breakout is impossible without it.
-        $view->headScript()->appendScript($json, 'application/ld+json', ['noescape' => true]);
+        $this->head->image($view, $url, $alt, $this->imageDimensions?->of($url));
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────
@@ -620,7 +538,7 @@ class HeadMetadata
         }
         foreach ($tags as $property => $content) {
             if ($content !== null && $content !== '') {
-                $view->headMeta()->setProperty($property, $content);
+                $this->head->property($view, $property, $content);
             }
         }
     }
@@ -763,15 +681,5 @@ class HeadMetadata
     private function citationsEnabled(): bool
     {
         return $this->settings->isOn('dre_seo_citation_meta', true);
-    }
-
-    private function markApplied(string $key): void
-    {
-        $this->applied[$key] = true;
-    }
-
-    private function isApplied(string $key): bool
-    {
-        return !empty($this->applied[$key]);
     }
 }

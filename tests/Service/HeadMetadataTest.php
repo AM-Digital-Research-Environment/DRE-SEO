@@ -7,6 +7,7 @@ use DRESeo\Service\CitationData;
 use DRESeo\Service\CitationKindMap;
 use DRESeo\Service\CitationMeta;
 use DRESeo\Service\HeadMetadata;
+use DRESeo\Service\HeadWriter;
 use DRESeo\Service\ImageDimensions;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\ResourceSummary;
@@ -53,6 +54,7 @@ final class HeadMetadataTest extends TestCase
 
         return new HeadMetadata(
             new SettingsGate($store),
+            new HeadWriter(),
             $structuredData,
             new CitationMeta($kinds, new CitationData($kinds)),
             $kinds,

@@ -42,7 +42,12 @@ return [
             // The one reading of the module's settings: "on", text, integer.
             Service\SettingsGate::class      => Service\SettingsGateFactory::class,
         ],
+        // Dependency-free: plain instantiation. Shared, like every
+        // service-manager entry — HeadWriter relies on that: its record of
+        // what the head says has to span the action and layout render passes
+        // of one request.
         'invokables' => [
+            Service\HeadWriter::class        => Service\HeadWriter::class,
             // Stateless formatter: no config, no dependencies.
             Service\CitationFormatter::class => Service\CitationFormatter::class,
         ],
