@@ -27,9 +27,9 @@ use Omeka\Api\Representation\ValueRepresentation;
  *     is its own field and doubles as a report's issuing body;
  *   • a thesis's awarding institution is its degree grantor (**marcrel:dgg**),
  *     and its degree is its resource class (fabio:MastersThesis, …);
- *   • authors come from the first populated of bibo:authorList, dcterms:creator,
- *     marcrel:aut and marcrel:cre — with podcasts and videos reading their
- *     host/speaker roles first, since they carry no dcterms:creator at all;
+ *   • authors come from the first populated of {@see CitationKind::authorTerms()},
+ *     which reads a podcast's or video's host/speaker roles first, since they
+ *     carry no dcterms:creator of their own; editors from EDITOR_TERMS;
  *   • dates are NumericDataTypes timestamps, read raw so month and day survive;
  *   • the accession id is **dre:id**; DOIs live in **bibo:doi**, ISBNs in
  *     **bibo:isbn13**.
@@ -42,10 +42,6 @@ use Omeka\Api\Representation\ValueRepresentation;
 final class CitationData
 {
     use ResourceValueReader;
-
-    /** Generic creator roles, tried after any kind-specific ones. */
-    private const AUTHOR_TERMS = ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre'];
-    private const EDITOR_TERMS = ['bibo:editorList', 'marcrel:edt'];
 
     /** Thesis degree per FaBiO class term; see {@see degree()}. */
     private const THESIS_DEGREES = [
@@ -170,8 +166,8 @@ final class CitationData
 
         // isPartOf is the container; a chapter's container IS its book title.
         $container = CitationRecord::tidyTitle($this->firstLabel($item, 'dcterms:isPartOf'));
-        $abstract = $this->firstString($item, self::ABSTRACT_TERMS);
-        [$authorTerm, $authors] = $this->people($item, [...$kind->creatorTerms(), ...self::AUTHOR_TERMS]);
+        $abstract = $this->firstString($item, self::DESCRIPTION_TERMS);
+        [$authorTerm, $authors] = $this->people($item, $kind->authorTerms());
         [$pageFirst, $pageLast] = $this->pageBounds($item);
 
         return new CitationRecord(

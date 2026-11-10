@@ -82,14 +82,13 @@ parameters:
                 - argument.type
 
         # ResourceValueReader is a trait, and PHPStan checks a private
-        # constant's use per *using* class: DATE_TERMS and ABSTRACT_TERMS are
-        # reported unused against each of its six users that reads only one of
-        # them, or neither. CitationData reads both, CitationMeta and
-        # ResourceSummary read DATE_TERMS — deleting either constant on this
-        # report's say-so would break them.
+        # constant's use per *using* class: DATE_TERMS, DESCRIPTION_TERMS and
+        # EDITOR_TERMS are reported unused against each of its users that does
+        # not read them. CitationData reads all three — deleting one on this
+        # report's say-so would break it.
         -
             identifier: classConstant.unused
-            message: '#^Constant DRESeo\\Service\\[A-Za-z]+\:\:(DATE|ABSTRACT)_TERMS is unused\.$#'
+            message: '#^Constant DRESeo\\Service\\[A-Za-z]+\:\:(DATE|DESCRIPTION|EDITOR)_TERMS is unused\.$#'
 
     # The list above is broad by necessity, and which entries match shifts with
     # every PHPStan release. An ignore that stops matching is not worth failing

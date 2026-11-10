@@ -127,7 +127,7 @@ class StructuredData
         // is never absent. Dataset Search reads at most 5000 characters.
         $data['description'] = $this->clip(
             $description
-                ?? $this->firstString($resource, ['dcterms:description', 'dcterms:abstract', 'bibo:abstract'])
+                ?? $this->firstString($resource, self::DESCRIPTION_TERMS)
                 ?? $this->fallbackDescription($resource)
         );
 
@@ -155,6 +155,17 @@ class StructuredData
         }
 
         return $data;
+    }
+
+    /**
+     * The terms a work's authors are read from: its kind's list, the one its
+     * citation reads. Signposting's `author` links read it too.
+     *
+     * @return list<string>
+     */
+    public function authorTerms(AbstractResourceEntityRepresentation $resource): array
+    {
+        return ($this->kinds?->forResource($resource) ?? CitationKind::Item)->authorTerms();
     }
 
     /**
@@ -341,24 +352,24 @@ class StructuredData
         AbstractResourceEntityRepresentation $resource,
         SiteRepresentation $site
     ): void {
-        // marcrel:hst / :spk are the podcast host / guest(s) and a video's
-        // speakers; marcrel:cre is a research item's creator. They trail the
-        // scholarly author roles so they only fill in when those are absent.
-        $authors = $this->links(
-            $resource,
-            ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre', 'marcrel:hst', 'marcrel:spk'],
-            $site,
-            'Person'
-        );
+        // The citation's author list, so the page's JSON-LD and its citation
+        // name the same people: a podcast's host before any dcterms:creator.
+        $authors = $this->links($resource, $this->authorTerms($resource), $site, 'Person');
         if ($authors) {
             // Google reads a Dataset's authors from `creator`; every other work
             // type uses `author`.
             $data[$type === 'Dataset' ? 'creator' : 'author'] = $authors;
         }
-        // marcrel:sde is the podcast sound engineer (a production contributor).
-        $contributors = $this->links($resource, ['dcterms:contributor', 'bibo:editorList', 'marcrel:edt', 'marcrel:sde'], $site, 'Person');
+        // The citation's editors, as `editor` on every type (schema.org has it
+        // on CreativeWork). The other contributors stay `contributor`;
+        // marcrel:sde is the podcast sound engineer.
+        $editors = $this->links($resource, self::EDITOR_TERMS, $site, 'Person');
+        if ($editors) {
+            $data['editor'] = $editors;
+        }
+        $contributors = $this->links($resource, ['dcterms:contributor', 'marcrel:sde'], $site, 'Person');
         if ($contributors) {
-            $data[in_array($type, ['Book', 'Chapter', 'PublicationIssue', 'CreativeWorkSeries'], true) ? 'editor' : 'contributor'] = $contributors;
+            $data['contributor'] = $contributors;
         }
 
         // ISO 8601, as precise as stored; a date that names no year is left out.

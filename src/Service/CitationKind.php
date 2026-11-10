@@ -214,10 +214,18 @@ enum CitationKind: string
     }
 
     /**
+     * Where a work's authors are, after any kind-specific roles: the scholarly
+     * author terms, then a research item's creator, then the host and speaker
+     * roles, so those fill in only when nothing else names the people.
+     */
+    public const AUTHOR_TERMS = [
+        'bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre', 'marcrel:hst', 'marcrel:spk',
+    ];
+
+    /**
      * The creator roles this kind reads, in preference order, ahead of the
      * generic author terms. Podcasts and videos carry no dcterms:creator — the
-     * host, guest and speaker roles are where their people live (the same
-     * fallbacks CitationMeta uses for the Highwire tags).
+     * host, guest and speaker roles are where their people live.
      *
      * A podcast's host is credited as such ("host"), which is why the first
      * term is also the role {@see roleFor()} reports.
@@ -231,6 +239,20 @@ enum CitationKind: string
             self::Video => ['marcrel:spk'],
             default => [],
         };
+    }
+
+    /**
+     * The one ordered list a record of this kind takes its authors from — the
+     * first populated term wins. The citation, the Highwire and Dublin Core
+     * tags, the JSON-LD `author`, the page summary and the Signposting
+     * `author` links all read it, so a podcast with both dcterms:creator and
+     * marcrel:hst names the same people everywhere (its host).
+     *
+     * @return list<string>
+     */
+    public function authorTerms(): array
+    {
+        return array_values(array_unique([...$this->creatorTerms(), ...self::AUTHOR_TERMS]));
     }
 
     /**

@@ -38,9 +38,6 @@ final class Signposting
         'ris'     => 'application/x-research-info-systems',
     ];
 
-    /** Where a work's authors are, preferred first — the order the JSON-LD `author` reads. */
-    private const AUTHOR_TERMS = ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre', 'marcrel:hst', 'marcrel:spk'];
-
     /**
      * The most a `Link` header may grow to. nginx refuses a FastCGI response
      * whose headers overflow `fastcgi_buffer_size` — one memory page, 4 KB on
@@ -176,7 +173,9 @@ final class Signposting
      */
     private function authors(ItemRepresentation $item): array
     {
-        foreach (self::AUTHOR_TERMS as $term) {
+        // The list the JSON-LD `author` and the citation read, so all three
+        // name the same people.
+        foreach ($this->structuredData->authorTerms($item) as $term) {
             $values = $item->value($term, ['all' => true]);
             if (!$values) {
                 continue;

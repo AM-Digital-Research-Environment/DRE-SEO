@@ -135,8 +135,8 @@ The head signals are written into Omeka's request-global head placeholder helper
 `<head>` — so **no theme template needs to change**.
 
 * **Resource pages** (`view.show.after` on the Item/ItemSet/Media controllers): title from
-  `displayTitle()`, description from `dcterms:description` / `dcterms:abstract` (truncated to
-  ~160 chars), canonical from the resource's site URL, `og:image` from the primary media, and
+  `displayTitle()`, description from `bibo:abstract` / `dcterms:abstract` /
+  `dcterms:description`, in that order (truncated to ~160 chars), canonical from the resource's site URL, `og:image` from the primary media, and
   JSON-LD from the resource template.
 * **Static pages** (`view.show.after` on the Page controller): the editor's per-page
   overrides, else defaults; on the home page, `WebSite` JSON-LD and the
@@ -243,8 +243,14 @@ keyed by Omeka resource-template id:
 | Podcasts (21) | `PodcastEpisode` (host/guest ← `marcrel:hst` / `:spk`) |
 | YouTube videos (22) | `VideoObject` (`thumbnailUrl` from the ingested media, `uploadDate` from `dcterms:date`, speaker ← `marcrel:spk`, canonical watch URL ← `fabio:hasURL`) |
 
-Creative works also carry `author`/`contributor` (from `bibo:authorList`, `dcterms:creator`,
-`marcrel:*`), `datePublished`/`dateCreated` (ISO 8601, as precise as stored; a video's
+Creative works also carry `author`, `editor` and `contributor`. Authors and editors come
+from the same ordered term lists the citation reads, so the JSON-LD, the citation, the
+Highwire and Dublin Core tags and the Signposting `author` links name the same people: the
+first populated of a podcast's `marcrel:hst` / `:spk` or a video's `marcrel:spk`, then
+`bibo:authorList`, `dcterms:creator`, `marcrel:aut`, `marcrel:cre`, `marcrel:hst`,
+`marcrel:spk` (`CitationKind::authorTerms()`); editors from `bibo:editorList`, then
+`marcrel:edt`; `contributor` from `dcterms:contributor`, then `marcrel:sde`. They also carry
+`datePublished`/`dateCreated` (ISO 8601, as precise as stored; a video's
 `uploadDate` falls back to `dcterms:created`, then the record's creation), `inLanguage` (a
 BCP 47 tag from the language record's ISO 639 code in `dcterms:alternative`: `deu` → `de`,
 `pcm` stays `pcm`), `keywords`, `spatialCoverage`, `isPartOf`, `publisher`, the DOI as
@@ -254,8 +260,9 @@ creativecommons.org, rightsstatements.org or opensource.org URL among its identi
 the canonical Creative Commons URL of a well-known label (`CC-BY-NC-SA-4.0`, `CC BY 3.0`,
 `CC0-1.0`, or the long "Creative Commons Attribution-…" form) — and is otherwise named as a
 `CreativeWork` under its resource URI; Signposting links it only when it has a URL.
-`description` is always emitted — it falls back to a typed boilerplate when the item has no
-`dcterms:description` / `abstract`.
+`description` is always emitted: the first of `bibo:abstract`, `dcterms:abstract` and
+`dcterms:description` (the order the citation's abstract, `DC.description` and the meta
+description use too), else a typed boilerplate.
 
 ### Research items and access
 

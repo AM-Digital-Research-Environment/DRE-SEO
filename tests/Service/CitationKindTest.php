@@ -106,6 +106,13 @@ final class CitationKindTest extends TestCase
         $this->assertSame(['marcrel:hst', 'marcrel:spk'], CitationKind::Podcast->creatorTerms());
         $this->assertSame(['marcrel:spk'], CitationKind::Video->creatorTerms());
         $this->assertSame([], CitationKind::Article->creatorTerms());
+
+        // The kind's own roles lead the one author list, each term once.
+        $this->assertSame(
+            ['marcrel:hst', 'marcrel:spk', 'bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre'],
+            CitationKind::Podcast->authorTerms()
+        );
+        $this->assertSame(CitationKind::AUTHOR_TERMS, CitationKind::Article->authorTerms());
     }
 
     public function testTheKindMapDispatchesOnTheResourceTemplateNotTheClass(): void

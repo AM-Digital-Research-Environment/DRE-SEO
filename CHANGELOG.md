@@ -18,6 +18,23 @@ GitHub release and shipped no installable asset.
 
 ### Changed
 
+- **One list each of author, editor and description terms.** The citation, the Highwire and
+  Dublin Core tags, the JSON-LD, the meta description and the Signposting links read the
+  same ordered lists, where the module had five lists in three orders. What a visitor or a
+  harvester sees change, on records where the lists disagreed:
+  - a podcast with both `dcterms:creator` and a host (`marcrel:hst`) is credited to its host
+    in the JSON-LD `author`, the generated description and the Signposting `author` links
+    too, as its citation already was; a video, likewise, to its speakers;
+  - a work with only `marcrel:hst` or `marcrel:spk` (no author term) now has those people
+    as its citation authors and `DC.creator`, as its JSON-LD already had;
+  - the JSON-LD `editor` is always the citation's editors (`bibo:editorList`, then
+    `marcrel:edt`), on every type, and `contributor` holds `dcterms:contributor` (then
+    `marcrel:sde`). Before, a book's `dcterms:contributor` was its `editor`, and an
+    article's editors were `contributor`s;
+  - descriptions prefer `bibo:abstract`, then `dcterms:abstract`, then
+    `dcterms:description`. A publication's meta description, JSON-LD `description` and
+    `DC.description` are now its abstract rather than its EPrints note, and a research
+    item's its abstract rather than its setting.
 - **Omeka S `^4.2.1`** is the declared requirement (`^4.2.0` before), as for the theme and
   the other DRE modules; 4.2.1 is what CI and the integration suite have always tested.
 - The release workflow runs the whole CI suite on the tag, the integration tests against

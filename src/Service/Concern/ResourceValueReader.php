@@ -29,8 +29,22 @@ trait ResourceValueReader
      */
     private const DATE_TERMS = ['dcterms:issued', 'dcterms:date', 'dcterms:created'];
 
-    /** Abstract/summary properties in citation preference order. */
-    private const ABSTRACT_TERMS = ['bibo:abstract', 'dcterms:abstract', 'dcterms:description'];
+    /**
+     * Where a record's description is, preferred first, for the citation
+     * abstract, DC.description, the JSON-LD `description` and the page's meta
+     * description alike. The abstract leads: on a publication
+     * dcterms:description is EPrints' free-text note, on a research item the
+     * setting, and either would describe the record worse than its abstract.
+     */
+    private const DESCRIPTION_TERMS = ['bibo:abstract', 'dcterms:abstract', 'dcterms:description'];
+
+    /**
+     * Where a work's editors are, preferred first: citation_editor, the
+     * citation's editors and the JSON-LD `editor`. Authors are
+     * {@see \DRESeo\Service\CitationKind::authorTerms()}, which depends on the
+     * kind.
+     */
+    private const EDITOR_TERMS = ['bibo:editorList', 'marcrel:edt'];
 
     /** Abstracts are clipped to this many characters before being emitted. */
     private const ABSTRACT_MAX = 5000;

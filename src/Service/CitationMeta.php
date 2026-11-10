@@ -80,7 +80,7 @@ class CitationMeta
         /** @var ItemRepresentation $resource */
         $record = $isWork ? $this->citationData->build($resource, $citeAs) : null;
 
-        $tags = $this->dublinCore($resource, $citeAs, $record);
+        $tags = $this->dublinCore($resource, $citeAs, $record, $kind);
         if ($record !== null && $this->isScholarlyPaper($record, $resource)) {
             $tags = [...$tags, ...$this->highwire($record, $resource, $canonical)];
         }
@@ -194,7 +194,8 @@ class CitationMeta
     private function dublinCore(
         AbstractResourceEntityRepresentation $resource,
         ?string $identifier,
-        ?CitationRecord $work
+        ?CitationRecord $work,
+        CitationKind $kind
     ): array {
         $workKind = $work?->kind;
         $tags = [];
@@ -209,7 +210,7 @@ class CitationMeta
         // video's speakers — so a page with no Highwire tags still names them.
         $creators = $work !== null
             ? array_map(static fn ($creator): string => $creator->literal, $work->authors)
-            : $this->people($resource, ['dcterms:creator', 'bibo:authorList', 'marcrel:aut']);
+            : $this->people($resource, $kind->authorTerms());
         foreach ($creators as $creator) {
             $add('DC.creator', $creator);
         }
@@ -236,7 +237,7 @@ class CitationMeta
         foreach ($this->labels($resource, 'dcterms:subject') as $subject) {
             $add('DC.subject', $subject);
         }
-        $description = $this->firstString($resource, ['dcterms:description', 'dcterms:abstract']);
+        $description = $this->firstString($resource, self::DESCRIPTION_TERMS);
         if ($description !== null) {
             $add('DC.description', $this->clip($description));
         }

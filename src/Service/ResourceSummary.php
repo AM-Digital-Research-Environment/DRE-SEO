@@ -24,11 +24,6 @@ final class ResourceSummary
 {
     use ResourceValueReader;
 
-    /** Description properties, in the order a page summary prefers them. */
-    private const DESCRIPTION_TERMS = ['dcterms:description', 'dcterms:abstract', 'bibo:abstract'];
-
-    private const AUTHOR_TERMS = ['bibo:authorList', 'dcterms:creator', 'marcrel:aut', 'marcrel:cre', 'marcrel:hst', 'marcrel:spk'];
-
     public function __construct(private readonly CitationKindMap $kinds)
     {
     }
@@ -98,7 +93,7 @@ final class ResourceSummary
     /** @return string[] the first populated creator role's labels */
     private function authorLabels(AbstractResourceEntityRepresentation $resource): array
     {
-        foreach (self::AUTHOR_TERMS as $term) {
+        foreach ($this->kinds->forResource($resource)->authorTerms() as $term) {
             $labels = $this->labels($resource, $term);
             if ($labels !== []) {
                 return $labels;
