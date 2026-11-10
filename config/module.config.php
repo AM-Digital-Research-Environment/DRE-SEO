@@ -52,6 +52,8 @@ return $instance + [
             Service\SettingsGate::class      => Service\SettingsGateFactory::class,
             // robots.txt: the fixed exclusions and dre_seo.robots.
             Service\RobotsTxt::class         => Service\RobotsTxtFactory::class,
+            // Admin → SEO's list of templates in use the maps do not name.
+            Service\TemplateCoverage::class  => Service\TemplateCoverageFactory::class,
             // Shared, like every service-manager entry — HeadWriter relies on
             // that: its record of what the head says has to span the action
             // and layout render passes of one request. The factory gives it
@@ -136,7 +138,9 @@ return $instance + [
             // Citation downloads at /cite/{id}/{format}. A new first segment,
             // so it cannot collide with the sitemap/robots literals above nor
             // with the IndexNow catch-all below (which only matches *.txt).
-            'dre-seo-cite' => [
+            // Links to it are assembled from the route
+            // (Service\CitationExport::url()), never written out.
+            Service\CitationExport::ROUTE => [
                 'type'    => Segment::class,
                 'options' => [
                     'route'       => '/cite/:id/:format',

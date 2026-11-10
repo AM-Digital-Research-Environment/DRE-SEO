@@ -361,6 +361,51 @@ final class CitationFormatterTest extends TestCase
         $this->assertTrue(str_contains($html, 'Brill &amp; Sons'), 'the publisher is escaped too');
     }
 
+    /**
+     * The theme echoes dreCitation()'s `html` raw, so no field may carry markup
+     * through, in any style or kind: the only tags are the formatter's own
+     * <em> and the link to the record.
+     */
+    public function testNoFieldCarriesMarkupThroughAnyStyleOrKind(): void
+    {
+        $formatter = new CitationFormatter();
+        $hostile = '<script>alert(1)</script><img src=x onerror=alert(2)>"\'';
+        foreach (CitationKind::cases() as $kind) {
+            $record = self::citationFixture($kind, [
+                'title' => 'T ' . $hostile,
+                'authors' => [Creator::parse('Author, ' . $hostile, false), Creator::parse('Org ' . $hostile, true)],
+                'editors' => [Creator::parse('Editor, ' . $hostile, false)],
+                'issued' => IssuedDate::parse('circa ' . $hostile),
+                'container' => 'C ' . $hostile,
+                'publisher' => 'P ' . $hostile,
+                'bookTitle' => 'B ' . $hostile,
+                'volume' => 'V' . $hostile,
+                'issue' => 'I' . $hostile,
+                'pageFirst' => '1' . $hostile,
+                'pageLast' => '2' . $hostile,
+                'doi' => '10.1/' . $hostile,
+                'url' => 'https://example.test/"><script>alert(3)</script>',
+                'degree' => 'doctoral',
+                'place' => 'Pl ' . $hostile,
+                'number' => 'N' . $hostile,
+                'event' => 'E ' . $hostile,
+                'platform' => 'Pf ' . $hostile,
+                'genre' => 'G ' . $hostile,
+                'archive' => 'A ' . $hostile,
+                'updated' => IssuedDate::parse('2026-01-01'),
+            ]);
+            foreach (CitationFormatter::STYLES as $style) {
+                $html = $formatter->format($record, $style);
+                $label = $kind->value . '/' . $style;
+                $this->assertStringNotContainsString('<script', $html, $label);
+                $this->assertStringNotContainsString('<img', $html, $label);
+                $tags = preg_replace('~</?em>|<a href="[^"<>]*">|</a>~', '', $html) ?? $html;
+                $this->assertStringNotContainsString('<', $tags, $label . ': only the formatter\'s own tags');
+                $this->assertDoesNotMatchRegularExpression('~<a href="[^"]*"[^>]~', $html, $label . ': the link attribute is closed where it opens');
+            }
+        }
+    }
+
     public function testARecordWithNoTitleAtAllStillCites(): void
     {
         $formatter = new CitationFormatter();

@@ -6,6 +6,7 @@ namespace DRESeo\Service;
 use DRESeo\Service\Citation\CitationRecord;
 use DRESeo\Service\Citation\Creator;
 use DRESeo\Service\Citation\IssuedDate;
+use Laminas\View\Renderer\PhpRenderer;
 
 /**
  * Serialises a {@see CitationRecord} to the citation formats offered on the
@@ -31,6 +32,19 @@ final class CitationExport
         'csljson' => ['json', 'application/vnd.citationstyles.csl+json; charset=utf-8'],
         'txt'     => ['txt', 'text/plain; charset=utf-8'],
     ];
+
+    /** The route the downloads are served at, /cite/{id}/{format}. */
+    public const ROUTE = 'dre-seo-cite';
+
+    /**
+     * A download's absolute URL, assembled from the route rather than written
+     * out, so the record rail, the Signposting links and the route cannot
+     * disagree, and an Omeka installed under a path keeps it.
+     */
+    public static function url(PhpRenderer $view, int $id, string $format): string
+    {
+        return (string) $view->url(self::ROUTE, ['id' => $id, 'format' => $format], ['force_canonical' => true]);
+    }
 
     /**
      * @param CitationFormatter|null $formatter renders the plain-text citation

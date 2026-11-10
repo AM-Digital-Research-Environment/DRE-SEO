@@ -564,7 +564,12 @@ namespace Laminas\View\Renderer {
              */
             public function url($name = null, array $params = [], $options = []): string
             {
-                $path = $name === 'site' ? '/s/' . ($params['site-slug'] ?? '') : '/' . (string) $name;
+                $path = match ($name) {
+                    'site' => '/s/' . ($params['site-slug'] ?? ''),
+                    // The citation download route, as config/module.config.php defines it.
+                    'dre-seo-cite' => '/cite/' . ($params['id'] ?? '') . '/' . ($params['format'] ?? ''),
+                    default => '/' . (string) $name,
+                };
                 return !empty($options['force_canonical']) ? $this->origin . $path : $path;
             }
 

@@ -161,8 +161,9 @@ class HeadMetadata
         $this->head->signposts($view, $this->signposting->links(
             $resource,
             $canonical,
-            $view->serverUrl(),
-            $this->citationsEnabled(),
+            $this->citationsEnabled()
+                ? static fn (int $id, string $format): string => CitationExport::url($view, $id, $format)
+                : null,
             $collection
         ));
     }

@@ -126,7 +126,7 @@ class Citation extends AbstractHelper
                 continue;
             }
             $downloads[$fmt] = [
-                'url'   => $view->serverUrl('/cite/' . $record->id . '/' . $fmt),
+                'url'   => CitationExport::url($view, $record->id, $fmt),
                 'label' => self::FORMAT_LABELS[$fmt] ?? strtoupper($fmt),
                 'ext'   => CitationExport::FORMATS[$fmt][0],
             ];

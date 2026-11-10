@@ -10,6 +10,7 @@ use DRESeo\Service\PingRepository;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SitemapGenerator;
+use DRESeo\Service\TemplateCoverage;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
@@ -29,6 +30,7 @@ final class SeoControllerFactory implements FactoryInterface
             $container->get(DefaultSite::class),
             $container->get(ProjectResolver::class),
             new PingRepository($container->get('Omeka\Connection')),
+            $container->get(TemplateCoverage::class),
         );
     }
 }

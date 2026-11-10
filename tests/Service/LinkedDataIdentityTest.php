@@ -25,6 +25,12 @@ final class LinkedDataIdentityTest extends TestCase
 {
     public const LD_BASE = 'https://data.example.test';
 
+    /** The /cite URLs as the route assembles them on https://example.test. */
+    private static function citeUrl(): \Closure
+    {
+        return static fn (int $id, string $format): string => 'https://example.test/cite/' . $id . '/' . $format;
+    }
+
     /**
      * A stand-in for DRE Linked Data's `dreLinkedData` helper: the same shape, and
      * nothing for the ids in $hidden, as the module returns for a private record.
@@ -131,7 +137,7 @@ final class LinkedDataIdentityTest extends TestCase
         $identity = self::linkedDataIdentity();
         $signposting = new Signposting(new StructuredData([30 => 'Thesis'], 'CreativeWork', null, $identity), $identity);
 
-        $links = $signposting->links(self::linkedThesis(), 'https://example.test/s/amira/item/41980', 'https://example.test', true);
+        $links = $signposting->links(self::linkedThesis(), 'https://example.test/s/amira/item/41980', self::citeUrl());
 
         $describedBy = array_values(array_filter($links, static fn (array $link) => $link['rel'] === 'describedby'));
         $this->assertSame([
@@ -151,7 +157,7 @@ final class LinkedDataIdentityTest extends TestCase
     {
         $signposting = new Signposting(new StructuredData([30 => 'Thesis']), new LinkedDataIdentity());
 
-        $links = $signposting->links(self::linkedThesis(), 'https://example.test/s/amira/item/41980', 'https://example.test', false);
+        $links = $signposting->links(self::linkedThesis(), 'https://example.test/s/amira/item/41980', null);
 
         $describedBy = array_values(array_filter($links, static fn (array $link) => $link['rel'] === 'describedby'));
         $this->assertSame(
@@ -203,10 +209,10 @@ final class LinkedDataIdentityTest extends TestCase
         ], 'https://example.test/s/amira/item/41980', 41980);
 
         $without = (new Signposting(new StructuredData([30 => 'Thesis']), new LinkedDataIdentity()))
-            ->links($thesis, 'https://example.test/s/amira/item/41980', 'https://example.test', false);
+            ->links($thesis, 'https://example.test/s/amira/item/41980', null);
         $identity = self::linkedDataIdentity();
         $with = (new Signposting(new StructuredData([30 => 'Thesis'], 'CreativeWork', null, $identity), $identity))
-            ->links($thesis, 'https://example.test/s/amira/item/41980', 'https://example.test', false);
+            ->links($thesis, 'https://example.test/s/amira/item/41980', null);
 
         $this->assertSame('https://example.test/s/amira/item/41980', $without[0]['href']);
         $this->assertSame(self::LD_BASE . '/resource/41980', $with[0]['href']);
@@ -301,7 +307,7 @@ final class LinkedDataIdentityTest extends TestCase
             ],
         ], idValue: 200);
 
-        $links = $signposting->links($book, 'https://example.test/s/amira/item/200', 'https://example.test', false);
+        $links = $signposting->links($book, 'https://example.test/s/amira/item/200', null);
 
         $this->assertSame(
             ['https://orcid.org/0000-0003-0959-2092', self::LD_BASE . '/resource/202'],
@@ -316,8 +322,8 @@ final class LinkedDataIdentityTest extends TestCase
             'dcterms:license' => [new Value(resource: $licence)],
         ], idValue: 300);
 
-        $cc = $signposting->links($licensed(new Resource('CC-BY-NC-SA-4.0', 6)), 'https://example.test/s/amira/item/300', 'https://example.test', false);
-        $custom = $signposting->links($licensed(new Resource('Custom terms', 6)), 'https://example.test/s/amira/item/300', 'https://example.test', false);
+        $cc = $signposting->links($licensed(new Resource('CC-BY-NC-SA-4.0', 6)), 'https://example.test/s/amira/item/300', null);
+        $custom = $signposting->links($licensed(new Resource('Custom terms', 6)), 'https://example.test/s/amira/item/300', null);
 
         $this->assertTrue(in_array(['rel' => 'license', 'href' => 'https://creativecommons.org/licenses/by-nc-sa/4.0/'], $cc, true));
         $this->assertSame([], array_values(array_filter($custom, static fn (array $l) => $l['rel'] === 'license')));
@@ -332,8 +338,8 @@ final class LinkedDataIdentityTest extends TestCase
         $media->originalUrlValue = 'https://example.test/files/original/scan.pdf';
         $media->mediaTypeValue = 'application/pdf';
 
-        $setLinks = $signposting->links($itemSet, 'https://example.test/s/amira/item-set/29918', 'https://example.test', true);
-        $mediaLinks = $signposting->links($media, 'https://example.test/s/amira/media/500', 'https://example.test', true, 'https://example.test/s/amira/item/41980');
+        $setLinks = $signposting->links($itemSet, 'https://example.test/s/amira/item-set/29918', self::citeUrl());
+        $mediaLinks = $signposting->links($media, 'https://example.test/s/amira/media/500', self::citeUrl(), 'https://example.test/s/amira/item/41980');
 
         $this->assertSame(['rel' => 'cite-as', 'href' => self::LD_BASE . '/resource/29918'], $setLinks[0]);
         $this->assertTrue(in_array(['rel' => 'describedby', 'href' => self::LD_BASE . '/resource/29918.ttl', 'type' => 'text/turtle'], $setLinks, true));

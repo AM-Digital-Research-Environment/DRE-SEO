@@ -60,27 +60,26 @@ final class Signposting
     }
 
     /**
-     * @param string      $canonical  the record page
-     * @param string      $origin     scheme and host the /cite downloads are served from
-     * @param bool        $citations  whether the /cite downloads are on
-     * @param string|null $collection the page of the record a media file belongs to
+     * @param string        $canonical  the record page
+     * @param \Closure|null $citeUrl    a /cite download's URL by item id and
+     *                                  format ({@see CitationExport::url()});
+     *                                  null when the downloads are off
+     * @param string|null   $collection the page of the record a media file belongs to
      * @return array<int,array{rel:string,href:string,type?:string}>
      */
     public function links(
         AbstractResourceEntityRepresentation $resource,
         string $canonical,
-        string $origin,
-        bool $citations,
+        ?\Closure $citeUrl,
         ?string $collection = null
     ): array {
         $links = [['rel' => 'cite-as', 'href' => $this->identity->uri($resource) ?? $canonical]];
 
-        if ($citations && $resource instanceof ItemRepresentation) {
-            $origin = rtrim($origin, '/');
+        if ($citeUrl !== null && $resource instanceof ItemRepresentation) {
             foreach (self::DESCRIBED_BY as $format => $mediaType) {
                 $links[] = [
                     'rel'  => 'describedby',
-                    'href' => $origin . '/cite/' . $resource->id() . '/' . $format,
+                    'href' => (string) $citeUrl((int) $resource->id(), $format),
                     'type' => $mediaType,
                 ];
             }

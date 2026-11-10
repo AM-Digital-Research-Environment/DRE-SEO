@@ -73,7 +73,7 @@ final class TermListsTest extends TestCase
             $identity
         );
         $authors = array_values(array_filter(
-            $signposting->links($episode, 'https://example.test/s/amira/item/200', 'https://example.test', false),
+            $signposting->links($episode, 'https://example.test/s/amira/item/200', null),
             static fn (array $link) => $link['rel'] === 'author'
         ));
         $this->assertSame([['rel' => 'author', 'href' => 'https://data.example.test/resource/202']], $authors, 'Signposting author');

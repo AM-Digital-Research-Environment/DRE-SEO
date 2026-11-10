@@ -15,6 +15,15 @@ GitHub release and shipped no installable asset.
   `config/module.ini`, `CITATION.cff` and the CHANGELOG heading, and refuses an empty
   Unreleased section; `--check X.Y.Z` compares them, and the release workflow runs it on
   the tag. See [CONTRIBUTING.md](https://github.com/AM-Digital-Research-Environment/DRE-SEO/blob/main/CONTRIBUTING.md#releasing).
+- **Admin → SEO lists the resource templates in use that the template maps do not name**,
+  with their label, item count and which map lacks them. Such a template's items fall
+  back to a generic `CreativeWork` and a generic citation, which is how templates 24–32
+  once went live unmapped.
+- Tests: the `/cite` controller (a private or unknown item and an unknown format are 404,
+  ETag and `If-None-Match` revalidation to 304), both admin screens rendered through
+  Laminas' real renderer and form helpers, markup in every field escaped in every citation
+  style and kind (the theme prints `dreCitation()`'s `html` raw), and a table of the
+  properties each schema.org type must carry, checked for every mapped template.
 
 ### Changed
 
@@ -45,6 +54,9 @@ GitHub release and shipped no installable asset.
 
 ### Fixed
 
+- The `/cite` download links (the record rail's downloads, the Signposting `describedby`
+  links) are assembled from the route instead of written out, so an Omeka installed under
+  a path keeps the path in them.
 - `DC.date` is the stored date in ISO 8601 (`2018-12-07`), as precise as recorded, read
   from the raw value like `datePublished`; it no longer depends on the value's string
   form, which a timestamp stored with a time, or a `rep.value.string` listener, could

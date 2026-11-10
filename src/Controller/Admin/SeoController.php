@@ -11,6 +11,7 @@ use DRESeo\Service\PingRepository;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SitemapGenerator;
+use DRESeo\Service\TemplateCoverage;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
 use Omeka\Api\Manager as ApiManager;
@@ -30,6 +31,7 @@ class SeoController extends AbstractActionController
         private readonly DefaultSite $defaultSite,
         private readonly ?ProjectResolver $projects = null,
         private readonly ?PingRepository $pingRepository = null,
+        private readonly ?TemplateCoverage $templates = null,
     ) {
     }
 
@@ -58,6 +60,8 @@ class SeoController extends AbstractActionController
             // other shape can never be served, so nothing is queued or sent.
             'indexNowKeyValid' => $indexNowKey === '' || IndexNowKey::isValid($indexNowKey),
             'queueCounts'    => $this->queueCounts(),
+            // Null when there is nothing to check against or the query fails.
+            'unmappedTemplates' => $this->templates?->unmapped(),
             'sitemapUrl'     => $hostUrl ? $hostUrl . '/sitemap.xml' : '',
             'robotsUrl'      => $hostUrl ? $hostUrl . '/robots.txt' : '',
             // The item sets the sitemap lists: less those redirecting to their project.

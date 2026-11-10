@@ -124,7 +124,9 @@ and a **Regenerate** button that clears the sitemap cache so it rebuilds on the 
 only needed after a change that bypasses Omeka's API, since every save clears it anyway.
 While IndexNow is on it also counts the URLs waiting in its queue and those that failed
 (refused, or out of retries), and flags a stored key that is not 8–128 hexadecimal
-characters.
+characters. It lists the resource templates items use that `structured_data.template_types`
+or `citation.template_kinds` does not name: their items would otherwise fall back to a
+generic `CreativeWork` and a generic citation without anyone noticing.
 
 ---
 
