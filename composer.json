@@ -42,6 +42,7 @@
       "@php .github/scripts/compile-po.php"
     ],
     "i18n:check": "@php .github/scripts/extract-strings.php --check",
+    "bump-version": "@php .github/scripts/bump-version.php",
     "check": [
       "@i18n:check",
       "@lint",
@@ -57,6 +58,7 @@
     "analyse": "Run PHPStan at level 6 against the recorded baseline.",
     "i18n": "Regenerate language/template.pot and compile any language/*.po.",
     "i18n:check": "Fail when language/template.pot no longer matches the sources.",
+    "bump-version": "Set the version in module.ini, CITATION.cff and the CHANGELOG heading: composer bump-version -- X.Y.Z (--check X.Y.Z only compares).",
     "check": "Everything CI runs except the Omeka integration test."
   },
   "config": {

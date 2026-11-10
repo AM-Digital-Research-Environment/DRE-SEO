@@ -8,21 +8,26 @@ behaviour. This file is only the things that bite.
 
 ## The whole suite runs locally
 
-`vendor/` holds the development tools and every check CI runs can be run here, the
-real-Omeka integration suite included. Three things on this machine make the obvious
-commands fail:
+`vendor/` holds the development tools (`composer install` once) and every check CI runs can
+be run locally, the real-Omeka integration suite included. What makes the obvious commands
+fail on the maintainers' Windows machines:
 
-- `php` on PATH is **PHP 8.5**, but `composer` / `composer.bat` forwards to an old PHP 8.2,
-  whose `@php` scripts then fail the 8.4 platform check. Run the phar with the PHP on PATH
-  (the phar does not care which).
+- `php` on PATH is **PHP 8.5**, possibly with no `php.ini` loaded, so without mbstring,
+  openssl, curl, zip or pdo_sqlite: the unit suite then fails on `mb_substr()` and Composer
+  cannot download. Point `PHPRC` at a directory whose `php.ini` sets `extension_dir` to the
+  PHP install's `ext` folder and enables those extensions.
+- Run Composer as `php /path/to/composer.phar …` with the PHP on PATH. A `composer` /
+  `composer.bat` shim may forward to an older PHP, whose `@php` scripts then fail the 8.4
+  platform check.
 - `vendor/bin/phpunit` has no `.bat` shim: run `php vendor/bin/phpunit`.
 - The integration suite needs `OMEKA_PATH` pointing at an Omeka S 4.2.1 tree with its
-  vendor. IWAC SEO's checkout serves both modules; never modify it.
+  vendor: the official release zip unpacked **outside** the repository (CI verifies it
+  against the SHA-256 in `.github/workflows/ci.yml`). Never modify another module's
+  checkout to serve it.
 
 ```bash
-C=C:/Users/frede/AppData/Local/Microsoft/WinGet/Packages/PHP.PHP.8.2_Microsoft.Winget.Source_8wekyb3d8bbwe/composer.phar
-php $C check                     # i18n:check + lint + analyse + unit tests
-OMEKA_PATH=C:/Users/frede/GitHub/IWAC-SEO/.integration/omeka-s php $C test:integration
+php /path/to/composer.phar check                                  # i18n:check + lint + analyse + unit tests
+OMEKA_PATH=/path/to/omeka-s php /path/to/composer.phar test:integration
 ```
 
 Run both before every commit that touches code, and say which ones you ran: CI covers the
@@ -31,6 +36,10 @@ Run both before every commit that touches code, and say which ones you ran: CI c
 another file (its references name files, not lines); commit the result.
 `phpstan-baseline.neon` is a ledger of debt that predates analysis: delete entries as they
 are fixed, never regenerate it to silence a new error.
+
+Never edit the version by hand: `composer bump-version -- X.Y.Z` writes module.ini,
+CITATION.cff and the CHANGELOG heading (`## [X.Y.Z] - YYYY-MM-DD`), and the release
+workflow checks the same three files with `--check`. CONTRIBUTING.md has the release steps.
 
 ## Gotchas
 

@@ -84,16 +84,24 @@ maintainer's machine (PHP 8.5 on PATH, Composer through its phar).
 
 Maintainers only:
 
-1. Bump `version` in **`config/module.ini`** and **`CITATION.cff`** (and `date-released`).
-2. In `CHANGELOG.md`, turn `## [Unreleased]` into `## [X.Y.Z] — YYYY-MM-DD`: the release
-   notes are taken from that section.
-3. Commit, then tag: `git tag -a vX.Y.Z -m "..." && git push --follow-tags`.
+1. Fill `## [Unreleased]` in `CHANGELOG.md` as you work.
+2. On a clean, green `main`, run `composer bump-version -- X.Y.Z` (or
+   `php .github/scripts/bump-version.php X.Y.Z`; `--date=YYYY-MM-DD` overrides today). It
+   writes the version into **`config/module.ini`** and **`CITATION.cff`** (with
+   `date-released`), turns `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` under a fresh,
+   empty Unreleased section, and moves the compare links at the foot of the file. It refuses
+   an empty Unreleased section and a version that is not above the current one, and it
+   commits and tags nothing.
+3. Review the diff, commit it as `Release X.Y.Z`, then tag and push:
+   `git tag -a vX.Y.Z -m "Release X.Y.Z" && git push origin main vX.Y.Z`.
 
-The `Release` workflow refuses to publish if those two declared versions disagree with the
-tag. When they agree it runs the quality gates and the unit suite at the tag, builds
-`DRESeo.zip` with `git archive --prefix=DRESeo/`, checks the archive for leaked development
-files, and attaches the zip plus a SHA-256 checksum to a release whose notes are the
-CHANGELOG section — it fails when there is none. Do not hand-build the zip.
+The `Release` workflow first runs the whole of `ci.yml` on the tag — the unit suite on PHP
+8.4 and 8.5, the translation, PSR-12 and PHPStan gates and the integration suite against
+Omeka S 4.2.1. It then checks, with `bump-version.php --check`, that module.ini,
+CITATION.cff and a dated CHANGELOG section all state the tag's version, builds `DRESeo.zip`
+with `git archive --prefix=DRESeo/`, checks the archive for leaked development files, and
+attaches the zip plus a SHA-256 checksum to a release whose notes are the CHANGELOG
+section. Do not edit the version by hand, and do not hand-build the zip.
 
 ## Licence
 

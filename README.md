@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AM-Digital-Research-Environment/DRE-SEO/actions/workflows/ci.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/DRE-SEO/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/AM-Digital-Research-Environment/DRE-SEO?sort=semver&label=release)](https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/latest)
-[![Omeka S ^4.2.0](https://img.shields.io/badge/Omeka%20S-%5E4.2.0-3b5f7d)](https://omeka.org/s/)
+[![Omeka S ^4.2.1](https://img.shields.io/badge/Omeka%20S-%5E4.2.1-3b5f7d)](https://omeka.org/s/)
 [![PHP >= 8.4](https://img.shields.io/badge/PHP-%E2%89%A5%208.4-777bb4)](https://www.php.net/)
 [![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-009260)](LICENSE)
 
@@ -74,7 +74,7 @@ No web-server changes are needed: nginx's `try_files … /index.php` already rou
 There are no third-party dependencies, so `composer install` is **not** required — Omeka
 autoloads the `DRESeo\` namespace from `src/`.
 
-**Requirements:** Omeka S `^4.2.0`, PHP `>= 8.4`. CI covers both the supported
+**Requirements:** Omeka S `^4.2.1`, PHP `>= 8.4`. CI covers both the supported
 floor (PHP 8.4) and the production runtime (PHP 8.5).
 
 ---
@@ -504,8 +504,9 @@ DRESeo/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                   # tests on PHP 8.4 + 8.5, quality gates, Omeka integration
-│   │   └── release.yml              # tested tag -> DRESeo.zip + SHA-256 on the GitHub release
+│   │   └── release.yml              # ci.yml on the tag, then DRESeo.zip + SHA-256 on the GitHub release
 │   ├── scripts/
+│   │   ├── bump-version.php         # the version in module.ini, CITATION.cff, CHANGELOG (--check: release gate)
 │   │   ├── extract-strings.php      # sources -> language/template.pot (--check: freshness gate)
 │   │   └── compile-po.php           # language/*.po -> .mo, without gettext
 │   └── dependabot.yml               # action pins and Composer dev tools, monthly
@@ -627,8 +628,8 @@ production ownership of the Laminas, Doctrine and PSR classes.
 GitHub Actions (`.github/workflows/ci.yml`) runs the syntax sweep and the unit suite on
 PHP 8.4 and the production PHP 8.5, the translation, PSR-12 and PHPStan gates at the 8.4
 floor, and the integration suite on PHP 8.5 against the checksum-pinned official Omeka S
-4.2.1 release. The release workflow runs the same gates at the tag before it builds
-`DRESeo.zip`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions, including the
+4.2.1 release. The release workflow calls `ci.yml` on the tag, so a release is gated on
+the whole suite, the integration tests included, before it builds `DRESeo.zip`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions, including the
 rule for the PHPStan baseline.
 
 ---

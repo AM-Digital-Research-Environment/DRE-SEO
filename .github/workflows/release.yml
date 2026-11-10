@@ -6,13 +6,20 @@ name: Release
 # `export-ignore` rules in .gitattributes — tests and repository furniture stay out.
 #
 # The tag is tested before anything is built: a tag is not retractable, so one that
-# cannot pass its own checks must not ship an asset. The checks are CI's `quality`
-# gates plus PHPUnit, at the 8.4 floor — the CI matrix is what covers production 8.5.
+# cannot pass its own checks must not ship an asset. The `gates` job is the whole of
+# ci.yml, called as a reusable workflow on the tagged tree — the PHP 8.4 and 8.5 unit
+# suite, the translation, PSR-12 and PHPStan gates, and the integration suite against
+# Omeka S 4.2.1 — so a release is gated on exactly what a pull request is. Before
+# 0.17.0 the release ran the unit suite only.
 #
 # Run manually with an existing tag to rebuild its zip and checksum and replace the
-# assets of its release. The checks are those of the tag's own composer.json, so a
-# tag from before the development toolchain (0.15.0 and earlier) has no `analyse` or
-# `i18n:check` script to run and fails here; re-upload those by hand.
+# assets of its release. The gates are this branch's ci.yml run on the tag's code, so
+# a tag from before the development toolchain (0.15.0 and earlier) has no `analyse` or
+# `i18n:check` script to run and fails here, and a tag before 0.17.0 has no
+# .github/scripts/bump-version.php to check its versions with; re-upload those by hand.
+#
+# Actions are pinned to commit SHAs, with the release in a comment; Dependabot keeps
+# the pins current.
 
 on:
   push:
@@ -29,8 +36,17 @@ permissions:
   contents: read
 
 jobs:
+  gates:
+    name: CI suite on the tagged tree
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
+    permissions:
+      contents: read
+
   release:
     name: Build and publish DRESeo.zip
+    needs: gates
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -40,75 +56,37 @@ jobs:
       - name: Resolve tag
         id: tag
         shell: bash
+        # Through the environment, not interpolated into the script: a manual
+        # run's tag is free text.
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
+          tag="$TAG"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Check out repository at ${{ steps.tag.outputs.tag }}
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.tag.outputs.tag }}
+          persist-credentials: false
 
-      # The version lives in two files that nothing else keeps in step with the
-      # tag. Disagreement fails the build rather than shipping a zip whose
-      # module.ini contradicts its release.
-      - name: Check declared versions match the tag
-        shell: bash
-        env:
-          VERSION: ${{ steps.tag.outputs.version }}
-        run: |
-          fail=0
-
-          ini_version="$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' config/module.ini | head -1)"
-          if [ "$ini_version" != "$VERSION" ]; then
-            echo "::error file=config/module.ini::version is '${ini_version}', tag says '${VERSION}'"
-            fail=1
-          fi
-
-          cff_version="$(sed -nE 's/^version:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' CITATION.cff | head -1)"
-          if [ "$cff_version" != "$VERSION" ]; then
-            echo "::error file=CITATION.cff::version is '${cff_version}', tag says '${VERSION}'"
-            fail=1
-          fi
-
-          if [ "$fail" -ne 0 ]; then
-            exit 1
-          fi
-          echo "module.ini and CITATION.cff both declare ${VERSION}."
-
-      # 8.4 is the floor declared in composer.json, as in CI's quality job.
+      # Only PHP itself: the version check below reads the files, it installs
+      # nothing. 8.4 is the floor declared in composer.json.
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.4'
-          extensions: dom, json, mbstring
           coverage: none
-          tools: composer:v2
 
-      - name: Validate Composer metadata
-        run: composer validate --strict
-
-      - name: Install development tools
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      # As in CI, each check runs even when an earlier one fails, so a bad tag
-      # reports every category at once. Any failure still stops the build: the
-      # steps after these run only when all of them passed.
-      - name: Translation template is current
-        run: composer i18n:check
-
-      - name: Coding standard (PSR-12)
-        if: ${{ !cancelled() }}
-        run: composer lint
-
-      - name: Static analysis (PHPStan level 6)
-        if: ${{ !cancelled() }}
-        run: composer analyse
-
-      - name: Run tests
-        if: ${{ !cancelled() }}
-        run: vendor/bin/phpunit
+      # Every file that states the version must agree with the tag — module.ini,
+      # CITATION.cff and a dated CHANGELOG section — rather than ship a zip whose
+      # module.ini contradicts its release. The list of files is the bump script's,
+      # so the one that writes the version and the one that checks it cannot drift.
+      - name: Check declared versions match the tag
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: php .github/scripts/bump-version.php --check "$VERSION"
 
       # The folder name inside the zip must be exactly `DRESeo` — Omeka matches the
       # module directory against the PHP namespace. The checksum is written beside
@@ -169,10 +147,11 @@ jobs:
             exit 0
           fi
 
-          # Headings read `## [0.15.0] — 2026-10-15`; index() rather than a regex,
-          # so the dots in the version are not wildcards.
+          # Headings read `## [0.17.0] - 2026-11-10`; index() rather than a regex,
+          # so the dots in the version are not wildcards. The trailing space keeps
+          # 0.1.1 from matching 0.1.10.
           awk -v v="$VERSION" '
-            index($0, "## [" v "]") == 1 || $0 == "## " v || index($0, "## " v " ") == 1 { found = 1; next }
+            index($0, "## [" v "] ") == 1 || $0 == "## [" v "]" { found = 1; next }
             /^## / && found { exit }
             found { print }
           ' CHANGELOG.md > notes.md

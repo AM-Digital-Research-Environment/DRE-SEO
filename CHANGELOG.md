@@ -9,6 +9,23 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Added
+
+- `composer bump-version -- X.Y.Z` (`.github/scripts/bump-version.php`) sets the version in
+  `config/module.ini`, `CITATION.cff` and the CHANGELOG heading, and refuses an empty
+  Unreleased section; `--check X.Y.Z` compares them, and the release workflow runs it on
+  the tag. See [CONTRIBUTING.md](https://github.com/AM-Digital-Research-Environment/DRE-SEO/blob/main/CONTRIBUTING.md#releasing).
+
+### Changed
+
+- **Omeka S `^4.2.1`** is the declared requirement (`^4.2.0` before), as for the theme and
+  the other DRE modules; 4.2.1 is what CI and the integration suite have always tested.
+- The release workflow runs the whole CI suite on the tag, the integration tests against
+  Omeka S 4.2.1 included, before it builds the zip; it used to run the unit suite only.
+- GitHub Actions are pinned by commit SHA, with the release in a comment.
+- CHANGELOG headings read `## [X.Y.Z] - YYYY-MM-DD`, with a hyphen, as in the theme and
+  the other modules.
+
 ### Fixed
 
 - `DC.date` is the stored date in ISO 8601 (`2018-12-07`), as precise as recorded, read
@@ -22,7 +39,7 @@ GitHub release and shipped no installable asset.
 - The admin dashboard's "On" and "Off" labels and its explanatory notes meet WCAG AA
   contrast (5.4:1 and 5.7:1 on white, from 4.0:1 and 2.8:1).
 
-## [0.16.0] — 2026-10-29
+## [0.16.0] - 2026-10-29
 
 IndexNow URLs wait in a queue table of their own, sent by a cron job (a bulk sync is
 still left to the sitemap), the sitemap follows content changes at once, and robots.txt
@@ -163,7 +180,7 @@ DRE SEO → Upgrade**, and if IndexNow is on, install the cron line in
 - [CLAUDE.md](CLAUDE.md) records, for coding agents, what bites on the maintainer's machine
   and in this codebase.
 
-## [0.15.0] — 2026-10-15
+## [0.15.0] - 2026-10-15
 
 The research project's item becomes its one public page: its item set redirects there, and
 every record is placed in the site through the landing page of its kind.
@@ -199,7 +216,7 @@ every record is placed in the site through the landing page of its kind.
 - The item-set sitemap leaves out the item sets that redirect to their project (in the same
   single query), and the admin dashboard counts the item sets it lists.
 
-## [0.14.0] — 2026-10-15
+## [0.14.0] - 2026-10-15
 
 ### Added
 
@@ -209,13 +226,13 @@ every record is placed in the site through the landing page of its kind.
 
 - The `BreadcrumbList` places a record in the site: an item under its item set (a research item's project, *Publications*, *Institutions* …), preferring one the site uses; a media under its item. It used to go straight from the home page to the record. Item sets and other records keep the two-step trail.
 
-## [0.13.1] — 2026-10-15
+## [0.13.1] - 2026-10-15
 
 ### Changed
 
 - The schema.org `Dataset` is on the dataset's landing page, the page that carries DRE Linked Data's *Linked open data* block, and its `url` is that page. DRE Linked Data 0.3.1 names the page (`dataset()['landingPage']`) and gives the same page as the VoID's `dcat:landingPage`, so Google Dataset Search and data catalogues send people to the page that explains the dataset. With DRE Linked Data 0.3.0, which names no landing page, the `Dataset` stays on the home page. The home page keeps its `WebSite` node.
 
-## [0.13.0] — 2026-10-15
+## [0.13.0] - 2026-10-15
 
 An SEO and FAIR audit of the live site, applied together with DRE Linked Data 0.3.0 and
 DRE-theme 2.38.0 under one shared identity contract. Everything that reads DRE Linked Data
@@ -297,7 +314,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 - The lastmod timezone was checked against Omeka (naive UTC datetimes) and is correct; the
   reason is now documented.
 
-## [0.12.0] — 2026-10-14
+## [0.12.0] - 2026-10-14
 
 ### Added
 
@@ -320,7 +337,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   too), and contradicts the schema.org block. Public pages read the site setting
   (**Sites → site → Settings → Disable JSON-LD embed**), not the global one.
 
-## [0.11.0] — 2026-10-09
+## [0.11.0] - 2026-10-09
 
 ### Added
 
@@ -408,7 +425,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   instead of private copies, and the four copies of the default-site lookup are one
   `DefaultSite` service.
 
-## [0.10.1] — 2026-10-07
+## [0.10.1] - 2026-10-07
 
 ### Removed
 
@@ -417,7 +434,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   AMIRA item. The RDSpace handle (`dre:rdspaceHandle`) still feeds `sameAs`, and a video's
   watch URL still joins it.
 
-## [0.10.0] — 2026-10-06
+## [0.10.0] - 2026-10-06
 
 ### Fixed
 
@@ -459,7 +476,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   the language statistics stop reporting the view templates as HTML.
 - CI checks out with `actions/checkout@v7`.
 
-## [0.9.0] — 2026-08-04
+## [0.9.0] - 2026-08-04
 
 ### Fixed
 
@@ -486,7 +503,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   was the failure here, which the existing "the keys you gave are valid" test passed
   throughout.
 
-## [0.8.0] — 2026-08-04
+## [0.8.0] - 2026-08-04
 
 ### Added
 
@@ -508,7 +525,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 - `/cite` shares the `dre_seo_citation_meta` switch, so "citations off" means off
   everywhere.
 
-## [0.7.0] — 2026-08-01
+## [0.7.0] - 2026-08-01
 
 ### Added
 
@@ -522,7 +539,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 - IndexNow pings coalesce through a `PingQueue`: concurrent edits become one background
   batch, and failed submissions are retained for a later retry.
 
-## [0.6.0] — 2026-07-31
+## [0.6.0] - 2026-07-31
 
 ### Added
 
@@ -534,7 +551,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 
 - SEO services refactored; `PageSeoStore` normalises per-page overrides.
 
-## [0.5.0] — 2026-06-25
+## [0.5.0] - 2026-06-25
 
 ### Fixed
 
@@ -547,7 +564,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   attribute and type escaping, so the previous call never removed it. `JSON_HEX_TAG`
   already escapes `</script>`.
 
-## [0.4.0] — 2026-06-12
+## [0.4.0] - 2026-06-12
 
 ### Fixed
 
@@ -562,7 +579,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 
 - `license` emitted from `dcterms:license` when present; no default is asserted.
 
-## [0.3.0] — 2026-06-05
+## [0.3.0] - 2026-06-05
 
 ### Added
 
@@ -571,7 +588,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   detection rides on `DC.type=podcast`; host and guests ride `citation_author`, which
   Zotero folds onto the primary podcaster role.
 
-## [0.2.0] — 2026-06-04
+## [0.2.0] - 2026-06-04
 
 ### Fixed
 
@@ -592,7 +609,7 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
   the home page listed once at its canonical URL. Public pages unreachable from the
   navigation are still included, but demoted.
 
-## [0.1.0] — 2026-06-03
+## [0.1.0] - 2026-06-03
 
 ### Added
 

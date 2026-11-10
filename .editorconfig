@@ -1,4 +1,9 @@
-# https://editorconfig.org — the conventions the codebase already follows.
+; Africa Multiple — DRE SEO
+; Copied from DRE-theme's .editorconfig, so the repositories share one baseline
+; (UTF-8, LF, final newline, no trailing whitespace, spaces). Only the sections
+; below the baseline differ, and each records this tree's existing convention
+; rather than a new one: PHP, the view scripts and asset/css use four spaces;
+; composer.json, the workflows, CITATION.cff and the PHPStan configuration use two.
 root = true
 
 [*]
@@ -9,13 +14,21 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
-[*.{yml,yaml,json,neon}]
+[*.{scss,css}]
+indent_size = 4
+
+[*.{json,yml,yaml,cff,neon}]
 indent_size = 2
 
 [*.md]
+; Markdown uses trailing double-space for hard line breaks.
 trim_trailing_whitespace = false
 
-# Gettext catalogues are generated; leave them exactly as written.
+[*.ini]
+indent_style = space
+indent_size = 4
+
 [*.{po,pot}]
+; Gettext catalogues are generated; leave them exactly as written.
 trim_trailing_whitespace = false
 insert_final_newline = false
