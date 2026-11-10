@@ -149,7 +149,7 @@ class ConfigForm extends Form
             'type'    => Element\Number::class,
             'options' => [
                 'label' => 'Sitemap cache lifetime (seconds)', // @translate
-                'info'  => 'How long a generated sitemap is cached before it is rebuilt on the next request. Default 86400 (24h). Use the “Regenerate now” button on the SEO admin page to rebuild immediately.', // @translate
+                'info'  => 'How long a generated sitemap is cached before it is rebuilt on the next request. Default 86400 (24h). Use the “Regenerate” button on Admin → SEO to rebuild immediately.', // @translate
             ],
             'attributes' => ['id' => 'dre_seo_sitemap_ttl', 'min' => 0, 'step' => 1, 'placeholder' => '86400'],
         ]);

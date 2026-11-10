@@ -39,6 +39,12 @@ class SeoController extends AbstractActionController
         $hostUrl = $site ? $this->hostUrl($site) : '';
         $indexNowKey = $this->settings->text('dre_seo_indexnow_key');
 
+        // ConfirmForm's button reads "Confirm" unless told otherwise; the
+        // dashboard and OPERATIONS.md call it Regenerate.
+        $confirmForm = $this->getForm(\Omeka\Form\ConfirmForm::class);
+        $confirmForm->setButtonLabel('Regenerate'); // @translate
+        $confirmForm->setAttribute('action', $this->url()->fromRoute('admin/dre-seo/regenerate'));
+
         $view = new ViewModel([
             'site'           => $site,
             'gscConfigured'  => $this->settings->text('dre_seo_gsc_verification') !== '',
@@ -58,8 +64,7 @@ class SeoController extends AbstractActionController
             'counts'         => $site
                 ? $this->generator->counts($site->id(), $this->projects?->redirectsEnabled((int) $site->id()) ?? false)
                 : ['items' => 0, 'itemSets' => 0, 'pages' => 0],
-            'confirmForm'    => $this->getForm(\Omeka\Form\ConfirmForm::class)
-                ->setAttribute('action', $this->url()->fromRoute('admin/dre-seo/regenerate')),
+            'confirmForm'    => $confirmForm,
         ]);
         return $view->setTemplate('dre-seo/admin/seo/dashboard');
     }

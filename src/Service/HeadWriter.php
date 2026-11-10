@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Service;
 
+use Laminas\Log\LoggerInterface;
 use Laminas\View\Renderer\PhpRenderer;
 
 /**
@@ -34,6 +35,15 @@ final class HeadWriter
 
     /** @var array<int,array{rel:string,href:string,type?:string}> The page's Signposting links. */
     private array $signposts = [];
+
+    /**
+     * @param LoggerInterface|null $logger where a JSON-LD document that cannot
+     *                                     be encoded is reported; without it
+     *                                     the block is still left out
+     */
+    public function __construct(private readonly ?LoggerInterface $logger = null)
+    {
+    }
 
     public function description(PhpRenderer $view, string $description): void
     {
@@ -133,11 +143,21 @@ final class HeadWriter
     {
         // Compact: nobody reads the inline block, and on a record with a long
         // abstract the indentation is a measurable share of the page.
+        // One value with invalid UTF-8 (a legacy import, a truncated multibyte
+        // character) used to fail the whole document, and the page lost its
+        // structured data without a word. The bad bytes now become U+FFFD and
+        // the rest is kept. What still fails (a NAN, a recursion too deep) is
+        // logged, so a page without JSON-LD can be traced.
         $json = json_encode(
             $data,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE
         );
         if ($json === false) {
+            $this->logger?->warn(sprintf(
+                '[DRESeo] JSON-LD for %s left out: %s',
+                is_string($data['@id'] ?? null) ? $data['@id'] : 'a page',
+                json_last_error_msg()
+            ));
             return;
         }
         // Emit the document as raw JSON. The `noescape` attribute suppresses the

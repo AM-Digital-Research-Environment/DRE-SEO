@@ -111,7 +111,7 @@ msgid "Google Search Console verification"
 msgstr ""
 
 #: src/Form/ConfigForm.php
-msgid "How long a generated sitemap is cached before it is rebuilt on the next request. Default 86400 (24h). Use the “Regenerate now” button on the SEO admin page to rebuild immediately."
+msgid "How long a generated sitemap is cached before it is rebuilt on the next request. Default 86400 (24h). Use the “Regenerate” button on Admin → SEO to rebuild immediately."
 msgstr ""
 
 #: view/dre-seo/admin/seo/pages.phtml
@@ -214,6 +214,10 @@ msgstr ""
 
 #: src/Form/SiteSettingsElements.php
 msgid "Redirect a project’s item set page to the project"
+msgstr ""
+
+#: src/Controller/Admin/SeoController.php
+msgid "Regenerate"
 msgstr ""
 
 #: config/module.config.php

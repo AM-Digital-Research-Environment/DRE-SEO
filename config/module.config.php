@@ -52,13 +52,14 @@ return $instance + [
             Service\SettingsGate::class      => Service\SettingsGateFactory::class,
             // robots.txt: the fixed exclusions and dre_seo.robots.
             Service\RobotsTxt::class         => Service\RobotsTxtFactory::class,
+            // Shared, like every service-manager entry — HeadWriter relies on
+            // that: its record of what the head says has to span the action
+            // and layout render passes of one request. The factory gives it
+            // the logger for a JSON-LD document that cannot be encoded.
+            Service\HeadWriter::class        => Service\HeadWriterFactory::class,
         ],
-        // Dependency-free: plain instantiation. Shared, like every
-        // service-manager entry — HeadWriter relies on that: its record of
-        // what the head says has to span the action and layout render passes
-        // of one request.
+        // Dependency-free: plain instantiation.
         'invokables' => [
-            Service\HeadWriter::class        => Service\HeadWriter::class,
             // Stateless formatter: no config, no dependencies.
             Service\CitationFormatter::class => Service\CitationFormatter::class,
         ],

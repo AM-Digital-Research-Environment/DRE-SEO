@@ -9,6 +9,19 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Fixed
+
+- `DC.date` is the stored date in ISO 8601 (`2018-12-07`), as precise as recorded, read
+  from the raw value like `datePublished`; it no longer depends on the value's string
+  form, which a timestamp stored with a time, or a `rep.value.string` listener, could
+  change. A date that names no year is left out instead of being passed through as text.
+- A JSON-LD document holding invalid UTF-8 is no longer dropped from the page: the bad
+  bytes become U+FFFD. A document that still cannot be encoded is logged.
+- The sitemap button on **Admin → SEO** reads **Regenerate**, as documented, instead of
+  Omeka's default "Confirm".
+- The admin dashboard's "On" and "Off" labels and its explanatory notes meet WCAG AA
+  contrast (5.4:1 and 5.7:1 on white, from 4.0:1 and 2.8:1).
+
 ## [0.16.0] — 2026-10-29
 
 IndexNow URLs wait in a queue table of their own, sent by a cron job (a bulk sync is

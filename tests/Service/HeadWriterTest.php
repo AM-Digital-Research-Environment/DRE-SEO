@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace DRESeo\Test\Service;
 
 use DRESeo\Service\HeadWriter;
+use DRESeo\Test\Double\MemoryLogger;
 use Laminas\View\Renderer\PhpRenderer;
 use PHPUnit\Framework\TestCase;
 
@@ -90,5 +91,30 @@ final class HeadWriterTest extends TestCase
 
         $this->assertSame(['Our team'], $view->head['title']);
         $this->assertNull($head->leadingTitle(new PhpRenderer()));
+    }
+
+    public function testInvalidUtf8IsSubstitutedRatherThanDroppingTheDocument(): void
+    {
+        $view = new PhpRenderer();
+        $logger = new MemoryLogger();
+        (new HeadWriter($logger))->jsonLd($view, ['@id' => 'https://example.test/r/1', 'name' => "Caf\xE9 <b>"]);
+
+        $this->assertCount(1, $view->head['script']);
+        $this->assertSame(
+            ['@id' => 'https://example.test/r/1', 'name' => "Caf\u{FFFD} <b>"],
+            json_decode($view->head['script'][0], true)
+        );
+        $this->assertSame([], $logger->records);
+    }
+
+    public function testADocumentThatCannotBeEncodedIsLoggedNotSilentlyDropped(): void
+    {
+        $view = new PhpRenderer();
+        $logger = new MemoryLogger();
+        (new HeadWriter($logger))->jsonLd($view, ['@id' => 'https://example.test/r/2', 'size' => NAN]);
+
+        $this->assertSame([], $view->head['script']);
+        $this->assertCount(1, $logger->records['warn'] ?? []);
+        $this->assertStringContainsString('https://example.test/r/2', $logger->records['warn'][0]['message']);
     }
 }

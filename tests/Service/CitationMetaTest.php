@@ -163,6 +163,23 @@ final class CitationMetaTest extends TestCase
         $this->assertSame(['1905-07-08'], self::tagValues($tags, 'DC.date'));
     }
 
+    public function testDcDateIsTheStoredDateInIso8601NotItsDisplayForm(): void
+    {
+        // The value's display form may be a localised date; DC.date is the
+        // stored value, cut to the date.
+        $episode = new ItemRepresentation('An episode', 10, null, [
+            'dcterms:title' => [new ValueRepresentation('An episode')],
+            'dcterms:issued' => [new ValueRepresentation('7. Dezember 2018', null, null, '2018-12-07T10:30:00', 'numeric:timestamp')],
+        ]);
+        $undated = new ItemRepresentation('Undated', 10, null, [
+            'dcterms:title' => [new ValueRepresentation('Undated')],
+            'dcterms:date' => [new ValueRepresentation('n.d.')],
+        ]);
+
+        $this->assertSame(['2018-12-07'], self::tagValues(self::citationMetaService()->tags($episode, null), 'DC.date'));
+        $this->assertSame([], self::tagValues(self::citationMetaService()->tags($undated, null), 'DC.date'), 'a value naming no year is no date');
+    }
+
     public function testScholarlyKindsNeedAnAuthorAndJournalIssuesAndSeriesAreNoPapers(): void
     {
         $withoutAuthor = new ItemRepresentation('Anonymous report', 12, 'Report', [

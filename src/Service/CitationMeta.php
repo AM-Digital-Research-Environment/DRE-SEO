@@ -213,7 +213,11 @@ class CitationMeta
         foreach ($creators as $creator) {
             $add('DC.creator', $creator);
         }
-        $add('DC.date', $this->firstString($resource, self::DATE_TERMS));
+        // W3CDTF, as precise as stored, from the raw value rather than the
+        // value's string form, which is whatever its data type and any
+        // `rep.value.string` listener make of it (a timestamp stored with a
+        // time keeps the time). A value naming no year is no date.
+        $add('DC.date', $this->isoDate($resource, self::DATE_TERMS));
         $add('DC.publisher', $this->firstLabel($resource, 'dcterms:publisher'));
         // A work names its exact Zotero item type here: the Embedded Metadata
         // translator accepts any Zotero type id in DC.type and lets it win over

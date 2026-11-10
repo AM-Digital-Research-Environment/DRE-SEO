@@ -1,12 +1,15 @@
 /* DRE SEO — admin screens (status dashboard + static-page table). */
 
+/* 5.4:1 on white; the earlier #009260 was 4.0:1, short of WCAG AA. */
 .dre-seo-on {
-    color: #009260;
+    color: #007a50;
     font-weight: 600;
 }
 
+/* #666 on Omeka's white admin panel is 5.7:1, above the 4.5:1 WCAG AA asks of
+   the explanatory sentences this class also carries ("no key set"). */
 .dre-seo-off {
-    color: #9a9a9a;
+    color: #666;
     font-weight: 600;
 }
 
