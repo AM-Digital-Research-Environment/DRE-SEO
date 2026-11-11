@@ -9,6 +9,8 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-11
+
 ### Added
 
 - `composer bump-version -- X.Y.Z` (`.github/scripts/bump-version.php`) sets the version in
@@ -680,7 +682,8 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.13.1...v0.14.0
