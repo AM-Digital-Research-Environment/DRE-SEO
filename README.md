@@ -188,9 +188,15 @@ share one identity contract:
   node is typed as its own page types it — a research item's project is a
   `ResearchProject`, not a `CreativeWork`. `keywords` keeps every subject as text.
   `sameAs` is DRE Linked Data's list of canonical identity IRIs (0.3.0+); without it, the
-  record's own `dcterms:identifier` URIs filtered to an allowlist (Wikidata as
-  `http://www.wikidata.org/entity/Q…`, GND, ORCID, VIAF, ISNI, ROR, LoC, GeoNames, DOI, and
-  the RDSpace handle) — never a YouTube playlist or a GEPRIS page.
+  same list built here by the same rules, so `sameAs` does not change when that module is
+  switched on: each URI value of `dcterms:identifier` that matches one of the authorities in
+  `config/identity-authorities.php` (Wikidata as `http://www.wikidata.org/entity/Q…`, Library
+  of Congress, GND, VIAF, ORCID, ISNI, ROR and GeoNames), in its canonical form, and each
+  `bibo:doi` as its `https://doi.org/…` IRI. Never a YouTube playlist or a GEPRIS page, a
+  literal (a bare `Q42` included) or the RDSpace handle, whose `rdspace-ubt` prefix the
+  Handle System does not resolve. The table is a byte-identical copy of DRE Linked Data's,
+  and a test in each repository pins both copies and a shared table of cases
+  (`tests/Fixture/identity-links.json`) by hash: change it there first, then copy it here.
 * **Signposting.** `describedby` points at the module's Turtle, N-Triples and JSON-LD
   documents instead of Omeka's `/api/items/{id}`. The CSL-JSON, BibTeX and RIS entries stay
   on item pages. `author` links each linked author by ORCID iD, else by resource URI.
@@ -235,7 +241,7 @@ keyed by Omeka resource-template id:
 |---|---|
 | Organisation (2) | `Organization` (+ `sameAs` ← Wikidata) |
 | Location (3) | `Place` (+ numeric `geo`, `containedInPlace`, `sameAs` ← Wikidata) |
-| Persons (4) | `Person` (natural-order `name`, `givenName`/`familyName`, `affiliation`, `sameAs` ← GND and `dre:rdspaceHandle`) |
+| Persons (4) | `Person` (natural-order `name`, `givenName`/`familyName`, `affiliation`, `sameAs` ← GND, ORCID, VIAF, ISNI) |
 | Projects (5) | `ResearchProject` (+ `funder`, `parentOrganization`, `alternateName`) |
 | Authority Resource (6) | `DefinedTerm` in its vocabulary (`inDefinedTermSet` ← `dcterms:type`, `sameAs` ← LCSH / Wikidata) |
 | Research sections (7) | `ResearchProject` (+ `member`) |

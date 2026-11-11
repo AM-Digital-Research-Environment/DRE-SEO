@@ -169,20 +169,17 @@ class StructuredData
     }
 
     /**
-     * The IRIs a record is the same as: DRE Linked Data's canonical identity
-     * links when it publishes them, else the allowlisted authority IRIs the
-     * record itself carries; and a work's DOI, as its https://doi.org/ IRI.
+     * The IRIs a record is the same as: its allowlisted authority IRIs in
+     * canonical form and its DOIs as https://doi.org/ IRIs. DRE Linked Data's
+     * list when it publishes one, else the same rules applied here
+     * ({@see identityUris()}), so the set does not change when that module is
+     * switched on or off.
      *
      * @return string[]
      */
     public function sameAsFor(AbstractResourceEntityRepresentation $resource): array
     {
-        $sameAs = $this->identity?->sameAs($resource) ?? $this->identityUris($resource);
-        $doi = $this->doi($resource);
-        if ($doi !== null) {
-            $sameAs[] = 'https://doi.org/' . $doi;
-        }
-        return array_values(array_unique($sameAs));
+        return array_values(array_unique($this->identity?->sameAs($resource) ?? $this->identityUris($resource)));
     }
 
     /**

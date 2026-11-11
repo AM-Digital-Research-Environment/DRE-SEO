@@ -5,6 +5,7 @@ namespace DRESeo\Service\Concern;
 
 use DRESeo\Service\Citation\CitationRecord;
 use DRESeo\Service\Citation\IssuedDate;
+use DRESeo\Service\IdentityAuthorities;
 use DRESeo\Service\LanguageCode;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
 use Omeka\Api\Representation\ItemRepresentation;
@@ -16,7 +17,7 @@ use Omeka\Api\Representation\ValueRepresentation;
  *
  * These are the DRE's field conventions in one place: linked-resource labels
  * via displayTitle, the dcterms:subject keyword set, the dre:id accession, the
- * bibo:doi normalisation, the ISBN properties, the identifier URIs that become
+ * bibo:doi normalisation, the ISBN properties, the identity links that become
  * `sameAs`, and the public-PDF lookup. {@see \DRESeo\Service\CitationData},
  * {@see \DRESeo\Service\CitationMeta} and {@see \DRESeo\Service\StructuredData}
  * all read through it, so a convention changes in one place.
@@ -54,27 +55,6 @@ trait ResourceValueReader
      * bibo:isbn13; bibo:isbn is the generic term a hand-entered record may use.
      */
     private const ISBN_TERMS = ['bibo:isbn13', 'bibo:isbn', 'bibo:isbn10'];
-
-    /**
-     * The authorities whose IRIs are identity links (`sameAs`), each as the
-     * pattern a stored URI must match and the canonical IRI it becomes — the
-     * allowlist DRE Linked Data applies to its owl:sameAs / skos:exactMatch
-     * links, so the page and the RDF name the same targets. Anything else in
-     * dcterms:identifier (a YouTube playlist, a GEPRIS project page, a free
-     * shelf mark) is not the same thing as the record and is never `sameAs`.
-     */
-    private const AUTHORITIES = [
-        'wikidata' => ['~^https?://(?:www\.|m\.)?wikidata\.org/(?:entity|wiki)/(Q[1-9][0-9]*)/?$~i', 'http://www.wikidata.org/entity/$1'],
-        'gnd'      => ['~^https?://d-nb\.info/gnd/([0-9X-]+)/?$~i', 'https://d-nb.info/gnd/$1'],
-        'orcid'    => ['~^https?://(?:www\.)?orcid\.org/([0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X])/?$~i', 'https://orcid.org/$1'],
-        'viaf'     => ['~^https?://(?:www\.)?viaf\.org/viaf/([0-9]+)/?$~i', 'http://viaf.org/viaf/$1'],
-        'isni'     => ['~^https?://(?:www\.)?isni\.org/isni/([0-9]{15}[0-9X])/?$~i', 'https://isni.org/isni/$1'],
-        'ror'      => ['~^https?://(?:www\.)?ror\.org/(0[a-z0-9]{8})/?$~i', 'https://ror.org/$1'],
-        'loc'      => ['~^https?://id\.loc\.gov/authorities/(subjects|names|genreForms)/([a-z]+[0-9]+)(?:\.html)?$~', 'http://id.loc.gov/authorities/$1/$2'],
-        'geonames' => ['~^https?://(?:www\.|sws\.)?geonames\.org/([0-9]+)(?:/.*)?$~i', 'https://sws.geonames.org/$1/'],
-        'doi'      => ['~^https?://(?:dx\.)?doi\.org/(10\.[0-9]{4,9}/\S+)$~i', 'https://doi.org/$1'],
-        'handle'   => ['~^https?://hdl\.handle\.net/([0-9.]+/\S+)$~i', 'https://hdl.handle.net/$1'],
-    ];
 
     /**
      * First non-empty literal/label across the given terms, in order, tags stripped.
@@ -209,9 +189,8 @@ trait ResourceValueReader
     }
 
     /**
-     * Every URI a property holds: URI-typed values by their URI, literals that
-     * are themselves http(s) URLs, and a bare Wikidata id ("Q209829"), which
-     * the location records store in place of the entity URI.
+     * Every URI a property holds: URI-typed values by their URI, and literals
+     * that are themselves http(s) URLs.
      *
      * @return string[]
      */
@@ -226,9 +205,6 @@ trait ResourceValueReader
             if ($uri === '') {
                 $uri = trim(strip_tags((string) $value));
             }
-            if (preg_match('/\AQ\d+\z/', $uri)) {
-                $uri = 'http://www.wikidata.org/entity/' . $uri;
-            }
             if (preg_match('#\Ahttps?://\S+\z#i', $uri)) {
                 $out[$uri] = $uri;
             }
@@ -237,41 +213,44 @@ trait ResourceValueReader
     }
 
     /**
-     * The record's identity links — `sameAs` in JSON-LD: the authority IRIs in
-     * dcterms:identifier (GND for people, Wikidata for places and institutions,
-     * LCSH and Wikidata for subject headings), in their canonical form, and the
-     * RDSpace handle. Only the {@see AUTHORITIES} qualify. WissKI links are
-     * retired and deliberately never read.
+     * The record's identity links — `sameAs` in JSON-LD — exactly as DRE
+     * Linked Data states them, for when that module does not say: each URI
+     * value of dcterms:identifier that is a listed authority's
+     * ({@see IdentityAuthorities}: GND for people, Wikidata for places and
+     * institutions, LCSH and Wikidata for subject headings), in its canonical
+     * form, then each bibo:doi as its https://doi.org/ IRI. Public values
+     * only, as that module reads them.
+     *
+     * A literal is never a link, whatever it spells: a bare "Q42" in a research
+     * item's identifiers is as likely a questionnaire number as a Wikidata id.
+     * The RDSpace handle is no link either: its "rdspace-ubt" prefix is not
+     * registered with the Handle System, and the dataset's DOI already names
+     * the deposit. WissKI links are retired and deliberately never read.
      *
      * @return string[]
      */
     private function identityUris(AbstractResourceEntityRepresentation $resource): array
     {
         $out = [];
-        foreach ($this->uris($resource, 'dcterms:identifier') as $uri) {
-            $iri = $this->authorityIri($uri);
-            if ($iri !== null) {
-                $out[$iri] = $iri;
+        foreach (['dcterms:identifier', 'bibo:doi'] as $term) {
+            foreach ($resource->value($term, ['all' => true]) as $value) {
+                if (
+                    !$value instanceof ValueRepresentation
+                    || $value->valueResource()
+                    || (method_exists($value, 'isPublic') && !$value->isPublic())
+                ) {
+                    continue;
+                }
+                $uri = trim((string) ($value->uri() ?? ''));
+                $iri = $term === 'bibo:doi'
+                    ? IdentityAuthorities::doiIri($uri !== '' ? $uri : (string) $value->value())
+                    : ($uri !== '' ? IdentityAuthorities::authorityIri($uri) : null);
+                if ($iri !== null) {
+                    $out[$iri] = $iri;
+                }
             }
-        }
-        $handle = $this->firstString($resource, ['dre:rdspaceHandle']);
-        if ($handle !== null) {
-            $iri = str_starts_with($handle, 'http') ? $handle : 'https://hdl.handle.net/' . ltrim($handle, '/');
-            $out[$iri] = $iri;
         }
         return array_values($out);
-    }
-
-    /** A stored URI as its authority's canonical IRI, or null when it is no authority's. */
-    private function authorityIri(string $uri): ?string
-    {
-        $uri = trim($uri);
-        foreach (self::AUTHORITIES as [$pattern, $canonical]) {
-            if (preg_match($pattern, $uri)) {
-                return (string) preg_replace($pattern, $canonical, $uri);
-            }
-        }
-        return null;
     }
 
     /**

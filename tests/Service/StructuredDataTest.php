@@ -59,17 +59,19 @@ final class StructuredDataTest extends TestCase
         $this->assertSame('Research stories', $data['isPartOf']['name']);
     }
 
-    public function testPersonSameAsComesFromTheRDSpaceHandleNeverAWissKIURL(): void
+    public function testAPersonIsNeverTheSameAsItsRDSpaceHandleOrAWissKIURL(): void
     {
         // WissKI was retired in October 2026 and its dre:wisskiUrl values are being
         // cleared; one still on a record must not resurface as an identity link.
+        // An RDSpace handle ("rdspace-ubt/295") resolves nowhere on hdl.handle.net,
+        // and DRE Linked Data never states it, so it is no identity link either.
         $person = new Resource(
             'Example, Ada',
             4,
             null,
             [
                 'dre:wisskiUrl' => [new Value(uriValue: 'https://wisski.example.test/wisski/navigate/1/view')],
-                'dre:rdspaceHandle' => [new Value('10962/12345')],
+                'dre:rdspaceHandle' => [new Value('rdspace-ubt/295', uriValue: 'https://rdspace.uni-bayreuth.de/handle/rdspace-ubt/295')],
             ]
         );
         $builder = new StructuredData([4 => 'Person']);
@@ -77,7 +79,7 @@ final class StructuredDataTest extends TestCase
         $data = $builder->forResource($person, new SiteRepresentation(), null, null);
 
         $this->assertSame('Person', $data['@type']);
-        $this->assertSame(['https://hdl.handle.net/10962/12345'], $data['sameAs']);
+        $this->assertArrayNotHasKey('sameAs', $data);
     }
 
     public function testAPersonIsNamedInNaturalOrderAndLinkedToItsAuthorityFiles(): void
@@ -119,11 +121,14 @@ final class StructuredDataTest extends TestCase
         $this->assertTrue(!isset($data['keywords']), 'a term has no keywords of its own');
     }
 
-    public function testAJournalIsAPeriodicalAndABareWikidataIdBecomesItsEntityURI(): void
+    public function testAJournalIsAPeriodicalAndABareWikidataIdIsNoIdentityLink(): void
     {
+        // AMIRA stores Wikidata ids as URI values with the id as their label. A
+        // bare "Q15755461" is not an IRI, and DRE Linked Data publishes it as a
+        // literal; the fallback must not link what the RDF does not.
         $journal = new Resource('Zeitschrift für französische Sprache und Literatur', 23, 'Journal', [
             'bibo:issn' => [new Value('2366-2425')],
-            'dcterms:identifier' => [new Value('Q15755461', uriValue: 'Q15755461')],
+            'dcterms:identifier' => [new Value('Q15755461', uriValue: 'Q15755461'), new Value('Q15755461')],
         ]);
         $config = require __DIR__ . '/../../config/module.config.php';
         $builder = new StructuredData($config['dre_seo']['structured_data']['template_types']);
@@ -132,7 +137,7 @@ final class StructuredDataTest extends TestCase
 
         $this->assertSame('Periodical', $data['@type']);
         $this->assertSame('2366-2425', $data['issn']);
-        $this->assertSame(['http://www.wikidata.org/entity/Q15755461'], $data['sameAs']);
+        $this->assertArrayNotHasKey('sameAs', $data);
     }
 
     public function testAPlaceHasNumericCoordinatesAndThePlaceThatContainsIt(): void
@@ -229,6 +234,53 @@ final class StructuredDataTest extends TestCase
             'http://viaf.org/viaf/12345',
             'https://isni.org/isni/000000012146438X',
         ], $data['sameAs']);
+    }
+
+    /**
+     * The same values as DRE Linked Data's ConfigurationTest ("a resource's
+     * sameAs is the list DRE SEO's fallback gives for the same values"), whose
+     * result the stubbed helper returns here: the fallback must give the same
+     * set, so `sameAs` does not change the day that module is switched on.
+     */
+    public function testTheFallbackSameAsIsDRELinkedDatas(): void
+    {
+        $values = [
+            'dcterms:identifier' => [
+                new Value('Q1189283', uriValue: 'https://www.wikidata.org/wiki/Q1189283'),
+                new Value('ORCID', uriValue: 'http://www.orcid.org/0000-0002-1694-233X/'),
+                new Value('Q42'),
+                new Value(uriValue: 'https://doi.org/10.1017/S0021853721000372'),
+                new Value(uriValue: 'https://www.youtube.com/playlist?list=PL123'),
+                new Value(uriValue: 'https://isni.org/isni/000000012146438X'),
+            ],
+            'bibo:doi' => [new Value('10.1000/abc#def', uriValue: 'https://doi.org/10.1000/abc%23def')],
+            'dre:rdspaceHandle' => [new Value('rdspace-ubt/295', uriValue: 'https://rdspace.uni-bayreuth.de/handle/rdspace-ubt/295')],
+        ];
+        $linkedData = [
+            'http://www.wikidata.org/entity/Q1189283',
+            'https://orcid.org/0000-0002-1694-233X',
+            'https://isni.org/isni/000000012146438X',
+            'https://doi.org/10.1000/abc%23def',
+        ];
+        $withHelper = new StructuredData([3 => 'Place'], identity: new LinkedDataIdentity(
+            static fn () => static fn (Resource $resource): array => ['uri' => 'https://example.test/resource/500', 'sameAs' => $linkedData]
+        ));
+        $withoutHelper = new StructuredData([3 => 'Place']);
+        $olderHelper = new StructuredData([3 => 'Place'], identity: new LinkedDataIdentity(
+            static fn () => static fn (Resource $resource): array => ['uri' => 'https://example.test/resource/500']
+        ));
+
+        $active = $withHelper->sameAsFor(new Resource('Somewhere', 3, 'Location', $values));
+        $absent = $withoutHelper->sameAsFor(new Resource('Somewhere', 3, 'Location', $values));
+        $older = $olderHelper->sameAsFor(new Resource('Somewhere', 3, 'Location', $values));
+
+        $this->assertSame($linkedData, $active, 'the helper\'s list, without a second DOI beside it');
+        $sorted = static function (array $iris): array {
+            sort($iris);
+            return $iris;
+        };
+        $this->assertSame($sorted($linkedData), $sorted($absent));
+        $this->assertSame($sorted($linkedData), $sorted($older), 'DRE Linked Data before 0.3.0 says nothing, so the fallback answers');
     }
 
     public function testALinkedRecordIsTypedAsItsOwnPageTypesItWhateverItsRole(): void

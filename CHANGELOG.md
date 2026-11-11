@@ -27,6 +27,31 @@ GitHub release and shipped no installable asset.
 
 ### Changed
 
+- **One identity-link allowlist with DRE Linked Data.** `sameAs` without DRE Linked Data is
+  now built by that module's rules, from a byte-identical copy of its authority table
+  (`config/identity-authorities.php`, which `ResourceValueReader` no longer duplicates), so
+  a record's `sameAs` is the same set with the module on or off. A test pins the table and
+  a shared table of cases by sha256, as DRE Linked Data's tests do. What changes in the
+  JSON-LD `sameAs` (and Signposting's ORCID `author` links, which read it) without DRE
+  Linked Data:
+  - `dre:rdspaceHandle` is no longer `sameAs`. AMIRA's 75 research items with one lose an
+    `https://hdl.handle.net/rdspace-ubt/…` IRI that the Handle System does not resolve;
+    their DOI, which names the same deposit, stays;
+  - only URI values of `dcterms:identifier` count: a literal that spells an authority URL,
+    or a bare Wikidata id (`Q42`), is no longer linked. A `https://doi.org/…` or
+    `https://hdl.handle.net/…` URI in `dcterms:identifier` is no longer `sameAs` either;
+    DOIs come from `bibo:doi`. None of these occurs in AMIRA's data today;
+  - every `bibo:doi` value is listed, not only the first, and a DOI containing `#`, `?`,
+    `%` or `<>` keeps them percent-encoded in its IRI, as DRE Linked Data writes it;
+  - ids are matched case-sensitively, so `…/wiki/q42`, a lower-case ORCID check digit `x`
+    or an upper-case ROR id is no longer turned into a different IRI; GND ids must have the
+    GND shape. Hosts stay case-insensitive and `www.`, `m.` (Wikidata) and a trailing
+    slash stay tolerated; a Library of Congress URI with a trailing slash is now accepted;
+  - private values are skipped, so a logged-in editor sees the `sameAs` visitors see.
+
+  With DRE Linked Data active, `sameAs` is its list alone: the module's own DOI IRI is no
+  longer appended beside it, where it could differ in encoding. Every identifier URI on
+  AMIRA's items today (5,108, checked on 11 November 2026) maps to the same IRI as before.
 - **One list each of author, editor and description terms.** The citation, the Highwire and
   Dublin Core tags, the JSON-LD, the meta description and the Signposting links read the
   same ordered lists, where the module had five lists in three orders. What a visitor or a

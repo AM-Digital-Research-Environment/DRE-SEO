@@ -78,7 +78,9 @@ workflow checks the same three files with `--check`. CONTRIBUTING.md has the rel
   `dreBreadcrumb($resource)` and relies on their names, arguments and return shapes; DRE
   Linked Data's `dreLinkedData` helper is read through `LinkedDataIdentity` (`uri`,
   `downloads`, `sameAs`, `dataset()`), which both modules rely on for one identity per
-  record. DRE Search's results page is `/s/{slug}/dre-search` and renders from
+  record. `config/identity-authorities.php` and `tests/Fixture/identity-links.json` are
+  byte-identical copies of DRE Linked Data's, pinned by sha256 in both repositories'
+  tests: change them there first, copy them here, update both pins. DRE Search's results page is `/s/{slug}/dre-search` and renders from
   `/dre-search/api/*`: robots.txt must never block those.
 - The module folder must be named `DRESeo` inside Omeka's `modules/`; the namespace and the
   release zip's prefix depend on it.
