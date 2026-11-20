@@ -606,6 +606,20 @@ namespace Laminas\View\Renderer {
                     {
                         return $this->put('property', $key, $content, true);
                     }
+
+                    /**
+                     * The recorded metas in Laminas' item shape: `type`, and the
+                     * name under the property the type names.
+                     *
+                     * @return list<object>
+                     */
+                    public function getContainer(): array
+                    {
+                        return array_map(
+                            static fn (array $m): object => (object) ['type' => $m[0], $m[0] => $m[1], 'content' => $m[2]],
+                            $this->view->head['meta']
+                        );
+                    }
                 };
             }
 

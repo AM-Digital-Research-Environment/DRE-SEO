@@ -56,6 +56,13 @@ GitHub release and shipped no installable asset.
   Chronicles work is a `CreativeWork` cited with its collection. The Cluster Chronicles item
   set's breadcrumb lands on the *Cluster Chronicles* page, and the template fixture lists
   both templates. A journal's JSON-LD names its publisher too.
+- **Omeka's `noindex` for a record outside the site is kept.** Core prepends `noindex` to an
+  item, media or item-set page the current site does not hold; the layout pass then wrote
+  `max-image-preview:large` with Laminas' `setName()`, which removes every robots meta, so
+  the page became indexable under a self-canonical while the sitemap left it out (live on
+  the Series and Cluster Chronicles item sets, which are outside AMIRA's item pool). A
+  robots directive another writer put in the head now counts as already set, as CLAUDE.md's
+  "the first directive stands" always meant; the staging noindex still overrides it.
 
 ## [0.17.0] - 2026-11-11
 

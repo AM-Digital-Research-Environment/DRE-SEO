@@ -95,14 +95,30 @@ final class HeadWriter
      * The robots meta. The first directive written stands — a record's own
      * noindex wins over the layout pass's — unless $force: the site-wide
      * staging noindex outranks any per-page directive.
+     *
+     * "Written" includes a directive another writer put in the head: Omeka
+     * core prepends `noindex` to a record outside the current site, and a
+     * theme may set one on its error pages. Laminas' setName() removes every
+     * meta of the name, so writing over them would delete that noindex.
      */
     public function robots(PhpRenderer $view, string $value, bool $force = false): void
     {
-        if (!$force && $this->has('robots')) {
+        if (!$force && ($this->has('robots') || self::headHasRobots($view))) {
             return;
         }
         $view->headMeta()->setName('robots', $value);
         $this->mark('robots');
+    }
+
+    /** Whether the head already carries a robots meta that this writer did not record. */
+    private static function headHasRobots(PhpRenderer $view): bool
+    {
+        foreach ($view->headMeta()->getContainer() as $item) {
+            if (is_object($item) && ($item->type ?? null) === 'name' && strtolower((string) ($item->name ?? '')) === 'robots') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** @param array<string,string|null> $tags og property => content */

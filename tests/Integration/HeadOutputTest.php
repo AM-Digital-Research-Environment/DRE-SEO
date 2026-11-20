@@ -74,6 +74,26 @@ final class HeadOutputTest extends OmekaTestCase
         $this->assertStringContainsString('https://example.test/s/amira/item?fulltext=history', $decodedHeadLink, $canonical);
     }
 
+    public function testANoindexAnotherWriterPutInTheHeadIsKept(): void
+    {
+        // Omeka core prepends noindex to a record outside the current site
+        // (application/Module.php, noindexResourceShow); AMIRA's Series and
+        // Cluster Chronicles item sets served max-image-preview:large instead.
+        $_SERVER['REQUEST_URI'] = '/s/amira/item-set/45028';
+        $_SERVER['QUERY_STRING'] = '';
+        $view = new PhpRenderer();
+        $view->doctype(Doctype::HTML5);
+        $view->headMeta()->prependName('robots', 'noindex');
+        $view->getHelperPluginManager()->setService('currentSite', new CurrentSiteHelper(new FixedSite()));
+
+        $events = new EventManager($this->sharedEvents, ['Omeka\\Controller\\Site\\Item']);
+        $events->triggerEvent(new Event('view.layout', $view, ['view' => $view]));
+
+        $headMeta = html_entity_decode((string) $view->headMeta(), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $this->assertStringContainsString('name="robots" content="noindex"', $headMeta);
+        $this->assertStringNotContainsString('max-image-preview', $headMeta);
+    }
+
     public function testJsonLdGoesThroughHeadScriptAndCannotCloseItsElement(): void
     {
         $view = $this->browsePage();
