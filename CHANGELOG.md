@@ -72,6 +72,9 @@ GitHub release and shipped no installable asset.
   queued or sent, and the key file answers 404. A save no longer queues a page an editor set
   to noindex, a record the default site does not hold, or a project's item set whose page
   redirects (301) to the project item.
+- A record with no image of its own shares the site's default image with the site's title as
+  its `og:image:alt` / `twitter:image:alt`, not the record's title, which described the
+  banner as the record to anyone reading a link preview with a screen reader.
 
 ## [0.17.0] - 2026-11-11
 

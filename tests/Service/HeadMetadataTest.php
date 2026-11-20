@@ -307,6 +307,22 @@ final class HeadMetadataTest extends TestCase
         }
     }
 
+    public function testTheSiteShareImageStandingInForARecordIsNotDescribedAsTheRecord(): void
+    {
+        // /s/amira/item/45029 has no media: the site's banner stood in, with
+        // "ZMO Programmatic Texts" as its alt text.
+        $series = new ItemRepresentation('ZMO Programmatic Texts', 33, 'Series', [
+            'dcterms:title' => [new ValueRepresentation('ZMO Programmatic Texts')],
+        ], 'https://example.test/s/amira/item/45029', 45029);
+        $view = new PhpRenderer('https://example.test/s/amira/item/45029');
+        $view->assetUrls = [5 => 'https://example.test/files/asset/banner.png'];
+
+        self::headMetadataService(['dre_seo_default_share_image' => '5'])->applyResource($view, $series, self::amiraSite());
+
+        $this->assertSame(['https://example.test/files/asset/banner.png'], $view->meta('og:image'));
+        $this->assertSame([self::amiraSite()->title()], $view->meta('og:image:alt'));
+    }
+
     public function testAResearchItemPageOneIdentityNoHighwireTypedProjectAccessConditions(): void
     {
         $identity = new LinkedDataIdentity(static fn () => static fn ($resource): array => [

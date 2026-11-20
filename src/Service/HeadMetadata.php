@@ -108,9 +108,15 @@ class HeadMetadata
         }
         // A link preview may fall back to the site's share image; the
         // structured data may not, or it would say the logo depicts the record.
-        $image = $ownImage ?? $this->resolveDefaultImage($view);
-        if ($image !== null) {
-            $this->setImage($view, $image, $title);
+        // Nor may its alt text: the fallback is described as the site's image,
+        // as on every other page.
+        if ($ownImage !== null) {
+            $this->setImage($view, $ownImage, $title);
+        } else {
+            $default = $this->resolveDefaultImage($view);
+            if ($default !== null) {
+                $this->setImage($view, $default, $site->title());
+            }
         }
         $this->head->mark('og:title');
 

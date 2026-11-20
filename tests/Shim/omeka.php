@@ -549,6 +549,47 @@ namespace Laminas\View\Renderer {
             ) {
             }
 
+            /** @var array<int,string> Asset URLs by id, for the api() helper's assets read. */
+            public array $assetUrls = [];
+
+            /** The api() view helper: reads an asset (the share image), and nothing else. */
+            public function api(): object
+            {
+                return new class ($this->assetUrls) {
+                    /** @param array<int,string> $assetUrls */
+                    public function __construct(private readonly array $assetUrls)
+                    {
+                    }
+
+                    public function read(string $resource, int $id): object
+                    {
+                        if ($resource !== 'assets' || !isset($this->assetUrls[$id])) {
+                            throw new \RuntimeException('Not found');
+                        }
+                        $url = $this->assetUrls[$id];
+                        return new class ($url) {
+                            public function __construct(private readonly string $url)
+                            {
+                            }
+
+                            public function getContent(): object
+                            {
+                                return new class ($this->url) {
+                                    public function __construct(private readonly string $url)
+                                    {
+                                    }
+
+                                    public function assetUrl(): string
+                                    {
+                                        return $this->url;
+                                    }
+                                };
+                            }
+                        };
+                    }
+                };
+            }
+
             /** @param string|bool|null $requestUri */
             public function serverUrl($requestUri = null): string
             {
