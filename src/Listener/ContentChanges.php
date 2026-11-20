@@ -4,11 +4,14 @@ declare(strict_types=1);
 namespace DRESeo\Listener;
 
 use DRESeo\Service\DefaultSite;
+use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\PingQueue;
+use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\EventManager\EventInterface;
 use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
+use Omeka\Api\Representation\ItemSetRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Request as ApiRequest;
 use Psr\Container\ContainerInterface;
@@ -219,6 +222,10 @@ final class ContentChanges
      * The URL a record is pinged at: its canonical page on the default site.
      * A site page is pinged only when it belongs to the default site, at its
      * own page URL — the home page included, which is canonical there too.
+     *
+     * Only a URL the sitemap would list is pinged: not a page an editor set to
+     * noindex, a record the site does not hold (core marks its page noindex),
+     * or an item set whose page redirects to its research project.
      */
     private function resourcePublicUrl(object $resource): ?string
     {
@@ -228,11 +235,31 @@ final class ContentChanges
         }
         try {
             if ($resource instanceof SitePageRepresentation) {
-                return $resource->site()->id() === $site->id() ? $resource->siteUrl($site->slug(), true) : null;
+                if ($resource->site()->id() !== $site->id() || $this->isNoindexPage((int) $site->id(), (int) $resource->id())) {
+                    return null;
+                }
+                return $resource->siteUrl($site->slug(), true);
+            }
+            $sites = method_exists($resource, 'sites') ? $resource->sites() : null;
+            if (is_array($sites) && !array_key_exists($site->id(), $sites)) {
+                return null;
+            }
+            if (
+                $resource instanceof ItemSetRepresentation
+                && $this->services->has(ProjectResolver::class)
+                && $this->services->get(ProjectResolver::class)->redirectTarget($resource, $site) !== null
+            ) {
+                return null;
             }
             return $resource->siteUrl($site->slug(), true);
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    private function isNoindexPage(int $siteId, int $pageId): bool
+    {
+        return $this->services->has(PageSeoStore::class)
+            && $this->services->get(PageSeoStore::class)->isNoindex($siteId, $pageId);
     }
 }

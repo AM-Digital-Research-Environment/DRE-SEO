@@ -14,6 +14,9 @@ GitHub release and shipped no installable asset.
 - The export type of a descriptive record (CSL `webpage`, BibTeX `@online`, RIS `ELEC`, Open
   Graph `website`) follows from `CitationKind::isAuthorityRecord()` instead of five lists of
   the same seven kinds.
+- The IndexNow batch size is `PingQueue::CAP` alone: the outbox's lease limit and the
+  interface's default follow it, so raising it no longer leaves claims silently capped at
+  200.
 
 ### Fixed
 
@@ -63,6 +66,12 @@ GitHub release and shipped no installable asset.
   the Series and Cluster Chronicles item sets, which are outside AMIRA's item pool). A
   robots directive another writer put in the head now counts as already set, as CLAUDE.md's
   "the first directive stands" always meant; the staging noindex still overrides it.
+- **IndexNow is not pinged from a staging site, nor for URLs the sitemap leaves out.** With
+  *Discourage indexing* on, a copy of production settings still queued and submitted its
+  URLs and served its `/{key}.txt`, while robots.txt said `Disallow: /`; now nothing is
+  queued or sent, and the key file answers 404. A save no longer queues a page an editor set
+  to noindex, a record the default site does not hold, or a project's item set whose page
+  redirects (301) to the project item.
 
 ## [0.17.0] - 2026-11-11
 

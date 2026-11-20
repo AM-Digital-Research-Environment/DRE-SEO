@@ -38,7 +38,8 @@ class PingSearchEngines extends AbstractJob
         $logger = $services->get('Omeka\Logger');
         $queue = $services->get(PingQueue::class);
 
-        if (!$services->get(SettingsGate::class)->isOn('dre_seo_ping_enabled')) {
+        // Off, or a staging site: nothing is claimed, so the URLs wait.
+        if (!$services->get(SettingsGate::class)->isOn('dre_seo_ping_enabled') || $queue->isStaging()) {
             return;
         }
         $key = $queue->key();

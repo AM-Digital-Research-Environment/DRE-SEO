@@ -74,6 +74,11 @@ final class PingQueueTest extends TestCase
         // The checkbox as an older release or a script may have stored it.
         $this->build(['dre_seo_ping_enabled' => 1, 'dre_seo_indexnow_key' => 'deadbeefdeadbeef']);
         $this->assertTrue($this->queue->isEnabled());
+
+        // A staging copy of production settings submits nothing.
+        $this->build(['dre_seo_ping_enabled' => '1', 'dre_seo_indexnow_key' => 'deadbeefdeadbeef', 'dre_seo_noindex_site' => '1']);
+        $this->assertFalse($this->queue->isEnabled(), 'staging');
+        $this->assertTrue($this->queue->isStaging());
     }
 
     public function testPushGoesToTheOutboxNotToSettings(): void

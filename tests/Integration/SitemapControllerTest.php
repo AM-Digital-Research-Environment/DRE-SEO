@@ -38,14 +38,15 @@ final class SitemapControllerTest extends OmekaTestCase
         $this->settings->set('dre_seo_sitemap_ttl', '3600');
     }
 
-    private function dispatch(string $action): Response
+    /** @param array<string,string> $params route parameters beyond the controller and action */
+    private function dispatch(string $action, array $params = []): Response
     {
         $router = new TreeRouteStack();
         $router->addRoute('site', Segment::factory(['route' => '/s/:site-slug']));
         $router->setRequestUri(new HttpUri('https://example.test/'));
         $event = new MvcEvent();
         $event->setRouter($router);
-        $event->setRouteMatch(new RouteMatch(['controller' => SitemapController::class, 'action' => $action]));
+        $event->setRouteMatch(new RouteMatch(['controller' => SitemapController::class, 'action' => $action] + $params));
 
         $controller = (new SitemapControllerFactory())($this->services, SitemapController::class);
         $controller->setPluginManager(new PluginManager($this->services));
@@ -122,5 +123,18 @@ final class SitemapControllerTest extends OmekaTestCase
         $this->settings->set('dre_seo_noindex_site', '1');
 
         $this->assertSame("User-agent: *\nDisallow: /\n", $this->dispatch('robots')->getContent());
+    }
+
+    /** A staging site proves no IndexNow ownership: its key file is not served. */
+    public function testTheIndexNowKeyIsServedOnlyOutsideStaging(): void
+    {
+        $this->settings->set('dre_seo_indexnow_key', 'a1b2c3d4e5f60718');
+
+        $served = $this->dispatch('indexNowKey', ['key' => 'a1b2c3d4e5f60718']);
+        $this->assertSame(200, $served->getStatusCode());
+        $this->assertSame("a1b2c3d4e5f60718\n", $served->getContent());
+
+        $this->settings->set('dre_seo_noindex_site', '1');
+        $this->assertSame(404, $this->dispatch('indexNowKey', ['key' => 'a1b2c3d4e5f60718'])->getStatusCode());
     }
 }

@@ -25,8 +25,8 @@ final class PingQueue
      * More URLs waiting for their first submission than this, and a drain
      * takes them for a bulk change rather than editing, and sends none.
      *
-     * Drains come five minutes apart (the cron) or at most a quarter hour
-     * apart (a save's dispatch). Editors working by hand do not change more
+     * Drains come five minutes apart (the cron) or, without it, with a save
+     * at least a quarter hour after the last dispatch. Editors working by hand do not change more
      * public records than one drain sends in that time; a MongoDB2OmekaS
      * sync re-saves thousands through the API, most of them unchanged.
      * IndexNow is for URLs whose content changed, and every record a sync
@@ -52,13 +52,24 @@ final class PingQueue
 
     /**
      * Pinging is configured: switched on *and* carrying a well-formed
-     * ownership key. A malformed key can never be verified (its /{key}.txt is
-     * not served), so queueing under one would only fill the outbox with work
-     * that fails; the dashboard flags such a key instead.
+     * ownership key, on a site that is not kept out of the index as a whole.
+     * A malformed key can never be verified (its /{key}.txt is not served), so
+     * queueing under one would only fill the outbox with work that fails; the
+     * dashboard flags such a key instead. Under the staging switch nothing is
+     * queued or sent: a copy of production settings would otherwise submit
+     * the staging host's URLs while its robots.txt says `Disallow: /`.
      */
     public function isEnabled(): bool
     {
-        return $this->settings->isOn('dre_seo_ping_enabled') && IndexNowKey::isValid($this->key());
+        return $this->settings->isOn('dre_seo_ping_enabled')
+            && !$this->isStaging()
+            && IndexNowKey::isValid($this->key());
+    }
+
+    /** Whether the whole site is kept out of the index (the staging switch). */
+    public function isStaging(): bool
+    {
+        return $this->settings->isOn('dre_seo_noindex_site');
     }
 
     /** The IndexNow ownership key, or '' when unset. */

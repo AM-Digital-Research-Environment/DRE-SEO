@@ -173,14 +173,15 @@ namespace Omeka\Settings {
                 $this->targetId = $targetId;
             }
 
-            public function get(string $key, mixed $default = null): mixed
+            /** As Omeka's AbstractTargetSettings: $targetId reads another site without moving the target. */
+            public function get(string $key, mixed $default = null, ?int $targetId = null): mixed
             {
-                return $this->values[$this->targetId][$key] ?? $default;
+                return $this->values[$targetId ?? $this->targetId][$key] ?? $default;
             }
 
-            public function set(string $key, mixed $value): void
+            public function set(string $key, mixed $value, ?int $targetId = null): void
             {
-                $this->values[$this->targetId][$key] = $value;
+                $this->values[$targetId ?? $this->targetId][$key] = $value;
             }
         }
     }

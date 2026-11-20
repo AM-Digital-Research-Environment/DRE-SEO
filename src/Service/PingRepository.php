@@ -23,7 +23,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
  * push bumps the row's version, and a job settles only the version it
  * leased, so an edit made while its batch was in flight is never acknowledged
  * by the older submission. Retryable failures back off exponentially (two
- * minutes, doubling, at most a day) until MAX_ATTEMPTS; refusals go straight
+ * minutes, doubling: 2, 4, 8 and 16) until MAX_ATTEMPTS; refusals go straight
  * to it.
  *
  * Plain SQL that runs on MySQL/MariaDB, as production does, and on SQLite, as
@@ -44,7 +44,8 @@ final class PingRepository implements PingOutboxInterface
     private const LEASE = 600;
 
     /** The most rows one claim leases. */
-    private const MAX_CLAIM = 200;
+    /** One drain's batch, which is also the bulk threshold ({@see PingQueue::CAP}). */
+    private const MAX_CLAIM = PingQueue::CAP;
 
     /**
      * Due rows no drain has submitted since their last push: attempts still
@@ -165,7 +166,7 @@ final class PingRepository implements PingOutboxInterface
                 ? self::MAX_ATTEMPTS
                 : (int) $row['attempts'] + 1;
             $this->connection->update(self::TABLE, ['token' => '', 'lease_until' => 0,
-                'attempts' => $attempts, 'available_at' => $now + min(86400, 60 * (2 ** $attempts))], $where);
+                'attempts' => $attempts, 'available_at' => $now + 60 * (2 ** $attempts)], $where);
         }
     }
 

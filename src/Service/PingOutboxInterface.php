@@ -19,7 +19,7 @@ interface PingOutboxInterface
      *
      * @return array<int,array<string,mixed>> the leased rows
      */
-    public function claim(int $limit = 200): array;
+    public function claim(int $limit = PingQueue::CAP): array;
 
     /**
      * How many due URLs no drain has submitted since they were queued: what

@@ -19,7 +19,8 @@ use Omeka\Settings\SiteSettings;
 class PageSeoStore
 {
     private const KEY = 'dre_seo_pages';
-    private const ROBOTS_VALUES = ['index, follow', 'noindex, follow'];
+    private const NOINDEX = 'noindex, follow';
+    private const ROBOTS_VALUES = ['index, follow', self::NOINDEX];
 
     public function __construct(private readonly SiteSettings $siteSettings)
     {
@@ -45,6 +46,17 @@ class PageSeoStore
     }
 
     /**
+     * Whether a page of $siteId is set to noindex, read for that site without
+     * moving the shared site-settings target (an API save reads it too).
+     */
+    public function isNoindex(int $siteId, int $pageId): bool
+    {
+        $all = $this->siteSettings->get(self::KEY, [], $siteId);
+        $overrides = is_array($all) ? ($all[$pageId] ?? null) : null;
+        return is_array($overrides) && ($overrides['robots'] ?? null) === self::NOINDEX;
+    }
+
+    /**
      * The pages whose indexing override is noindex.
      *
      * @return int[]
@@ -53,7 +65,7 @@ class PageSeoStore
     {
         $ids = [];
         foreach ($this->all() as $pageId => $overrides) {
-            if (is_array($overrides) && ($overrides['robots'] ?? null) === 'noindex, follow') {
+            if (is_array($overrides) && ($overrides['robots'] ?? null) === self::NOINDEX) {
                 $ids[] = (int) $pageId;
             }
         }

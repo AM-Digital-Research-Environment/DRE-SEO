@@ -162,7 +162,11 @@ class SitemapController extends AbstractActionController
     {
         $configured = $this->settings->text('dre_seo_indexnow_key');
         $requested = (string) $this->params()->fromRoute('key', '');
-        if (!IndexNowKey::isValid($configured) || !hash_equals($configured, $requested)) {
+        // A staging site proves no ownership: it is not to be submitted.
+        if (
+            !IndexNowKey::isValid($configured) || !hash_equals($configured, $requested)
+            || $this->settings->isOn('dre_seo_noindex_site')
+        ) {
             return $this->respondWithStatus(404);
         }
         return $this->text($configured . "\n");

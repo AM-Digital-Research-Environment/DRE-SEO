@@ -5,6 +5,7 @@ namespace DRESeo\Test\Double;
 
 use DRESeo\Service\PingOutboxInterface;
 use DRESeo\Service\PingOutcome;
+use DRESeo\Service\PingQueue;
 
 /** Records what the queue asks of the outbox, for dispatch-policy tests. */
 final class InMemoryPingOutbox implements PingOutboxInterface
@@ -31,7 +32,7 @@ final class InMemoryPingOutbox implements PingOutboxInterface
         $this->pushed[] = $url;
     }
 
-    public function claim(int $limit = 200): array
+    public function claim(int $limit = PingQueue::CAP): array
     {
         $this->lastLimit = $limit;
         return array_slice($this->rows, 0, $limit);

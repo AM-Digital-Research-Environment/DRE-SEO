@@ -5,11 +5,13 @@ namespace DRESeo\Test\Integration;
 
 use DRESeo\Module;
 use DRESeo\Service\DefaultSite;
+use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\PingQueue;
 use DRESeo\Service\SettingsGate;
 use DRESeo\Test\Double\InMemoryPingOutbox;
 use DRESeo\Test\Integration\Double\FixedSite;
 use DRESeo\Test\Integration\Double\InMemorySettings;
+use DRESeo\Test\Integration\Double\InMemorySiteSettings;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\EventManager;
 use Laminas\EventManager\SharedEventManager;
@@ -48,6 +50,8 @@ final class ContentChangePingTest extends TestCase
 
     private SharedEventManager $sharedEvents;
 
+    private InMemorySiteSettings $siteSettings;
+
     protected function setUp(): void
     {
         $this->outbox = new InMemoryPingOutbox();
@@ -76,6 +80,8 @@ final class ContentChangePingTest extends TestCase
             $logger
         ));
         $services->setService('Omeka\\Logger', $logger);
+        $this->siteSettings = new InMemorySiteSettings();
+        $services->setService(PageSeoStore::class, new PageSeoStore($this->siteSettings));
 
         $module = new Module();
         $module->setServiceLocator($services);
@@ -208,6 +214,37 @@ final class ContentChangePingTest extends TestCase
         self::assertSame([], $this->outbox->pushed);
     }
 
+    /** Only a URL the sitemap would list is pinged. */
+    public function testAPageSetToNoindexQueuesNothing(): void
+    {
+        $this->siteSettings->set('dre_seo_pages', [7 => ['robots' => 'noindex, follow']], 1);
+        $page = $this->page(true);
+
+        $this->fire(self::PAGE_ADAPTER, 'api.update.post', $this->pageAdapter($page, 1), $this->request(Request::UPDATE), $page);
+
+        self::assertSame([], $this->outbox->pushed);
+    }
+
+    public function testAnItemTheSiteDoesNotHoldQueuesNothing(): void
+    {
+        $item = $this->item(true);
+        $adapter = $this->itemAdapter($item, sites: [2]);
+
+        $this->fire(self::ITEM_ADAPTER, 'api.update.post', $adapter, $this->request(Request::UPDATE), $item);
+
+        self::assertSame([], $this->outbox->pushed);
+    }
+
+    public function testAStagingSiteQueuesNothing(): void
+    {
+        $this->settings->set('dre_seo_noindex_site', '1');
+        $item = $this->item(true);
+
+        $this->fire(self::ITEM_ADAPTER, 'api.create.post', $this->itemAdapter($item), $this->request(Request::CREATE), $item);
+
+        self::assertSame([], $this->outbox->pushed);
+    }
+
     public function testNothingIsReadOrQueuedWhilePingingIsOff(): void
     {
         $this->settings->set('dre_seo_ping_enabled', '0');
@@ -272,9 +309,13 @@ final class ContentChangePingTest extends TestCase
      * An item adapter whose representation builds the record's canonical URL
      * on whatever site slug it is asked for — until $deleted turns true.
      */
-    private function itemAdapter(Item $item, bool &$deleted = false, int $id = 42): ItemAdapter
+    /** @param list<int>|null $sites the sites holding the item; null leaves sites() unanswered */
+    private function itemAdapter(Item $item, bool &$deleted = false, int $id = 42, ?array $sites = null): ItemAdapter
     {
         $representation = $this->createStub(ItemRepresentation::class);
+        if ($sites !== null) {
+            $representation->method('sites')->willReturn(array_fill_keys($sites, true));
+        }
         $representation->method('siteUrl')->willReturnCallback(
             static function ($slug = null, $canonical = false) use (&$deleted, $id): string {
                 if ($deleted) {
@@ -296,6 +337,7 @@ final class ContentChangePingTest extends TestCase
         $site->method('id')->willReturn($siteId);
         $site->method('slug')->willReturn($siteId === 1 ? 'amira' : 'other');
         $representation = $this->createStub(SitePageRepresentation::class);
+        $representation->method('id')->willReturn(7);
         $representation->method('site')->willReturn($site);
         $representation->method('siteUrl')->willReturnCallback(
             static fn ($slug = null, $canonical = false): string
