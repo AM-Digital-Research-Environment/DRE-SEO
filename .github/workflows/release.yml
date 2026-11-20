@@ -101,7 +101,8 @@ jobs:
 
       # export-ignore is silent when it is wrong: a rule that stops matching (a
       # renamed dev file, a new tool configuration) leaks without any error, and
-      # the zip just quietly grows. These assertions turn that into a failed build.
+      # the zip just quietly grows; a rule that matches too much drops what Omeka
+      # needs. These assertions turn either into a failed build.
       - name: Verify archive contents
         shell: bash
         run: |
@@ -118,7 +119,26 @@ jobs:
             fi
           done
 
-          leaks='^DRESeo/(tests/|\.github/|\.git|\.editorconfig|\.phpunit\.cache/|vendor/|composer\.lock|phpunit[^/]*\.xml(\.dist)?$|phpstan[^/]*$|phpcs\.xml(\.dist)?$|CLAUDE\.md$)'
+          # The directories Omeka loads the module from: a rule that dropped
+          # one would ship a zip that fails on install.
+          for dir in src view asset config language scripts; do
+            if ! grep -q "^DRESeo/${dir}/.*[^/]$" <<< "$contents"; then
+              echo "::error::DRESeo/${dir}/ holds no file in the archive"
+              fail=1
+            fi
+          done
+
+          # Every path .gitattributes marks export-ignore, read from the file
+          # itself so a new rule is checked the day it is added, and the
+          # untracked development files no rule needs to name.
+          while read -r path _; do
+            path="${path#/}"
+            if grep -qxF "DRESeo/${path}" <<< "$contents" || grep -qF "DRESeo/${path}/" <<< "$contents"; then
+              echo "::error::${path} is export-ignored but in the archive"
+              fail=1
+            fi
+          done < <(grep -E '^[^#[:space:]]+[[:space:]]+export-ignore' .gitattributes)
+          leaks='^DRESeo/(\.phpunit\.cache/|vendor/|composer\.lock$)'
           if grep -qE "$leaks" <<< "$contents"; then
             echo "::error::development files leaked into the archive:"
             grep -E "$leaks" <<< "$contents"
