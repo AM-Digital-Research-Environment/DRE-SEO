@@ -99,7 +99,8 @@ adjusting both paths:
 
 `OMEKA_PATH` may be left out when the module sits in that installation's `modules/`
 directory. The script refuses to run outside the command line (a web request gets a 404),
-exits quietly while the module is inactive or IndexNow is off, and records an Omeka job
+exits quietly while the module is inactive, IndexNow is off or **Discourage indexing** is on
+(a staging copy sends nothing), and records an Omeka job
 (**Admin → Jobs**) only when a URL is due, so a quiet site does not fill the job list.
 
 Each run leases up to 200 URLs, submits them per origin, and settles each submission by

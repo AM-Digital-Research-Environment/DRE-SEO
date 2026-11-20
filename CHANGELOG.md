@@ -24,6 +24,8 @@ GitHub release and shipped no installable asset.
   `.gitattributes` itself, so `CITATION.cff`, `CONTRIBUTING.md` and `SECURITY.md` are checked
   too, and fails a zip in which `src/`, `view/`, `asset/`, `config/`, `language/` or
   `scripts/` holds no file.
+- `composer.json` declares the extensions the module uses, `ext-mbstring` and `ext-ctype`;
+  `ext-dom`, which only the tests use, moves to `require-dev`.
 
 ### Fixed
 

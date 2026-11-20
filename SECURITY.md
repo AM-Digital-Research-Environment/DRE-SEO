@@ -29,8 +29,8 @@ outbound IndexNow requests. Findings of the following kinds are in scope:
 - Privilege issues in the admin SEO pages or the module configuration form
 - Server-side request forgery or credential leakage via the IndexNow ping
 
-The Google Search Console verification snippet is, by design, pasted by an administrator and
-injected verbatim site-wide. That is an authenticated-admin capability equivalent to theme
-editing, not a vulnerability in itself.
+The Google Search Console and Bing verification snippets are pasted by an administrator; the
+module extracts the token and writes it, escaped, as a `<meta>` tag on every public page.
+Pasting one is an authenticated-admin capability, not a vulnerability in itself.
 
 Vulnerabilities in Omeka S core belong to the [Omeka project](https://omeka.org/s/).

@@ -91,12 +91,13 @@ install.
 | **Default meta description** | Used on pages without their own description (home, browse, search). |
 | **Default social share image** | `og:image` fallback (≈1200×630). Used when a page or an item with no media is shared. |
 | **Twitter / X @handle** | Emitted as `twitter:site`. |
-| **Discourage indexing (whole site)** | Staging switch: every page becomes `noindex,nofollow` and robots.txt disallows everything. **Off in production.** |
+| **Discourage indexing (whole site)** | Staging switch: every page becomes `noindex,nofollow`, robots.txt disallows everything, no sitemap is served and IndexNow queues and sends nothing (its key file answers 404). **Off in production.** |
 | **Noindex filtered/paginated browse** | `noindex, follow` on facet/pagination URLs, search results pages (core's `/s/{slug}/index/search` and advanced search, DRE Search's `/s/{slug}/dre-search`) and any other page URL with a query string, while crawlers still follow links to the resources. A record paging through its connection lists (`page`, `lr_page`, `lr_property`) stays indexable; tracking parameters (`utm_*`, `fbclid`, `gclid` …) never count and are dropped from canonicals. On by default. |
 | **Emit schema.org JSON-LD** | Toggle structured data. On by default. While it is on, the configuration page warns if Omeka's own JSON-LD embed is still enabled for the site (see [One identity per record](#one-identity-per-record)). |
+| **Emit citations (Zotero / Google Scholar / record page)** | Toggle the Highwire and Dublin Core tags and the record page's citations. On by default. See [Citation metadata](#citation-metadata-zotero-google-scholar-). |
 | **Access statement for research items** | Closes every research item's `conditionsOfAccess` (see [Research items and access](#research-items-and-access)). Blank: the default sentence, translated into the page language. |
 | **Serve /sitemap.xml & /robots.txt** | Toggle the sitemap/robots endpoints. On by default. |
-| **Sitemap cache lifetime** | Seconds before the cached sitemap is rebuilt. Default 86400 (24h). A content change clears it sooner. |
+| **Sitemap cache lifetime** | Seconds before the cached sitemap is rebuilt. Left blank, the default: 86400 (24h). `0` turns the cache off, and every request builds the sitemap live. A content change clears it sooner. |
 | **Ping IndexNow when content changes** | Off by default. See the caveat below. |
 | **IndexNow key** | A hex key you choose (`openssl rand -hex 16`); served at `/{key}.txt`. |
 
@@ -136,7 +137,7 @@ The head signals are written into Omeka's request-global head placeholder helper
 (`headTitle`, `headMeta`, `headLink`, `headScript`), which the theme already echoes in
 `<head>` — so **no theme template needs to change**.
 
-* **Resource pages** (`view.show.after` on the Item/ItemSet/Media controllers): title from
+* **Resource pages** (`view.show.after` on the Item and Media controllers): title from
   `displayTitle()`, description from `bibo:abstract` / `dcterms:abstract` /
   `dcterms:description`, in that order (truncated to ~160 chars), canonical from the resource's site URL, `og:image` from the primary media, and
   JSON-LD from the resource template.
@@ -312,7 +313,7 @@ renders the item-set page and no session is touched. The item set's items stay b
 per site with **Redirect a project's item set page to the project**. While it is on, the
 item-set sitemap leaves those item sets out (one query, two correlated subqueries).
 
-**Breadcrumb.** `StructuredData::trail()` gives the trail the `BreadcrumbList` states and
+**Breadcrumb.** `BreadcrumbTrail::trail()` gives the trail the `BreadcrumbList` states and
 `dreBreadcrumb($resource)` returns to the theme, so the two always agree:
 
 | Page | Trail |
@@ -366,7 +367,7 @@ falls back silently to `CreativeWork` / `item`. `tests/Fixture/amira-templates.p
 instance's templates: when the site gains one, add it there and the suite fails until both
 maps name it. `citation_pdf_url` is emitted only for a
 **public** PDF media, so restricted bitstreams are never exposed. Toggle the whole feature with
-**Emit citation meta tags** in Configure (on by default). The same tags double as
+**Emit citations (Zotero / Google Scholar / record page)** in Configure (on by default). The same tags double as
 [Google Scholar](https://scholar.google.com) indexing signals.
 
 Every work's `DC.type` names its exact Zotero item type where the Highwire tags cannot
@@ -456,7 +457,7 @@ The code is split as in IWAC SEO: `SitemapGenerator` decides which URLs go in wh
 `/login`, `/logout`, `/maintenance`, and the query variants AMIRA's pages generate without
 end — DRE Search's results page with a query, facets or a tab (`/s/*/dre-search?`) and
 Omeka's item, item-set and media browse with filters or sorts (`/s/*/item?`,
-`/s/*/item-set?`, an item set's landing page `/s/*/item-set/*?`, `/s/*/media?`), among them
+`/s/*/item-set?`, an item set's landing page `/s/*/item-set/*?`), among them
 the `?property[…]` link every metadata value carries. Those pages already say `noindex,
 follow`, but a noindex has to be crawled to be read: Google's guidance on faceted
 navigation is to disallow such URLs instead, and the records they list are reached through
@@ -540,7 +541,8 @@ DRESeo/
 ├── config/
 │   ├── module.ini
 │   ├── module.config.php            # wiring: routes, services, controllers, navigation
-│   └── instance.config.php          # AMIRA data: the dre_seo block (template maps, landing pages …)
+│   ├── instance.config.php          # AMIRA data: the dre_seo block (template maps, landing pages …)
+│   └── identity-authorities.php     # the sameAs authority table, a copy of DRE Linked Data's
 ├── scripts/drain-indexnow.php       # the five-minute IndexNow cron (CLI only)
 ├── src/
 │   ├── Controller/
@@ -559,13 +561,17 @@ DRESeo/
 │   └── Service/
 │       ├── HeadMetadata.php          # what the <head> says: the policy
 │       ├── HeadWriter.php            # the head writes, and what was set this request
+│       ├── ResourceSummary.php       # a record's description, or a generated one
 │       ├── SettingsGate.php          # typed reads of the dre_seo_* settings
+│       ├── DefaultSite.php           # the site the host-root endpoints speak for
+│       ├── ViewLocale.php            # the page language
 │       ├── StructuredData.php        # schema.org JSON-LD of a record (forResource)
 │       ├── BreadcrumbTrail.php       # the trail: BreadcrumbList and dreBreadcrumb()
 │       ├── CollectionNodes.php       # catalogue Dataset, CollectionPage, distribution
 │       ├── RobotsTxt.php             # robots.txt, with Google's precedence for tests
 │       ├── Signposting.php           # FAIR Signposting links + Link header (2 KB)
 │       ├── LinkedDataIdentity.php    # resource URIs, sameAs, dataset from DRE Linked Data
+│       ├── IdentityAuthorities.php   # sameAs rules over config/identity-authorities.php
 │       ├── SiteHome.php              # the one home-page URL
 │       ├── LandingPages.php          # item set -> landing page, for the breadcrumb
 │       ├── ProjectResolver.php       # a record's project; the project item-set redirect
@@ -574,6 +580,14 @@ DRESeo/
 │       ├── SearchPage.php            # search results routes (noindex)
 │       ├── ImageDimensions.php       # og:image size of a local file
 │       ├── HttpCache.php             # ETag / Last-Modified for /cite
+│       ├── CitationData.php          # an item as a citation record (Citation/: the record,
+│       │                             #   its creators and dates)
+│       ├── CitationKind.php, CitationKindMap.php # template → citation kind, export types
+│       ├── CitationFormatter.php     # Chicago, APA, MLA
+│       ├── CitationExport.php        # BibTeX, RIS, CSL-JSON, plain text
+│       ├── CitationMeta.php          # Highwire and Dublin Core tags
+│       ├── Concern/ResourceValueReader.php # the value readers the services share
+│       ├── TemplateCoverage.php      # templates in use the maps do not name (dashboard)
 │       ├── SitemapGenerator.php      # sitemap policy: which URLs, in what order
 │       ├── Sitemap/
 │       │   ├── SitemapRepository.php # lean DBAL queries (+ SitemapRepositoryInterface)
@@ -590,7 +604,7 @@ DRESeo/
 ├── view/dre-seo/admin/seo/{dashboard,pages}.phtml
 ├── asset/css/admin.css
 ├── tests/
-│   ├── Service/, Config/             # PHPUnit unit tests, run on the shims
+│   ├── Service/, Config/, Scripts/   # PHPUnit unit tests, run on the shims (Scripts/: the release scripts)
 │   ├── Integration/                  # PHPUnit suite against a real Omeka S (own bootstrap)
 │   ├── Double/, Fixture/             # shared test doubles and fixtures
 │   ├── Shim/omeka.php                # minimal Omeka/Laminas/Doctrine stand-ins

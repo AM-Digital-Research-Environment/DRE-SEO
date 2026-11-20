@@ -13,8 +13,9 @@
   ],
   "require": {
     "php": ">=8.4",
+    "ext-ctype": "*",
     "ext-json": "*",
-    "ext-dom": "*"
+    "ext-mbstring": "*"
   },
   "autoload": {
     "psr-4": {
@@ -22,6 +23,7 @@
     }
   },
   "require-dev": {
+    "ext-dom": "*",
     "phpunit/phpunit": "^13.4",
     "phpstan/phpstan": "^2.3",
     "squizlabs/php_codesniffer": "^4.0"
@@ -59,7 +61,7 @@
     "i18n": "Regenerate language/template.pot and compile any language/*.po.",
     "i18n:check": "Fail when language/template.pot no longer matches the sources.",
     "bump-version": "Set the version in module.ini, CITATION.cff and the CHANGELOG heading: composer bump-version -- X.Y.Z (--check X.Y.Z only compares).",
-    "check": "Everything CI runs except the Omeka integration test."
+    "check": "Every CI gate except the php -l sweep, composer validate and the Omeka integration test."
   },
   "config": {
     "platform": {

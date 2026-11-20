@@ -2,8 +2,9 @@
 ; Copied from DRE-theme's .editorconfig, so the repositories share one baseline
 ; (UTF-8, LF, final newline, no trailing whitespace, spaces). Only the sections
 ; below the baseline differ, and each records this tree's existing convention
-; rather than a new one: PHP, the view scripts and asset/css use four spaces;
-; composer.json, the workflows, CITATION.cff and the PHPStan configuration use two.
+; rather than a new one: PHP, the view scripts, asset/css and phpstan.neon.dist
+; use four spaces; composer.json, the workflows and CITATION.cff use two. The
+; PHPStan baseline is generated, with tabs.
 root = true
 
 [*]
