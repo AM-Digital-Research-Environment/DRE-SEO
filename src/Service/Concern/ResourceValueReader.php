@@ -345,18 +345,8 @@ trait ResourceValueReader
             if ($raw === '') {
                 continue;
             }
-            $date = IssuedDate::parse($raw);
-            if ($date->year === null) {
-                return null;
-            }
-            $out = sprintf('%04d', $date->year);
-            if ($date->month !== null && $date->month >= 1 && $date->month <= 12) {
-                $out .= sprintf('-%02d', $date->month);
-                if ($date->day !== null && checkdate($date->month, $date->day, $date->year)) {
-                    $out .= sprintf('-%02d', $date->day);
-                }
-            }
-            return $out;
+            // One date: an interval gives only what its two ends share.
+            return IssuedDate::parse($raw)->asSingleDate()->iso();
         }
         return null;
     }

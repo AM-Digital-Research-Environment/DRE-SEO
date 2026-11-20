@@ -5,6 +5,7 @@ namespace DRESeo\Service;
 
 use DRESeo\Service\Citation\CitationRecord;
 use DRESeo\Service\Citation\Creator;
+use DRESeo\Service\Citation\IssuedDate;
 
 /**
  * Formats a {@see CitationRecord} as a Chicago (18th ed., notes–bibliography),
@@ -866,7 +867,7 @@ final class CitationFormatter
      *   MLA      → "7 Dec. 2018"
      * Falls back to the year (or the raw literal) when month/day are absent.
      */
-    private function dateText(\DRESeo\Service\Citation\IssuedDate $date, string $locale, string $style): string
+    private function dateText(IssuedDate $date, string $locale, string $style): string
     {
         $y = $date->year;
         $m = $date->month;
@@ -874,8 +875,9 @@ final class CitationFormatter
         if ($y === null) {
             return $date->literal !== null ? $this->esc($date->literal) : '';
         }
-        if (!$m) {
-            return $this->esc((string) $y);
+        // A span ("1950–1962") is cited by its years, not by its first day.
+        if (!$m || $date->isInterval()) {
+            return $this->esc((string) $date->yearOrLiteral());
         }
         $month = $style === 'mla' && $locale === 'en'
             ? self::MLA_MONTHS_EN[$m] ?? (string) $m

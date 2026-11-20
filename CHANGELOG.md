@@ -9,6 +9,19 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A date interval is cited as a span, not as its first day.** 625 AMIRA records date
+  themselves by a NumericDataTypes interval (`1950-01-01/1962-01-01`), which every output
+  read as 1 January 1950. The text styles now print `1950–1962`, CSL-JSON a date range,
+  biblatex `date = {1950-01-01/1962-01-01}`; the formats that hold one date
+  (`citation_publication_date`, `DC.date`, RIS, the JSON-LD dates) carry only what the two
+  ends share, here `1950`.
+- A month or day that cannot exist (`1999-20`, `2018-02-30`) is no longer emitted in
+  `citation_publication_date`, RIS, BibTeX or CSL-JSON, which read the parsed parts without
+  checking them; `IssuedDate` validates once, for every output, and a span of years typed
+  as text (`1999-2001`) is an interval.
+
 ## [0.17.0] - 2026-11-11
 
 ### Added

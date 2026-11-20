@@ -43,4 +43,62 @@ final class IssuedDateTest extends TestCase
         $this->assertSame(null, $date->literal);
         $this->assertSame(null, $date->yearOrLiteral());
     }
+
+    public function testAMonthOrDayThatCannotExistIsDroppedNotEmitted(): void
+    {
+        $span = IssuedDate::parse('1999-20');
+        $this->assertSame(1999, $span->year);
+        $this->assertSame(null, $span->month, 'no month 20');
+
+        $february = IssuedDate::parse('2018-02-30');
+        $this->assertSame(2, $february->month);
+        $this->assertSame(null, $february->day, 'no 30 February');
+        $this->assertSame('2018-02', $february->iso());
+
+        $this->assertSame(null, IssuedDate::parse('12345')->year, 'five digits are no year');
+    }
+
+    public function testAnIntervalKeepsBothEndsAndCitesItsYears(): void
+    {
+        $date = IssuedDate::parse('1950-01-01/1962-01-01');
+
+        $this->assertTrue($date->isInterval());
+        $this->assertSame(1950, $date->year);
+        $this->assertSame(1962, $date->until?->year);
+        $this->assertSame('1950–1962', $date->yearOrLiteral());
+        $this->assertSame([[1950, 1, 1], [1962, 1, 1]], $date->dateParts());
+        $this->assertSame('1950-01-01/1962-01-01', $date->isoRange());
+    }
+
+    public function testASingleDateFormatGetsOnlyWhatTheTwoEndsShare(): void
+    {
+        $years = IssuedDate::parse('1950-01-01/1962-01-01')->asSingleDate();
+        $this->assertSame('1950', $years->iso(), 'not 1 January 1950');
+        $this->assertSame('1950', $years->slashed());
+
+        $months = IssuedDate::parse('2020-07-01/2020-12-31')->asSingleDate();
+        $this->assertSame('2020', $months->iso());
+
+        $days = IssuedDate::parse('2020-07-01/2020-07-31')->asSingleDate();
+        $this->assertSame('2020-07', $days->iso());
+
+        $plain = IssuedDate::parse('2018-12-07');
+        $this->assertSame($plain, $plain->asSingleDate(), 'a date that is no interval stays itself');
+    }
+
+    public function testASpanOfYearsTypedAsTextIsAnInterval(): void
+    {
+        $date = IssuedDate::parse('1999-2001');
+
+        $this->assertTrue($date->isInterval());
+        $this->assertSame('1999–2001', $date->yearOrLiteral());
+        $this->assertSame([[1999], [2001]], $date->dateParts());
+    }
+
+    public function testAnIntervalSurvivesTheArrayRoundTrip(): void
+    {
+        $date = IssuedDate::parse('1950-01-01/1962-01-01');
+
+        $this->assertSame($date->toArray(), IssuedDate::fromArray($date->toArray())->toArray());
+    }
 }

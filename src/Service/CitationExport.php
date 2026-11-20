@@ -205,9 +205,10 @@ final class CitationExport
         $date = $this->date($record);
         if ($date->hasYear()) {
             $fields['year'] = (string) $date->year;
-            // biblatex reads the full date; classic BibTeX ignores the field.
-            if ($date->month !== null) {
-                $fields['date'] = $this->isoDate($date);
+            // biblatex reads the full date, an interval as a range
+            // ("1950/1962"); classic BibTeX ignores the field.
+            if ($date->month !== null || $date->isInterval()) {
+                $fields['date'] = (string) $date->isoRange();
             }
         }
         $this->addField($fields, 'volume', $record->volume);
@@ -308,10 +309,12 @@ final class CitationExport
         $lines[] = $this->risLine('PB', $record->publisher ?? ($record->kind === CitationKind::Video ? $record->platform : null));
         $lines[] = $this->risLine('CY', $record->place);
 
-        $date = $this->date($record);
+        // RIS holds one date: an interval gives only what its two ends share.
+        $date = $this->date($record)->asSingleDate();
         if ($date->hasYear()) {
             $lines[] = $this->risLine('PY', (string) $date->year);
-            $lines[] = $this->risLine('DA', $this->risDate($date));
+            // DA is YYYY/MM/DD (trailing parts optional).
+            $lines[] = $this->risLine('DA', $date->slashed());
         }
         $lines[] = $this->risLine('VL', $record->volume);
         $lines[] = $this->risLine('IS', $record->issue);
@@ -358,34 +361,6 @@ final class CitationExport
         return $person->given !== null
             ? $person->family . ', ' . $person->given
             : (string) $person->family;
-    }
-
-    private function risDate(IssuedDate $issued): ?string
-    {
-        if (!$issued->hasYear()) {
-            return null;
-        }
-        // RIS DA is YYYY/MM/DD/ (trailing parts optional, slashes kept).
-        $out = sprintf('%04d', $issued->year);
-        if ($issued->month !== null) {
-            $out .= sprintf('/%02d', $issued->month);
-            if ($issued->day !== null) {
-                $out .= sprintf('/%02d', $issued->day);
-            }
-        }
-        return $out;
-    }
-
-    private function isoDate(IssuedDate $date): string
-    {
-        $out = sprintf('%04d', $date->year);
-        if ($date->month !== null) {
-            $out .= sprintf('-%02d', $date->month);
-            if ($date->day !== null) {
-                $out .= sprintf('-%02d', $date->day);
-            }
-        }
-        return $out;
     }
 
     // ─── CSL-JSON ────────────────────────────────────────────────────────────
@@ -442,9 +417,10 @@ final class CitationExport
                 $item[$field] = $value;
             }
         }
-        $dateParts = $this->cslDateParts($this->date($record));
+        // One array per end: an interval is a CSL date range.
+        $dateParts = $this->date($record)->dateParts();
         if ($dateParts) {
-            $item['issued'] = ['date-parts' => [$dateParts]];
+            $item['issued'] = ['date-parts' => $dateParts];
         }
         if ($record->issn !== null) {
             $item['ISSN'] = $record->issn;
@@ -494,22 +470,6 @@ final class CitationExport
             $out[] = $name;
         }
         return $out;
-    }
-
-    /** @return array<int,int> date-parts [year(,month(,day))] or [] */
-    private function cslDateParts(IssuedDate $issued): array
-    {
-        if (!$issued->hasYear()) {
-            return [];
-        }
-        $parts = [(int) $issued->year];
-        if ($issued->month !== null) {
-            $parts[] = $issued->month;
-            if ($issued->day !== null) {
-                $parts[] = $issued->day;
-            }
-        }
-        return $parts;
     }
 
     /** @param array<string,string> $fields */

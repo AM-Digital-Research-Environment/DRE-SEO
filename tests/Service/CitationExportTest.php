@@ -143,6 +143,27 @@ final class CitationExportTest extends TestCase
         $this->assertTrue(str_ends_with($ris, "ER  - \r\n"), 'the end tag closes the record');
     }
 
+    public function testAnIntervalIsARangeWhereTheFormatHasOneAndItsYearWhereNot(): void
+    {
+        $record = new CitationRecord(
+            id: 7722,
+            kind: CitationKind::Item,
+            title: 'Field recordings',
+            issued: IssuedDate::parse('1950-01-01/1962-01-01'),
+        );
+        $export = new CitationExport();
+
+        $csl = json_decode($export->serialize($record, 'csljson'), true, flags: JSON_THROW_ON_ERROR)[0];
+        $this->assertSame([[1950, 1, 1], [1962, 1, 1]], $csl['issued']['date-parts'], 'a CSL date range');
+
+        $ris = $export->serialize($record, 'ris');
+        $this->assertTrue(str_contains($ris, "PY  - 1950\r\n"), 'RIS holds one year');
+        $this->assertTrue(str_contains($ris, "DA  - 1950\r\n"), 'never 1 January 1950');
+
+        $bibtex = $export->serialize($record, 'bibtex');
+        $this->assertSame(1, preg_match('/^  date +=\s\{1950-01-01\/1962-01-01\},$/m', $bibtex), 'a biblatex date range');
+    }
+
     public function testRISCollapsesNewlinesInsideAValue(): void
     {
         $record = new CitationRecord(

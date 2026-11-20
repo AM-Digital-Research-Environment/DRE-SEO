@@ -171,21 +171,12 @@ class CitationMeta
 
     /**
      * Google Scholar's date form: "2025/03/20", "2025/03" or "2025", as precise
-     * as the record; an unparseable literal passes through as entered.
+     * as the record (an interval as what its two ends share); an unparseable
+     * literal passes through as entered.
      */
     private function scholarDate(IssuedDate $date): ?string
     {
-        if ($date->year === null) {
-            return $date->literal;
-        }
-        $out = sprintf('%04d', $date->year);
-        if ($date->month !== null) {
-            $out .= sprintf('/%02d', $date->month);
-            if ($date->day !== null) {
-                $out .= sprintf('/%02d', $date->day);
-            }
-        }
-        return $out;
+        return $date->asSingleDate()->slashed() ?? $date->literal;
     }
 
     // ─── Dublin Core (DC.*) ─────────────────────────────────────────────────

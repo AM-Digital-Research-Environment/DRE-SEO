@@ -71,6 +71,22 @@ final class CitationMetaTest extends TestCase
         $this->assertSame(['Journal Article'], self::tagValues($tags, 'DC.type'));
     }
 
+    public function testAnIntervalIsTaggedWithTheYearItsEndsShareNotItsFirstDay(): void
+    {
+        // 625 AMIRA records date themselves by a NumericDataTypes interval;
+        // /s/amira/item/7722 was tagged 1 January 1950 for 1950–1962.
+        $article = new ItemRepresentation('An article', 11, 'Journal Article', [
+            'dcterms:creator' => [new ValueRepresentation('Example, Ada')],
+            'dcterms:issued' => [new ValueRepresentation('1950 – 1962', null, null, '1950-01-01/1962-01-01', 'numeric:interval')],
+            'dcterms:isPartOf' => [new ValueRepresentation('Pambazuka News')],
+        ]);
+
+        $tags = self::citationMetaService()->tags($article, null);
+
+        $this->assertSame(['1950'], self::tagValues($tags, 'citation_publication_date'));
+        $this->assertSame(['1950'], self::tagValues($tags, 'DC.date'));
+    }
+
     public function testADescriptiveRecordCarriesDublinCoreOnly(): void
     {
         foreach ([4 => 'Person', 6 => 'Authority file', 23 => 'Journal'] as $templateId => $class) {
