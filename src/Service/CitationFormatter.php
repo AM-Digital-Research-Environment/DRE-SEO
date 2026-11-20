@@ -133,7 +133,8 @@ final class CitationFormatter
             $parts[] = $this->terminate($this->str($locale, 'in') . ' ' . $this->italic($record->archive));
         }
         $parts[] = $this->terminate($this->esc($record->publisher));
-        $parts[] = $this->linkSegment($record);
+        // APA ends on the URL with no period, which would break the link.
+        $parts[] = $this->link($record);
 
         return $this->join($parts);
     }
@@ -188,8 +189,10 @@ final class CitationFormatter
                 $vi = $this->volumeIssue($record, $locale);
                 $pages = $this->pages($record);
                 if ($vi !== '') {
-                    // A journal: "Journal 42, no. 3 (2001): 185–209."
-                    $seg = trim($seg . ' ' . $vi);
+                    // A journal: "Journal 42, no. 3 (2001): 185–209"; one
+                    // numbered by issue alone takes a comma, "Journal, no. 93
+                    // (2026)".
+                    $seg = $record->volume === null ? $this->joinComma([$seg, $vi]) : trim($seg . ' ' . $vi);
                     $year = $this->year($record);
                     if ($year !== null) {
                         $seg .= ' (' . $this->esc($year) . ')';
@@ -226,7 +229,12 @@ final class CitationFormatter
                     }
                     $parts[] = $this->terminate($seg);
                 }
-                $parts[] = $this->terminate($this->publisherYear($record));
+                // The publisher alone: the container is already named above,
+                // and proceedings with no publisher would otherwise appear twice.
+                $parts[] = $this->terminate($this->joinComma([
+                    $this->esc($record->publisher),
+                    $this->esc($this->year($record)),
+                ]));
                 break;
 
             case CitationKind::Post:
@@ -321,17 +329,20 @@ final class CitationFormatter
 
         switch ($kind) {
             case CitationKind::Article:
-                $seg = $this->italic($record->container);
+                // "*Journal*, *42*(3), 185–209." A journal numbered by issue
+                // alone keeps its issue: "*Journal*, (93), 65–80."
+                $numbering = '';
                 if ($this->esc($record->volume) !== '') {
-                    $seg .= ', ' . $this->italic($record->volume);
-                    if ($record->issue !== null) {
-                        $seg .= '(' . $this->esc($record->issue) . ')';
-                    }
+                    $numbering = $this->italic($record->volume)
+                        . ($record->issue !== null ? '(' . $this->esc($record->issue) . ')' : '');
+                } elseif ($record->issue !== null) {
+                    $numbering = '(' . $this->esc($record->issue) . ')';
                 }
-                if ($this->pages($record) !== '') {
-                    $seg .= ', ' . $this->pages($record);
-                }
-                $parts[] = $this->terminate($seg);
+                $parts[] = $this->terminate($this->joinComma([
+                    $this->italic($record->container),
+                    $numbering,
+                    $this->pages($record),
+                ]));
                 break;
 
             case CitationKind::Chapter:
@@ -392,7 +403,8 @@ final class CitationFormatter
                 break;
         }
 
-        $parts[] = $this->linkSegment($record);
+        // APA ends on the DOI or URL with no period, which would break the link.
+        $parts[] = $this->link($record);
         return $this->join($parts);
     }
 
@@ -495,7 +507,8 @@ final class CitationFormatter
                 $parts[] = $this->mlaClose($this->joinComma([
                     $this->italic($container),
                     $eds !== '' ? $this->str($locale, 'eds') . ' ' . $eds : '',
-                    $this->publisherYear($record),
+                    $this->esc($record->publisher),
+                    $this->esc($this->year($record)),
                     $pp,
                 ]), $record);
                 break;
@@ -703,7 +716,9 @@ final class CitationFormatter
         }
 
         if ($style === 'mla' && $n >= 3) {
-            return $first . ', ' . $this->str($locale, 'et_al');
+            // "Walther, Olivier, et al." but "edited by Olivier Walther et al.":
+            // the comma closes an inverted name only.
+            return $first . ($invertFirst ? ', ' : ' ') . $this->str($locale, 'et_al');
         }
 
         // Subsequent names: natural order for Chicago/MLA; APA follows the list's

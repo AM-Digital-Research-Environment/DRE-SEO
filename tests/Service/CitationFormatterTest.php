@@ -45,8 +45,9 @@ final class CitationFormatterTest extends TestCase
             $formatter->format($record, 'chicago')
         );
         $this->assertSame(
+            // APA puts no period after the DOI or URL.
             'Triaud, J.-L. (2001). Muslim Politics. <em>Journal of African History</em>, <em>42</em>(3), 185–209.'
-                . ' <a href="https://data.africamultiple.uni-bayreuth.de/s/amira/item/1">https://data.africamultiple.uni-bayreuth.de/s/amira/item/1</a>.',
+                . ' <a href="https://data.africamultiple.uni-bayreuth.de/s/amira/item/1">https://data.africamultiple.uni-bayreuth.de/s/amira/item/1</a>',
             $formatter->format($record, 'apa')
         );
         $this->assertSame(
@@ -437,7 +438,7 @@ final class CitationFormatterTest extends TestCase
         );
         $this->assertSame(
             'Aas, Norbert [Person record]. (2026, June 9). In <em>Africa Multiple Interactive Research Atlas (AMIRA)</em>.'
-                . ' Africa Multiple Cluster of Excellence, University of Bayreuth. ' . $link . '.',
+                . ' Africa Multiple Cluster of Excellence, University of Bayreuth. ' . $link,
             $formatter->format($record, 'apa')
         );
         $this->assertSame(
@@ -619,5 +620,100 @@ final class CitationFormatterTest extends TestCase
             'Boudjekeu, Thierry. <em>Writing the Slave Trade Trauma in Francophone Africa</em>. Akademische Verlagsanstalt, 2026.',
             $formatter->format($record, 'mla')
         );
+    }
+
+    public function testProceedingsWithoutAPublisherAreNamedOnce(): void
+    {
+        // /s/amira/item/29969 printed its proceedings title twice in Chicago and MLA.
+        $paper = self::citationFixture(CitationKind::Conference, [
+            'container' => 'VAD 2024 Proceedings',
+            'issued' => IssuedDate::parse('2024'),
+        ]);
+        $formatter = new CitationFormatter();
+
+        foreach (['chicago', 'apa', 'mla'] as $style) {
+            $text = $formatter->format($paper, $style);
+            $this->assertSame(1, substr_count($text, 'VAD 2024 Proceedings'), $style . ': ' . $text);
+        }
+        $this->assertStringContainsString('<em>VAD 2024 Proceedings</em>. 2024.', $formatter->format($paper, 'chicago'));
+    }
+
+    public function testAJournalNumberedByIssueAloneKeepsItsIssue(): void
+    {
+        // /s/amira/item/29931: WerkstattGeschichte, no. 93, with no volume.
+        $article = self::citationFixture(CitationKind::Article, [
+            'container' => 'WerkstattGeschichte',
+            'issue' => '93',
+            'pageFirst' => '65',
+            'pageLast' => '80',
+            'issued' => IssuedDate::parse('2026'),
+        ]);
+        $formatter = new CitationFormatter();
+
+        $this->assertStringContainsString('<em>WerkstattGeschichte</em>, no. 93 (2026): 65–80.', $formatter->format($article, 'chicago'));
+        $this->assertStringContainsString('<em>WerkstattGeschichte</em>, (93), 65–80.', $formatter->format($article, 'apa'));
+        $this->assertStringContainsString('<em>WerkstattGeschichte</em>, no. 93, 2026, pp. 65–80', $formatter->format($article, 'mla'));
+    }
+
+    public function testMlaEtAlTakesACommaOnlyAfterAnInvertedName(): void
+    {
+        $editors = [
+            Creator::parse('Olivier Walther', false),
+            Creator::parse('Denis Retaillé', false),
+            Creator::parse('Jérôme Lombard', false),
+        ];
+        $chapter = self::citationFixture(CitationKind::Chapter, [
+            'authors' => $editors,
+            'editors' => $editors,
+            'bookTitle' => 'Borders and Networks',
+        ]);
+        $mla = (new CitationFormatter())->format($chapter, 'mla');
+
+        $this->assertStringStartsWith('Walther, Olivier, et al.', $mla, 'an inverted first author');
+        $this->assertStringContainsString('edited by Olivier Walther et al.,', $mla, 'a natural-order editor');
+    }
+
+    /**
+     * Every kind in every style, with each optional field missing in turn:
+     * no element may be doubled, and no separator may be left dangling.
+     */
+    public function testNoKindOrStyleDoublesAFieldOrLeavesASeparatorWhenOneIsMissing(): void
+    {
+        $formatter = new CitationFormatter();
+        $full = [
+            'container' => 'The Container',
+            'bookTitle' => 'The Book',
+            'publisher' => 'The Publisher',
+            'editors' => [Creator::parse('Ada Example', false)],
+            'volume' => '7',
+            'issue' => '2',
+            'pageFirst' => '10',
+            'pageLast' => '20',
+            'event' => 'The Event',
+            'platform' => 'YouTube',
+            'archive' => 'AMIRA',
+        ];
+        foreach (CitationKind::cases() as $kind) {
+            foreach (array_merge([''], array_keys($full), ['authors', 'issued']) as $missing) {
+                $fields = $full;
+                if (array_key_exists($missing, $fields)) {
+                    unset($fields[$missing]);
+                } elseif ($missing === 'authors') {
+                    $fields['authors'] = [];
+                } elseif ($missing === 'issued') {
+                    $fields['issued'] = new IssuedDate();
+                }
+                $record = self::citationFixture($kind, $fields);
+                foreach (['chicago', 'apa', 'mla'] as $style) {
+                    $text = strip_tags($formatter->format($record, $style));
+                    $case = sprintf('%s/%s without %s: %s', $kind->value, $style, $missing ?: 'nothing', $text);
+                    $this->assertNotSame('', $text, $case);
+                    foreach (['The Container', 'The Book', 'The Publisher', 'The Event'] as $element) {
+                        $this->assertLessThanOrEqual(1, substr_count($text, $element), $case);
+                    }
+                    $this->assertDoesNotMatchRegularExpression('/,\s*[,.]|\.\s*,|\(\s*\)|\s[,.:]/u', $text, $case);
+                }
+            }
+        }
     }
 }

@@ -28,6 +28,14 @@ GitHub release and shipped no installable asset.
   page range (BibTeX `pages`, RIS `SP`, CSL `page`, `citation_firstpage`): it is the page
   count, exported as biblatex `pagetotal`, CSL `number-of-pages` and, for a `Book`, JSON-LD
   `numberOfPages`, preferring `bibo:numPages` where the record has one.
+- **Four citation-style rules that dropped or repeated fields.** A conference paper whose
+  proceedings have no publisher named them twice in Chicago and MLA
+  (`/s/amira/item/29969`); an article in a journal numbered by issue alone lost its issue in
+  APA and lacked Chicago's comma ("*WerkstattGeschichte*, no. 93 (2026)"); MLA put a comma
+  before "et al." after a name in natural order ("edited by Olivier Walther et al."); and
+  every APA reference ended with a period after its DOI or URL, which APA 7 leaves out. An
+  APA article with no journal title no longer opens its source with a stray comma. A test
+  now formats every kind in every style with each optional field missing in turn.
 
 ## [0.17.0] - 2026-11-11
 
