@@ -90,6 +90,8 @@ final class CitationRecord
         public readonly IssuedDate $updated = new IssuedDate(),
         /** The role the authors hold when it is not authorship ('host'). */
         public readonly ?string $authorRole = null,
+        /** How many pages a book, report or thesis has (bibo:numPages, or its extent). */
+        public readonly ?string $pageCount = null,
     ) {
     }
 
@@ -115,19 +117,48 @@ final class CitationRecord
         return $title !== '' ? $title : null;
     }
 
+    /** One page locator: a page number, an article number (e70110, a04521) or a supplement page (S204). */
+    private const PAGE = '[A-Za-z]{0,2}\d+(?:\.\d+)*';
+
     /**
-     * Read a page range written as text — "S. 23-38", "pp. 5–17", "112" — into
-     * a first and last page. Returns [null, null] for anything else.
+     * Read a page range written as text — "S. 23-38", "pp. 5–17", "112",
+     * "e70110", "S. S204-S207" — into a first and last page. A letter-prefixed
+     * locator is kept whole: e70110 is an article number, not page 70110. An
+     * extent ({@see pageCount()}) is no range, and anything else is
+     * [null, null].
      *
      * @return array{0:?string,1:?string}
      */
     public static function splitPages(?string $pages): array
     {
-        if ($pages === null || !preg_match('/(\d+)(?:\s*[-–—]\s*(\d+))?/u', $pages, $m)) {
+        $text = trim((string) $pages);
+        if ($text === '' || self::pageCount($text) !== null) {
+            return [null, null];
+        }
+        $text = (string) preg_replace('/^(?:S\.|pp?\.|Bl\.)\s*/iu', '', $text);
+        if (!preg_match('/^(' . self::PAGE . ')(?:\s*[-–—]\s*(' . self::PAGE . '))?\.?$/u', $text, $m)) {
             return [null, null];
         }
 
         return [$m[1], ($m[2] ?? '') !== '' ? $m[2] : null];
+    }
+
+    /**
+     * The page count an extent states — "XIV, 310", "XVII; 228",
+     * "vii, 238 Blätter", "18 S." — as catalogued for a book, report or thesis
+     * in bibo:pages, else null. Front matter in roman numerals is not counted.
+     */
+    public static function pageCount(?string $pages): ?string
+    {
+        $text = trim((string) $pages);
+        $unit = '(?:S\.|Bl(?:\.|ätter)|pp?\.|pages?|Seiten)';
+        if (
+            preg_match('/^[ivxlcdm]+\s*[,;]\s*(\d+)(?:\s*' . $unit . ')?\.?$/iu', $text, $m)
+            || preg_match('/^(\d+)\s*' . $unit . '$/iu', $text, $m)
+        ) {
+            return $m[1];
+        }
+        return null;
     }
 
     /**
@@ -190,6 +221,7 @@ final class CitationRecord
             'issue'     => $this->issue,
             'pageFirst' => $this->pageFirst,
             'pageLast'  => $this->pageLast,
+            'pageCount' => $this->pageCount,
             'issn'      => $this->issn,
             'isbn'      => $this->isbn,
             'doi'       => $this->doi,
@@ -260,6 +292,7 @@ final class CitationRecord
             archive: $string('archive'),
             updated: IssuedDate::fromArray(is_array($data['updated'] ?? null) ? $data['updated'] : []),
             authorRole: $string('authorRole'),
+            pageCount: $string('pageCount'),
         );
     }
 }

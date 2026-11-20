@@ -428,6 +428,10 @@ class StructuredData
         if ($isbn !== null && $type === 'Book') {
             $data['isbn'] = $isbn;
         }
+        $pageCount = $type === 'Book' ? $this->pageCount($resource) : null;
+        if ($pageCount !== null) {
+            $data['numberOfPages'] = (int) $pageCount;
+        }
         [$pageFirst, $pageLast] = $this->pageBounds($resource);
         if (in_array($type, ['ScholarlyArticle', 'NewsArticle', 'Article', 'Chapter'], true)) {
             if ($pageFirst !== null) {

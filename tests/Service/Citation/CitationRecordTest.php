@@ -92,4 +92,26 @@ final class CitationRecordTest extends TestCase
         $thesis = new CitationRecord(id: 1, kind: CitationKind::Thesis, degree: 'masters');
         $this->assertSame('masters', CitationRecord::fromArray($thesis->toArray())->degree);
     }
+
+    public function testAPageLocatorIsKeptWholeAndAnExtentIsNoRange(): void
+    {
+        // Live values from AMIRA's bibo:pages.
+        $this->assertSame(['e70110', null], CitationRecord::splitPages('e70110'), 'an article number, not page 70110');
+        $this->assertSame(['a04521', null], CitationRecord::splitPages('a04521'));
+        $this->assertSame(['S204', 'S207'], CitationRecord::splitPages('S. S204-S207'), 'a supplement range');
+        $this->assertSame(['259', '411'], CitationRecord::splitPages('S.259-411'));
+        $this->assertSame(['334', '345'], CitationRecord::splitPages('334 - 345'));
+        $this->assertSame(['E1', 'E3'], CitationRecord::splitPages('E1–E3'));
+        $this->assertSame(['104', null], CitationRecord::splitPages('104'));
+
+        foreach (['XIV, 310', 'XVII; 228', 'vii, 238 Blätter', '18 S.', '110 S.'] as $extent) {
+            $this->assertSame([null, null], CitationRecord::splitPages($extent), $extent . ' counts pages');
+        }
+        $this->assertSame('310', CitationRecord::pageCount('XIV, 310'));
+        $this->assertSame('228', CitationRecord::pageCount('XVII; 228'));
+        $this->assertSame('238', CitationRecord::pageCount('vii, 238 Blätter'));
+        $this->assertSame('18', CitationRecord::pageCount('18 S.'));
+        $this->assertSame(null, CitationRecord::pageCount('S. 23-38'), 'a range is no extent');
+        $this->assertSame([null, null], CitationRecord::splitPages('–'), 'no digits, no pages');
+    }
 }

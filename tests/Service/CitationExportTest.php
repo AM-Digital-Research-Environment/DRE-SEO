@@ -164,6 +164,20 @@ final class CitationExportTest extends TestCase
         $this->assertSame(1, preg_match('/^  date +=\s\{1950-01-01\/1962-01-01\},$/m', $bibtex), 'a biblatex date range');
     }
 
+    public function testABooksPageCountIsItsTotalNeverItsPages(): void
+    {
+        $book = new CitationRecord(id: 41169, kind: CitationKind::Book, title: 'Decolonial Horizons', pageCount: '310');
+        $export = new CitationExport();
+
+        $bibtex = $export->serialize($book, 'bibtex');
+        $this->assertSame(1, preg_match('/^  pagetotal +=\s\{310\},$/m', $bibtex), 'biblatex pagetotal');
+        $this->assertTrue(!str_contains($bibtex, 'pages '), 'no page range');
+
+        $csl = json_decode($export->serialize($book, 'csljson'), true, flags: JSON_THROW_ON_ERROR)[0];
+        $this->assertSame('310', $csl['number-of-pages']);
+        $this->assertTrue(!array_key_exists('page', $csl));
+    }
+
     public function testRISCollapsesNewlinesInsideAValue(): void
     {
         $record = new CitationRecord(

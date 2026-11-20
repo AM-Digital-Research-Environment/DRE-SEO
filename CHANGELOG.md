@@ -21,6 +21,13 @@ GitHub release and shipped no installable asset.
   `citation_publication_date`, RIS, BibTeX or CSL-JSON, which read the parsed parts without
   checking them; `IssuedDate` validates once, for every output, and a span of years typed
   as text (`1999-2001`) is an interval.
+- **Page fields are read as locators.** An article number in `bibo:pages` (`e70110`,
+  `a04521`) was cut to its digits, so `/s/amira/item/29920` told Google Scholar
+  `citation_firstpage 70110` and cited ": 70110"; it is now kept whole, as is a supplement
+  range (`S. S204-S207`). A book's extent (`XIV, 310`, `18 S.`) is no longer exported as its
+  page range (BibTeX `pages`, RIS `SP`, CSL `page`, `citation_firstpage`): it is the page
+  count, exported as biblatex `pagetotal`, CSL `number-of-pages` and, for a `Book`, JSON-LD
+  `numberOfPages`, preferring `bibo:numPages` where the record has one.
 
 ## [0.17.0] - 2026-11-11
 

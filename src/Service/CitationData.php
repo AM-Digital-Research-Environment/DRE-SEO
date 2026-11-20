@@ -186,6 +186,9 @@ final class CitationData
             issue: $this->firstString($item, ['bibo:issue']),
             pageFirst: $pageFirst,
             pageLast: $pageLast,
+            pageCount: in_array($kind, [CitationKind::Book, CitationKind::Report, CitationKind::Thesis], true)
+                ? $this->pageCount($item)
+                : null,
             issn: $this->firstString($item, ['bibo:issn']),
             isbn: $this->isbn($item),
             doi: $this->doi($item),

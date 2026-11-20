@@ -213,6 +213,7 @@ final class CitationExport
         }
         $this->addField($fields, 'volume', $record->volume);
         $this->addField($fields, 'number', $record->issue ?? $record->number);
+        $this->addField($fields, 'pagetotal', $record->pageCount);
         $pages = $record->pageRange();
         if ($pages !== null) {
             $fields['pages'] = str_replace('-', '--', $pages);
@@ -408,6 +409,7 @@ final class CitationExport
             'issue'            => $record->issue,
             'number'           => $record->number,
             'page'             => $record->pageRange(),
+            'number-of-pages'  => $record->pageCount,
             'genre'            => $this->genre($record),
             'archive'          => $record->archive,
             'archive_location' => $record->archive !== null ? $record->accession : null,

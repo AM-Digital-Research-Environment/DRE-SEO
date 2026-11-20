@@ -200,6 +200,26 @@ final class CitationDataTest extends TestCase
             'bibo:pages' => [self::literalValue('S. 23-38')],
         ]);
         $this->assertSame('23-38', $data->build($paper)->pageRange());
+
+        // /s/amira/item/41169: a book's extent is its page count, not a range.
+        $book = $data->build(new ItemRepresentation('Decolonial Horizons', 15, null, [
+            'bibo:pages' => [self::literalValue('XIV, 310')],
+        ]));
+        $this->assertSame(null, $book->pageRange());
+        $this->assertSame('310', $book->pageCount);
+
+        $report = $data->build(new ItemRepresentation('Working paper', 12, null, [
+            'bibo:numPages' => [self::literalValue('21')],
+            'bibo:pages' => [self::literalValue('VI, 21')],
+        ]));
+        $this->assertSame('21', $report->pageCount, 'bibo:numPages first');
+
+        // /s/amira/item/29920: an article number stays whole.
+        $article = $data->build(new ItemRepresentation('African Decolonial Theory', 11, null, [
+            'bibo:pages' => [self::literalValue('e70110')],
+        ]));
+        $this->assertSame('e70110', $article->pageFirst);
+        $this->assertSame(null, $article->pageCount, 'an article has no page count');
     }
 
     public function testWorksReadTheFieldsTheirStyleNeeds(): void

@@ -401,6 +401,19 @@ trait ResourceValueReader
     }
 
     /**
+     * How many pages a book, report or thesis has: bibo:numPages, else the
+     * extent catalogued in bibo:pages ("XIV, 310", "18 S.").
+     */
+    private function pageCount(AbstractResourceEntityRepresentation $resource): ?string
+    {
+        $count = $this->firstString($resource, ['bibo:numPages']);
+        if ($count !== null && preg_match('/^\d+$/', $count)) {
+            return $count;
+        }
+        return CitationRecord::pageCount($this->firstString($resource, ['bibo:pages']));
+    }
+
+    /**
      * The resource's citation page range. The join rule itself belongs to the
      * record, so a page range reads the same whether it came from a resource or
      * from a built citation.
