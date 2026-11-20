@@ -96,6 +96,13 @@ GitHub release and shipped no installable asset.
   record's URL, which a term that ever held a link would have printed into the meta
   description or a citation; the unit suite's stand-in rendered the title, so no test could
   see it.
+- **A record's people are read once, for every output.** Two different people who share a
+  name ("Müller, Thomas") were one JSON-LD `author`, carrying the second one's `@id`, while
+  the citation named both; one person entered twice was one author in the JSON-LD and two in
+  the citation. The generated description split an organisation's name like a person's
+  ("Report by University of Bayreuth Institute of African Studies"). The citation, the
+  Highwire and Dublin Core tags, the JSON-LD and the description now read one list, which
+  counts each linked record once by its id and keeps an organisation's name whole.
 
 ## [0.17.0] - 2026-11-11
 

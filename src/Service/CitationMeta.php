@@ -243,12 +243,6 @@ class CitationMeta
      */
     private function people(AbstractResourceEntityRepresentation $resource, array $terms): array
     {
-        foreach ($terms as $term) {
-            $names = $this->labels($resource, $term);
-            if ($names) {
-                return $names;
-            }
-        }
-        return [];
+        return array_column($this->agentsOf($resource, $terms), 'label');
     }
 }

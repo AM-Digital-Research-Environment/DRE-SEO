@@ -686,34 +686,22 @@ class StructuredData
         string $type
     ): array {
         $out = [];
-        foreach ($terms as $term) {
-            foreach ($resource->value($term, ['all' => true]) as $value) {
-                if (!$value instanceof ValueRepresentation) {
-                    continue;
+        // The first populated term's people, each once ({@see agentsOf()}).
+        foreach ($this->agentsOf($resource, $terms) as ['label' => $label, 'linked' => $linked]) {
+            $isOrganization = $type === 'Organization' || ($this->kinds?->isOrganization($linked) ?? false);
+            $roleType = $isOrganization ? 'Organization' : $type;
+            $node = $this->agent($label, $linked ? $this->linkedType($linked, $roleType) : $roleType);
+            if ($linked) {
+                $node = $this->identified($node, $linked);
+                try {
+                    $node['url'] = $linked->siteUrl($site->slug(), true);
+                } catch (\Throwable $e) {
+                    // no url
                 }
-                $linked = $value->valueResource();
-                $label = $linked ? trim((string) $linked->displayTitle()) : trim(strip_tags((string) $value));
-                if ($label === '') {
-                    continue;
-                }
-                $isOrganization = $type === 'Organization' || ($this->kinds?->isOrganization($linked) ?? false);
-                $roleType = $isOrganization ? 'Organization' : $type;
-                $node = $this->agent($label, $linked ? $this->linkedType($linked, $roleType) : $roleType);
-                if ($linked) {
-                    $node = $this->identified($node, $linked);
-                    try {
-                        $node['url'] = $linked->siteUrl($site->slug(), true);
-                    } catch (\Throwable $e) {
-                        // no url
-                    }
-                }
-                $out[$label] = $node;
             }
-            if ($out) {
-                break; // first populated term wins
-            }
+            $out[] = $node;
         }
-        return array_values($out);
+        return $out;
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace DRESeo\Test\Service;
 
 use DRESeo\Service\BreadcrumbTrail;
+use DRESeo\Service\CitationKindMap;
 use DRESeo\Service\Licence;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\StructuredData;
@@ -245,6 +246,26 @@ final class StructuredDataTest extends TestCase
         $data = (new StructuredData([11 => 'ScholarlyArticle']))->forResource($article, new SiteRepresentation(), null, null);
 
         $this->assertSame('An abstract kept as a record', $data['description']);
+    }
+
+    public function testTwoPeopleWhoShareANameAreTwoAuthorsAndOneEnteredTwiceIsOne(): void
+    {
+        $first = new Resource('Müller, Thomas', 4, 'Person', [], 'https://example.test/s/amira/item/11', 11);
+        $second = new Resource('Müller, Thomas', 4, 'Person', [], 'https://example.test/s/amira/item/12', 12);
+        $article = new Resource('An article', 11, 'Article', [
+            'dcterms:title' => [new Value('An article')],
+            'dcterms:creator' => [new Value(resource: $first), new Value(resource: $second), new Value(resource: $first)],
+        ]);
+        $config = require __DIR__ . '/../../config/module.config.php';
+        $citation = $config['dre_seo']['citation'];
+        $builder = new StructuredData([11 => 'ScholarlyArticle', 4 => 'Person'], 'CreativeWork', new CitationKindMap($citation['template_kinds'], $citation['default_kind']));
+
+        $data = $builder->forResource($article, new SiteRepresentation(), null, null);
+
+        $this->assertSame(
+            ['https://example.test/s/amira/item/11', 'https://example.test/s/amira/item/12'],
+            array_column($data['author'], 'url')
+        );
     }
 
     public function testSameAsIsLimitedToAuthorityIRIsInTheirCanonicalForm(): void

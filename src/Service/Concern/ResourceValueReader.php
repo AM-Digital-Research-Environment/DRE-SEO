@@ -91,6 +91,39 @@ trait ResourceValueReader
     }
 
     /**
+     * The people (or organisations) a record names under the first of $terms
+     * that holds any: each linked record once, by its id, and each literal
+     * name once. Two different records that share a name stay two people,
+     * and one record entered twice counts once. The citation, the Highwire
+     * and Dublin Core tags, the JSON-LD and the generated description all read
+     * this list, so they name the same people.
+     *
+     * @param string[] $terms
+     * @return list<array{label:string,linked:?AbstractResourceEntityRepresentation}>
+     */
+    private function agentsOf(AbstractResourceEntityRepresentation $resource, array $terms): array
+    {
+        foreach ($terms as $term) {
+            $out = [];
+            foreach ($resource->value($term, ['all' => true]) as $value) {
+                if (!$value instanceof ValueRepresentation) {
+                    continue;
+                }
+                $linked = $value->valueResource();
+                $label = $linked ? trim((string) $linked->displayTitle()) : trim(strip_tags((string) $value));
+                if ($label === '') {
+                    continue;
+                }
+                $out[$linked ? 'record:' . $linked->id() : 'name:' . $label] = ['label' => $label, 'linked' => $linked];
+            }
+            if ($out !== []) {
+                return array_values($out);
+            }
+        }
+        return [];
+    }
+
+    /**
      * All distinct labels for $term (linked titles or literals), in document order.
      *
      * @return string[]

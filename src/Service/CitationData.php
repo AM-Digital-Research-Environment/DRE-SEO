@@ -280,20 +280,12 @@ final class CitationData
     private function people(ItemRepresentation $item, array $terms): array
     {
         foreach ($terms as $term) {
-            $out = [];
-            foreach ($item->value($term, ['all' => true]) as $value) {
-                if (!$value instanceof ValueRepresentation) {
-                    continue;
-                }
-                $linked = $value->valueResource();
-                $label = $linked ? (string) $linked->displayTitle() : trim(strip_tags((string) $value));
-                if ($label === '') {
-                    continue;
-                }
-                $out[] = Creator::parse($label, $this->kinds->isOrganization($linked));
-            }
-            if ($out) {
-                return [$term, $out];
+            $people = $this->agentsOf($item, [$term]);
+            if ($people !== []) {
+                return [$term, array_map(
+                    fn (array $person): Creator => Creator::parse($person['label'], $this->kinds->isOrganization($person['linked'])),
+                    $people
+                )];
             }
         }
         return [null, []];

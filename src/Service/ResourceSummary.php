@@ -62,11 +62,14 @@ final class ResourceSummary
         $sentence = $type;
 
         $names = array_map(
-            static function (string $label): string {
-                $creator = Creator::parse($label, false);
-                return $creator->given !== null ? $creator->given . ' ' . $creator->family : $creator->literal;
+            function (array $person): string {
+                // An organisation keeps its name ("Institute of African
+                // Studies, University of Bayreuth"); a person is named in
+                // natural order.
+                $creator = Creator::parse($person['label'], $this->kinds->isOrganization($person['linked']));
+                return $creator->given !== null ? $creator->given . ' ' . $creator->family : (string) $creator->literal;
             },
-            $this->authorLabels($resource)
+            $this->agentsOf($resource, $this->kinds->forResource($resource)->authorTerms())
         );
         if ($names !== []) {
             $sentence .= ' by ' . match (true) {
@@ -88,18 +91,6 @@ final class ResourceSummary
             return sprintf('%s — %s%s.', $title !== '' ? $title : 'Untitled', mb_strtolower($type), $where);
         }
         return rtrim($sentence, '.') . '.';
-    }
-
-    /** @return string[] the first populated creator role's labels */
-    private function authorLabels(AbstractResourceEntityRepresentation $resource): array
-    {
-        foreach ($this->kinds->forResource($resource)->authorTerms() as $term) {
-            $labels = $this->labels($resource, $term);
-            if ($labels !== []) {
-                return $labels;
-            }
-        }
-        return [];
     }
 
     private function ucfirst(string $text): string

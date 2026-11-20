@@ -33,9 +33,9 @@ final class ResourceSummaryTest extends TestCase
     {
         $chapter = new ItemRepresentation('Introduction', 14, 'book chapter', [
             'bibo:authorList' => [
-                new ValueRepresentation('', new ItemRepresentation('Fendler, Ute', 4)),
-                new ValueRepresentation('', new ItemRepresentation('Kohl, Marie-Anne', 4)),
-                new ValueRepresentation('', new ItemRepresentation('Vierke, Clarissa', 4)),
+                new ValueRepresentation('', new ItemRepresentation('Fendler, Ute', 4, idValue: 101)),
+                new ValueRepresentation('', new ItemRepresentation('Kohl, Marie-Anne', 4, idValue: 102)),
+                new ValueRepresentation('', new ItemRepresentation('Vierke, Clarissa', 4, idValue: 103)),
             ],
             'dcterms:date' => [new ValueRepresentation('2024')],
             'dcterms:isPartOf' => [new ValueRepresentation('Of Worlds and Artworks : A Relational View')],
@@ -44,6 +44,19 @@ final class ResourceSummaryTest extends TestCase
         $this->assertSame(
             'Book chapter by Ute Fendler, Marie-Anne Kohl et al. (2024), in Of Worlds and Artworks: A Relational View.',
             self::resourceSummary()->describe($chapter, 'AMIRA')
+        );
+    }
+
+    public function testAnOrganisationAuthorKeepsItsNameInTheDescription(): void
+    {
+        $report = new ItemRepresentation('Annual report', 12, 'report', [
+            'dcterms:creator' => [new ValueRepresentation('', new ItemRepresentation('Institute of African Studies, University of Bayreuth', 2, idValue: 900))],
+            'dcterms:date' => [new ValueRepresentation('2024')],
+        ]);
+
+        $this->assertSame(
+            'Report by Institute of African Studies, University of Bayreuth (2024).',
+            self::resourceSummary()->describe($report, 'AMIRA')
         );
     }
 
