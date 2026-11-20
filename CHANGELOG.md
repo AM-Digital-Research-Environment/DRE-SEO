@@ -9,6 +9,15 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-20
+
+Citations, dates and page numbers come out right for the records Zotero and Google Scholar
+read, the Series and Cluster Chronicles templates are mapped, and a staging copy no longer
+pings IndexNow. After replacing the module folder, run **Admin → Modules → DRE SEO →
+Upgrade**. Then add the Series (45028) and Cluster Chronicles (50105) item sets to the AMIRA
+site under **Sites → AMIRA → Resources**: until then Omeka keeps their pages out of the
+index, and the sitemap leaves them out.
+
 ### Changed
 
 - The export type of a descriptive record (CSL `webpage`, BibTeX `@online`, RIS `ELEC`, Open
@@ -802,7 +811,8 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.14.0...v0.15.0
