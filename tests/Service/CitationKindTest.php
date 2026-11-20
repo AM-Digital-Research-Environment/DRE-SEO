@@ -33,6 +33,14 @@ final class CitationKindTest extends TestCase
 
     public function testTheEntityTemplatesAreNotCitableWorks(): void
     {
+        // A series (template 33) is a venue like a journal: an entry of the
+        // database, typed as a web page in every export.
+        $this->assertTrue(CitationKind::Series->isAuthorityRecord());
+        $this->assertSame('Series record', CitationKind::Series->entryLabel());
+        $this->assertSame('webpage', CitationKind::Series->cslType());
+        $this->assertSame('online', CitationKind::Series->bibtexType());
+        $this->assertSame('ELEC', CitationKind::Series->risType());
+
         $config = require __DIR__ . '/../../config/module.config.php';
         $kinds = $config['dre_seo']['citation']['template_kinds'];
         $templates = require __DIR__ . '/../Fixture/amira-templates.php';

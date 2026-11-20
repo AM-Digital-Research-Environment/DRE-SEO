@@ -89,12 +89,12 @@ final class AdminViewsTest extends OmekaTestCase
     public function testTheDashboardListsTheTemplatesInUseThatTheMapsDoNotName(): void
     {
         $html = $this->dashboard(['unmappedTemplates' => [
-            ['id' => 33, 'label' => 'Patent <b>', 'items' => 1500, 'missing' => ['schema.org type', 'citation kind']],
-            ['id' => 34, 'label' => '', 'items' => 2, 'missing' => ['citation kind']],
+            ['id' => 98, 'label' => 'Patent <b>', 'items' => 1500, 'missing' => ['schema.org type', 'citation kind']],
+            ['id' => 99, 'label' => '', 'items' => 2, 'missing' => ['citation kind']],
         ]]);
 
-        $this->assertStringContainsString('Template 33 (Patent &lt;b&gt;): 1,500 items; no schema.org type, citation kind', $html);
-        $this->assertStringContainsString('Template 34 (no label): 2 items; no citation kind', $html);
+        $this->assertStringContainsString('Template 98 (Patent &lt;b&gt;): 1,500 items; no schema.org type, citation kind', $html);
+        $this->assertStringContainsString('Template 99 (no label): 2 items; no citation kind', $html);
         $this->assertStringNotContainsString('Every resource template in use', $html);
     }
 
@@ -130,16 +130,16 @@ final class AdminViewsTest extends OmekaTestCase
     {
         $this->connection->executeStatement('ALTER TABLE resource ADD COLUMN resource_template_id INTEGER');
         $this->connection->executeStatement('CREATE TABLE resource_template (id INTEGER PRIMARY KEY, label VARCHAR(255))');
-        $this->connection->executeStatement("INSERT INTO resource_template VALUES (11, 'Article'), (33, 'Patent'), (34, 'Map')");
-        // Items 1 and 2 use mapped 11 and unmapped 33; the private item 4
+        $this->connection->executeStatement("INSERT INTO resource_template VALUES (11, 'Article'), (98, 'Patent'), (99, 'Map')");
+        // Items 1 and 2 use mapped 11 and unmapped 98; the private item 4
         // counts too (it is still described when made public); item set 3 on
-        // template 34 is not an item.
+        // template 99 is not an item.
         $this->connection->executeStatement('UPDATE resource SET resource_template_id = 11 WHERE id = 1');
-        $this->connection->executeStatement('UPDATE resource SET resource_template_id = 33 WHERE id IN (2, 4)');
-        $this->connection->executeStatement('UPDATE resource SET resource_template_id = 34 WHERE id = 3');
+        $this->connection->executeStatement('UPDATE resource SET resource_template_id = 98 WHERE id IN (2, 4)');
+        $this->connection->executeStatement('UPDATE resource SET resource_template_id = 99 WHERE id = 3');
 
         $this->assertSame(
-            [['id' => 33, 'label' => 'Patent', 'items' => 2, 'missing' => ['schema.org type', 'citation kind']]],
+            [['id' => 98, 'label' => 'Patent', 'items' => 2, 'missing' => ['schema.org type', 'citation kind']]],
             $this->services->get(TemplateCoverage::class)->unmapped()
         );
     }

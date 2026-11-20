@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * The AMIRA instance's resource templates, as GET /api/resource_templates lists
- * them (checked 2026-10-06; MongoDB2OmekaS pins the same ids in
+ * them (checked 2026-11-20; MongoDB2OmekaS pins the same ids in
  * config/profiles/amira.json).
  *
  * Both template maps in config/instance.config.php are keyed by these ids, and a
@@ -24,6 +24,7 @@ return [
         6 => 'Authority Resource',
         7 => 'Research Sections',
         23 => 'Journal',
+        33 => 'Series',
     ],
     // The cluster bibliography — every template in item set 29918, on a
     // non-contiguous range that grows with each new upstream ERef/EPub type.
@@ -53,5 +54,6 @@ return [
         10 => 'Research Items',
         21 => 'Podcasts',
         22 => 'YouTube video',
+        34 => 'Cluster Chronicles',
     ],
 ];

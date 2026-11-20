@@ -45,7 +45,7 @@ class StructuredData
     /** Types that describe a thing rather than a work: they take no authors, dates or containers. */
     private const ENTITY_TYPES = [
         'Person', 'Place', 'Organization', 'ResearchOrganization', 'ResearchProject',
-        'DefinedTerm', 'Periodical',
+        'DefinedTerm', 'Periodical', 'BookSeries',
     ];
 
     /** Article types whose container is a periodical. */
@@ -331,9 +331,15 @@ class StructuredData
                 break;
 
             case 'Periodical':
+            case 'BookSeries':
+                // A venue: its ISSN and who publishes it.
                 $issn = $this->firstString($resource, ['bibo:issn', 'bibo:eissn']);
                 if ($issn !== null) {
                     $data['issn'] = $issn;
+                }
+                $publisher = $this->firstLink($resource, 'dcterms:publisher', $site, 'Organization');
+                if ($publisher) {
+                    $data['publisher'] = $publisher;
                 }
                 break;
         }

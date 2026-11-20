@@ -9,6 +9,12 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Changed
+
+- The export type of a descriptive record (CSL `webpage`, BibTeX `@online`, RIS `ELEC`, Open
+  Graph `website`) follows from `CitationKind::isAuthorityRecord()` instead of five lists of
+  the same seven kinds.
+
 ### Fixed
 
 - **A date interval is cited as a span, not as its first day.** 625 AMIRA records date
@@ -43,6 +49,13 @@ GitHub release and shipped no installable asset.
   ("Schramm, Katharina") is braced in BibTeX `keywords` instead of splitting into two
   keywords. Braces in a value are escaped, so a stray `}` can no longer end a field early.
   CSL-JSON `language` is the locale code (`de`) the page head carries, not the label.
+- **Series (template 33) and Cluster Chronicles (template 34) are mapped.** Both went live
+  unmapped, so their 148 records fell back to a generic `CreativeWork` and a generic
+  citation. A series (`bibo:Series`) is now a `BookSeries` naming its publisher, and is
+  cited as an entry of the database ("Series record"), like a journal; a Cluster
+  Chronicles work is a `CreativeWork` cited with its collection. The Cluster Chronicles item
+  set's breadcrumb lands on the *Cluster Chronicles* page, and the template fixture lists
+  both templates. A journal's JSON-LD names its publisher too.
 
 ## [0.17.0] - 2026-11-11
 

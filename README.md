@@ -245,11 +245,13 @@ keyed by Omeka resource-template id:
 | Projects (5) | `ResearchProject` (+ `funder`, `parentOrganization`, `alternateName`) |
 | Authority Resource (6) | `DefinedTerm` in its vocabulary (`inDefinedTermSet` ← `dcterms:type`, `sameAs` ← LCSH / Wikidata) |
 | Research sections (7) | `ResearchProject` (+ `member`) |
-| Journals (23) | `Periodical` (+ `issn`) |
+| Journals (23) | `Periodical` (+ `issn`, `publisher`) |
+| Series (33) | `BookSeries` (+ `issn`, `publisher`), a venue cited as an entry, like a journal |
 | Research items (10) | `CreativeWork` (+ `conditionsOfAccess`, `isAccessibleForFree` — see [Research items and access](#research-items-and-access)) |
 | Publications (11–20, 24–32) | `ScholarlyArticle` / `NewsArticle` / `Book` / `Chapter` / `Thesis` / `Dataset` / `BlogPosting` / `CreativeWorkSeries` … (book reviews are `ScholarlyArticle`, not `Review`, which Google requires to carry a `reviewRating`; encyclopedia entries and legal commentaries are `Chapter`, since schema.org has no entry type; a series editorship is a `CreativeWorkSeries`, as it may edit a book series or a journal) |
 | Podcasts (21) | `PodcastEpisode` (host/guest ← `marcrel:hst` / `:spk`) |
 | YouTube videos (22) | `VideoObject` (`thumbnailUrl` from the ingested media, `uploadDate` from `dcterms:date`, speaker ← `marcrel:spk`, canonical watch URL ← `fabio:hasURL`) |
+| Cluster Chronicles (34) | `CreativeWork`, cited with its collection (the works of the cluster's writers in residence) |
 
 Creative works also carry `author`, `editor` and `contributor`. Authors and editors come
 from the same ordered term lists the citation reads, so the JSON-LD, the citation, the
@@ -400,7 +402,7 @@ its awarding institution (`marcrel:dgg`), a newspaper article its full date, a p
 host and episode, a YouTube video its platform, a research item its project and the archive.
 
 **Authority records** — persons, places, organisations, projects, research sections, subject
-headings and other vocabulary terms, journals — are not works and get no Highwire tags. They
+headings and other vocabulary terms, journals and book series — are not works and get no Highwire tags. They
 are cited as entries of the database, the way Wikidata or the Deutsche Biographie cite an
 index entry:
 

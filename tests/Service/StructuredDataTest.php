@@ -140,6 +140,23 @@ final class StructuredDataTest extends TestCase
         $this->assertArrayNotHasKey('sameAs', $data);
     }
 
+    public function testASeriesIsABookSeriesNamingItsPublisher(): void
+    {
+        // /s/amira/item/45029, template 33, was a generic CreativeWork.
+        $series = new Resource('ZMO Programmatic Texts', 33, 'Series', [
+            'dcterms:title' => [new Value('ZMO Programmatic Texts')],
+            'dcterms:publisher' => [new Value('Leibniz-Zentrum Moderner Orient')],
+        ]);
+        $config = require __DIR__ . '/../../config/module.config.php';
+        $builder = new StructuredData($config['dre_seo']['structured_data']['template_types']);
+
+        $data = $builder->forResource($series, new SiteRepresentation(), null, null);
+
+        $this->assertSame('BookSeries', $data['@type']);
+        $this->assertSame('Leibniz-Zentrum Moderner Orient', $data['publisher']['name'] ?? null);
+        $this->assertArrayNotHasKey('author', $data, 'a venue names no authors');
+    }
+
     public function testAPlaceHasNumericCoordinatesAndThePlaceThatContainsIt(): void
     {
         $place = new Resource('Sankuru', 3, 'Location', [

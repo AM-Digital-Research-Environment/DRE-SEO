@@ -54,7 +54,7 @@ final class CitationFormatter
             'entry_person' => 'Person record', 'entry_place' => 'Place record',
             'entry_organization' => 'Organisation record', 'entry_project' => 'Project record',
             'entry_section' => 'Research section record', 'entry_authority' => 'Authority record',
-            'entry_journal' => 'Journal record',
+            'entry_journal' => 'Journal record', 'entry_series' => 'Series record',
         ],
         'fr' => [
             'and' => 'et', 'et_al' => 'et al.', 'in' => 'Dans', 'eds' => 'sous la dir. de',
@@ -69,7 +69,7 @@ final class CitationFormatter
             'entry_person' => 'Notice de personne', 'entry_place' => 'Notice de lieu',
             'entry_organization' => 'Notice d’organisation', 'entry_project' => 'Notice de projet',
             'entry_section' => 'Notice de section de recherche', 'entry_authority' => 'Notice d’autorité',
-            'entry_journal' => 'Notice de revue',
+            'entry_journal' => 'Notice de revue', 'entry_series' => 'Notice de collection',
         ],
     ];
 

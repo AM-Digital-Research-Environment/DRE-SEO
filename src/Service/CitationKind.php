@@ -10,11 +10,12 @@ namespace DRESeo\Service;
  * A kind is resolved from an Omeka **resource template** id through the
  * configured `dre_seo.citation.template_kinds` map — see {@see CitationKindMap}.
  * Templates, not resource classes: the DRE's templates are the authoritative
- * distinction (templates 11-20 are the publication types, 21 podcasts, 22
- * YouTube videos), and several of them share a class.
+ * distinction (templates 11-20 and 24-32 are the publication types, 21
+ * podcasts, 22 YouTube videos), and several of them share a class.
  *
- * The type tables live here rather than in the services that consume them, so a
- * new kind cannot be added without the compiler asking for its types.
+ * The type tables live here rather than in the services that consume them. A
+ * new descriptive kind needs only {@see isAuthorityRecord()} and an
+ * {@see entryLabel()}; every export type follows from the first.
  */
 enum CitationKind: string
 {
@@ -34,6 +35,8 @@ enum CitationKind: string
     case Authority = 'authority';
     /** A publication venue (template 23), not a work that is cited on its own. */
     case Journal = 'journal';
+    /** A book series (template 33), a venue like a journal. */
+    case Series = 'series';
 
     // Bibliographic works.
     case Article = 'article';
@@ -70,7 +73,7 @@ enum CitationKind: string
     {
         return match ($this) {
             self::Person, self::Place, self::Organization, self::Project,
-            self::Section, self::Authority, self::Journal => true,
+            self::Section, self::Authority, self::Journal, self::Series => true,
             default => false,
         };
     }
@@ -109,6 +112,11 @@ enum CitationKind: string
     /** CSL item type — drives CSL-JSON export and downstream typing. */
     public function cslType(): string
     {
+        if ($this->isAuthorityRecord()) {
+            // A database entry is cited as a page of the website that holds
+            // it — CSL's `webpage`, which Zotero imports as a Web Page.
+            return 'webpage';
+        }
         return match ($this) {
             self::Article => 'article-journal',
             self::Conference => 'paper-conference',
@@ -120,10 +128,6 @@ enum CitationKind: string
             self::Dataset => 'dataset',
             self::Podcast => 'broadcast',
             self::Video => 'motion_picture',
-            // A database entry is cited as a page of the website that holds
-            // it — CSL's `webpage`, which Zotero imports as a Web Page.
-            self::Person, self::Place, self::Organization, self::Project,
-            self::Section, self::Authority, self::Journal => 'webpage',
             default => 'document',
         };
     }
@@ -135,6 +139,9 @@ enum CitationKind: string
      */
     public function bibtexType(): string
     {
+        if ($this->isAuthorityRecord()) {
+            return 'online';
+        }
         return match ($this) {
             self::Article => 'article',
             self::Conference => 'inproceedings',
@@ -144,8 +151,6 @@ enum CitationKind: string
             self::Report => 'techreport',
             self::Post => 'online',
             self::Dataset => 'dataset',
-            self::Person, self::Place, self::Organization, self::Project,
-            self::Section, self::Authority, self::Journal => 'online',
             default => 'misc',
         };
     }
@@ -153,6 +158,11 @@ enum CitationKind: string
     /** RIS reference type (the TY tag), following Zotero's own RIS mappings. */
     public function risType(): string
     {
+        if ($this->isAuthorityRecord()) {
+            // ELEC (web page) is the type Zotero and EndNote both read back as
+            // a web page; DBASE would claim the record is the whole database.
+            return 'ELEC';
+        }
         return match ($this) {
             self::Article => 'JOUR',
             self::Conference => 'CONF',
@@ -164,10 +174,6 @@ enum CitationKind: string
             self::Dataset => 'DATA',
             self::Podcast => 'SOUND',
             self::Video => 'VIDEO',
-            // ELEC (web page) is the type Zotero and EndNote both read back as a
-            // web page; DBASE would claim the record is the whole database.
-            self::Person, self::Place, self::Organization, self::Project,
-            self::Section, self::Authority, self::Journal => 'ELEC',
             default => 'GEN',
         };
     }
@@ -209,6 +215,7 @@ enum CitationKind: string
             self::Section => 'Research section record',
             self::Authority => 'Authority record',
             self::Journal => 'Journal record',
+            self::Series => 'Series record',
             default => null,
         };
     }

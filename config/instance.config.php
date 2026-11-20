@@ -85,6 +85,7 @@ return [
                 1851  => 'locations',         // Locations
                 19    => 'languages',         // Languages
                 21    => 'genres',            // Genres
+                50105 => 'cluster-chronicles', // Cluster Chronicles
                 41268 => '',                  // Journals: no page of their own
                 45028 => '',                  // Series: no page of their own
             ],
@@ -133,6 +134,8 @@ return [
                 30 => 'Thesis',           // habilitation (fabio:Thesis)
                 31 => 'Thesis',           // master's thesis
                 32 => 'Thesis',           // bachelor's thesis
+                33 => 'BookSeries',       // series (bibo:Series): a venue like a journal
+                34 => 'CreativeWork',     // Cluster Chronicles: essays, poems, images, events (fabio:Work)
             ],
         ],
         'citation' => [
@@ -181,6 +184,8 @@ return [
                 30 => 'thesis',       // habilitation
                 31 => 'thesis',       // master's thesis
                 32 => 'thesis',       // bachelor's thesis
+                33 => 'series',       // series: a venue, cited as an entry of the database
+                34 => 'item',         // Cluster Chronicles: a work, cited with its collection
             ],
 
             // The formatted citations offered in the record rail, in the order

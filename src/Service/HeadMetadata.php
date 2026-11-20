@@ -501,12 +501,12 @@ class HeadMetadata
         if (!$resource instanceof ItemRepresentation) {
             return 'website';
         }
-        return match ($this->kinds->forResource($resource)) {
-            CitationKind::Person => 'profile',
-            CitationKind::Book => 'book',
-            CitationKind::Video => 'video.other',
-            CitationKind::Place, CitationKind::Organization, CitationKind::Project,
-            CitationKind::Section, CitationKind::Authority, CitationKind::Journal => 'website',
+        $kind = $this->kinds->forResource($resource);
+        return match (true) {
+            $kind === CitationKind::Person => 'profile',
+            $kind->isAuthorityRecord() => 'website',
+            $kind === CitationKind::Book => 'book',
+            $kind === CitationKind::Video => 'video.other',
             default => 'article',
         };
     }
