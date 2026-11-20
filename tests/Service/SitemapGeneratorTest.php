@@ -255,7 +255,7 @@ final class SitemapGeneratorTest extends TestCase
     {
         $store = new PageSeoStore(new SiteSettings());
         $store->setSite(1);
-        $store->replaceAll([2 => ['robots' => 'noindex, follow'], 3 => ['robots' => 'index, follow'], 4 => ['title' => 'x']]);
+        $store->replacePages([2 => ['robots' => 'noindex, follow'], 3 => ['robots' => 'index, follow'], 4 => ['title' => 'x']], [2, 3, 4]);
 
         $this->assertSame([2], $store->noindexPageIds());
     }

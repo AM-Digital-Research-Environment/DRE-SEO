@@ -75,6 +75,19 @@ GitHub release and shipped no installable asset.
 - A record with no image of its own shares the site's default image with the site's title as
   its `og:image:alt` / `twitter:image:alt`, not the record's title, which described the
   banner as the record to anyone reading a link preview with a screen reader.
+- **The admin forms keep what an editor typed.** A configuration submission that fails
+  validation (a mistyped IndexNow key) is shown again with every other edit and the errors
+  beside the fields, where the form reloaded the stored settings and the edits were lost.
+  The static-page table carries Omeka's own 12-hour CSRF token instead of a one-hour one
+  that turned a long editing session into "Invalid form submission.". A blank *Sitemap
+  cache lifetime* is the default (86400), as its placeholder says, where it used to switch
+  the cache off; 0 still does.
+- Saving the static-page table changes only the pages it listed, so a page the editor
+  cannot see keeps its overrides, and only a user who may change the site's settings (its
+  owner, a site administrator, a global administrator) can save it; Omeka grants editing a
+  site's pages no more widely.
+- *Noindex filtered/paginated browse* reads as on when the setting is missing, as the
+  module's default and the configuration form already said.
 
 ## [0.17.0] - 2026-11-11
 

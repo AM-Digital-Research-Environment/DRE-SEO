@@ -97,12 +97,23 @@ class SeoController extends AbstractActionController
         }
         $this->pageSeoStore->setSite($site->id());
         $form = $this->getForm(PageSeoForm::class);
+        // The pages this user can see: the rows the table shows and saves.
+        $pages = $this->api->search('site_pages', ['site_id' => $site->id()])->getContent();
 
         if ($this->getRequest()->isPost()) {
+            // The overrides are a setting of the site, which Omeka lets only
+            // the site's owner and administrators change.
+            if (!$site->userIsAllowed('update')) {
+                $this->messenger()->addError('You may not change this site’s settings.'); // @translate
+                return $this->redirect()->toRoute('admin/dre-seo/pages');
+            }
             $post = $this->params()->fromPost();
             $form->setData($post);
             if ($form->isValid()) {
-                $this->pageSeoStore->replaceAll((array) ($post['pages'] ?? []));
+                $this->pageSeoStore->replacePages(
+                    (array) ($post['pages'] ?? []),
+                    array_map(static fn ($page): int => (int) $page->id(), $pages)
+                );
                 // A page set to noindex leaves the pages sitemap now, not when
                 // the cached copy expires.
                 $this->generator->clearCache();
@@ -111,8 +122,6 @@ class SeoController extends AbstractActionController
             }
             $this->messenger()->addError('Invalid form submission.'); // @translate
         }
-
-        $pages = $this->api->search('site_pages', ['site_id' => $site->id()])->getContent();
 
         $view = new ViewModel([
             'site'      => $site,

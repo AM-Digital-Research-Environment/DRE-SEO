@@ -104,8 +104,20 @@ class Module extends AbstractModule
         'dre_seo_sitemap_ttl'     => '86400',
     ];
 
+    /** Settings whose blank field means the default, not an empty value. */
+    private const BLANK_MEANS_DEFAULT = ['dre_seo_sitemap_ttl'];
+
     /** The API listeners' state and logic, built on the first content change. */
     private ?Listener\ContentChanges $contentChanges = null;
+
+    /**
+     * A configuration submission that failed validation, which Omeka shows
+     * again through getConfigForm() in the same request: the form is refilled
+     * from it rather than from the stored settings, so the other edits survive.
+     *
+     * @var array<string,mixed>|null
+     */
+    private ?array $rejectedConfig = null;
 
     /** @return array<string,mixed> */
     public function getConfig(): array
@@ -492,14 +504,20 @@ class Module extends AbstractModule
         $settings = $services->get('Omeka\Settings');
         $form = $services->get('FormElementManager')->get(Form\ConfigForm::class);
 
-        $data = [];
-        foreach (self::SETTINGS as $key) {
-            if (in_array($key, self::INTERNAL_SETTINGS, true)) {
-                continue; // internal bookkeeping, not user-facing
+        if ($this->rejectedConfig !== null) {
+            // Show the submission again, with its errors beside the fields.
+            $form->setData($this->rejectedConfig);
+            $form->isValid();
+        } else {
+            $data = [];
+            foreach (self::SETTINGS as $key) {
+                if (in_array($key, self::INTERNAL_SETTINGS, true)) {
+                    continue; // internal bookkeeping, not user-facing
+                }
+                $data[$key] = $settings->get($key, self::DEFAULTS[$key] ?? '');
             }
-            $data[$key] = $settings->get($key, self::DEFAULTS[$key] ?? '');
+            $form->setData($data);
         }
-        $form->setData($data);
 
         return $this->omekaJsonLdWarning($renderer) . $renderer->formCollection($form, false);
     }
@@ -510,9 +528,11 @@ class Module extends AbstractModule
         $settings = $services->get('Omeka\Settings');
         $form = $services->get('FormElementManager')->get(Form\ConfigForm::class);
 
-        $form->setData($controller->params()->fromPost());
+        $posted = $controller->params()->fromPost();
+        $form->setData($posted);
         if (!$form->isValid()) {
             $controller->messenger()->addErrors($form->getMessages());
+            $this->rejectedConfig = $posted;
             return false;
         }
 
@@ -522,7 +542,13 @@ class Module extends AbstractModule
                 continue;
             }
             if (array_key_exists($key, $data)) {
-                $settings->set($key, (string) $data[$key]);
+                $value = (string) $data[$key];
+                if (trim($value) === '' && in_array($key, self::BLANK_MEANS_DEFAULT, true)) {
+                    // A cleared number field means the default, as its
+                    // placeholder says; only 0 turns the sitemap cache off.
+                    $value = self::DEFAULTS[$key];
+                }
+                $settings->set($key, $value);
             }
         }
         return true;

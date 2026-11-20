@@ -302,7 +302,7 @@ class HeadMetadata
         // item-set pages (/item-set/{id}), which are listed in the sitemap;
         // marking them noindex made Search Console reject that sitemap.
         $hasQuery = ((string) (parse_url($current, PHP_URL_QUERY) ?? '')) !== '';
-        if ($hasQuery && $this->settings->isOn('dre_seo_noindex_browse')) {
+        if ($hasQuery && $this->settings->isOn('dre_seo_noindex_browse', true)) {
             $this->head->robots($view, 'noindex, follow');
         }
 
@@ -360,7 +360,7 @@ class HeadMetadata
         // record paging through its connection lists, or a URL that only
         // carries tracking parameters, is not a variant.
         if (
-            $this->settings->isOn('dre_seo_noindex_browse')
+            $this->settings->isOn('dre_seo_noindex_browse', true)
             && ($isSearch || $this->isQueryVariant($view->serverUrl(true)))
         ) {
             $this->head->robots($view, 'noindex, follow');

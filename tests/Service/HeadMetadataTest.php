@@ -214,8 +214,13 @@ final class HeadMetadataTest extends TestCase
 
         // The switch off: nothing is noindexed.
         $off = new PhpRenderer('https://example.test/s/amira/some-module?sort=title');
-        self::headMetadataService([])->applyGlobals($off, $site, true);
+        self::headMetadataService(['dre_seo_noindex_browse' => '0'])->applyGlobals($off, $site, true);
         $this->assertSame(['max-image-preview:large'], $off->meta('robots'));
+
+        // Unset, it is on, as the module's default and its form say.
+        $unset = new PhpRenderer('https://example.test/s/amira/some-module?sort=title');
+        self::headMetadataService([])->applyGlobals($unset, $site);
+        $this->assertSame(['noindex, follow'], $unset->meta('robots'));
     }
 
     public function testARecordPagingThroughItsConnectionListsStaysIndexable(): void

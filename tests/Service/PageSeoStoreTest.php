@@ -15,7 +15,7 @@ final class PageSeoStoreTest extends TestCase
         $settings = new SiteSettings();
         $store = new PageSeoStore($settings);
         $store->setSite(1);
-        $store->replaceAll([
+        $store->replacePages([
             '10' => [
                 'title' => '  A useful title  ',
                 'description' => "  A useful description\n",
@@ -28,7 +28,7 @@ final class PageSeoStoreTest extends TestCase
             0 => ['title' => 'invalid page id'],
             'not-an-id' => ['title' => 'invalid page id'],
             12 => 'invalid fields',
-        ]);
+        ], [10, 11, 12, 13, 0]);
 
         $this->assertSame([
             10 => [
@@ -46,18 +46,34 @@ final class PageSeoStoreTest extends TestCase
         $settings = new SiteSettings();
         $store = new PageSeoStore($settings);
         $store->setSite(1);
-        $store->set(4, ['title' => 'Site one']);
+        $store->replacePages([4 => ['title' => 'Site one']], [4]);
 
         $store->setSite(2);
         $this->assertSame([], $store->all());
-        $store->set(4, ['title' => 'Site two']);
+        $store->replacePages([4 => ['title' => 'Site two']], [4]);
 
         $store->setSite(1);
         $this->assertSame(['title' => 'Site one'], $store->get(4));
-        $store->set(4, ['title' => '']);
+        $store->replacePages([4 => ['title' => '']], [4]);
         $this->assertSame([], $store->get(4));
 
         $store->setSite(2);
         $this->assertSame(['title' => 'Site two'], $store->get(4));
+    }
+
+    public function testAPageTheTableDidNotListKeepsItsOverrides(): void
+    {
+        // A global editor sees only public pages; saving the table must not
+        // erase the overrides of a private page it never showed.
+        $store = new PageSeoStore(new SiteSettings());
+        $store->setSite(1);
+        $store->replacePages([5 => ['robots' => 'noindex, follow'], 6 => ['title' => 'Old']], [5, 6]);
+
+        $store->replacePages([6 => ['title' => 'New']], [6]);
+
+        $this->assertSame(['robots' => 'noindex, follow'], $store->get(5));
+        $this->assertSame(['title' => 'New'], $store->get(6));
+        $this->assertTrue($store->isNoindex(1, 5));
+        $this->assertFalse($store->isNoindex(2, 5), 'another site');
     }
 }

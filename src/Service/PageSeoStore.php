@@ -72,34 +72,32 @@ class PageSeoStore
         return $ids;
     }
 
-    /** @param array<string,mixed> $overrides */
-    public function set(int $pageId, array $overrides): void
+    /**
+     * Save the table's rows for $pageIds, the pages it listed: a row left
+     * empty removes that page's overrides. A page the table did not list (one
+     * the editor cannot see) keeps its overrides; replacing the whole map
+     * would erase them unseen.
+     *
+     * @param array<int|string,mixed> $map    the posted rows, by page id
+     * @param int[]                   $pageIds the pages the table listed
+     */
+    public function replacePages(array $map, array $pageIds): void
     {
         $all = $this->all();
-        $clean = $this->normalize($overrides);
-        if ($clean === []) {
-            unset($all[$pageId]);
-        } else {
-            $all[$pageId] = $clean;
-        }
-        $this->siteSettings->set(self::KEY, $all);
-    }
-
-    /** @param array<int,array<string,mixed>> $map */
-    public function replaceAll(array $map): void
-    {
-        $clean = [];
-        foreach ($map as $pageId => $overrides) {
-            $pageId = is_int($pageId) || ctype_digit((string) $pageId) ? (int) $pageId : 0;
-            if ($pageId < 1 || !is_array($overrides)) {
+        foreach ($pageIds as $pageId) {
+            $pageId = (int) $pageId;
+            if ($pageId < 1) {
                 continue;
             }
-            $normalized = $this->normalize($overrides);
-            if ($normalized !== []) {
-                $clean[$pageId] = $normalized;
+            $row = $map[$pageId] ?? null;
+            $clean = is_array($row) ? $this->normalize($row) : [];
+            if ($clean === []) {
+                unset($all[$pageId]);
+            } else {
+                $all[$pageId] = $clean;
             }
         }
-        $this->siteSettings->set(self::KEY, $clean);
+        $this->siteSettings->set(self::KEY, $all);
     }
 
     /**
