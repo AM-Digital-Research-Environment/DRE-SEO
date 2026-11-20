@@ -238,10 +238,9 @@ final class LinkedDataIdentityTest extends TestCase
 
         $data = $builder->forResource($person, new SiteRepresentation(), null, null);
         $identity->uri($person);
-        $identity->page($person);
+        $identity->sameAs($person);
 
         $this->assertSame(['http://www.wikidata.org/entity/Q1', 'https://d-nb.info/gnd/118540238'], $data['sameAs']);
-        $this->assertSame('https://example.test/s/amira/item/7', $identity->page($person));
         $this->assertSame(1, $calls, 'memoised per resource');
     }
 
@@ -253,7 +252,6 @@ final class LinkedDataIdentityTest extends TestCase
         ], idValue: 8);
 
         $this->assertSame(null, $identity->sameAs($person));
-        $this->assertSame(null, $identity->page($person));
         $this->assertSame([], $identity->dataset(), 'a closure helper has no dataset()');
         $data = (new StructuredData([4 => 'Person'], 'CreativeWork', null, $identity))
             ->forResource($person, new SiteRepresentation(), null, null);

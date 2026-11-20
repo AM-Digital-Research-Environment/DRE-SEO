@@ -114,11 +114,17 @@ final class WiringTest extends OmekaTestCase
 
     public function testTheListenersAttachWhereOmekaTriggersTheEvents(): void
     {
-        $this->assertCount(
-            1,
-            $this->sharedEvents->getListeners(['Omeka\\Controller\\Site\\Item'], 'view.show.after'),
-            'Resource show listener was not attached.'
-        );
+        foreach (['Omeka\\Controller\\Site\\Item', 'Omeka\\Controller\\Site\\Media'] as $controller) {
+            $this->assertCount(
+                1,
+                $this->sharedEvents->getListeners([$controller], 'view.show.after'),
+                'Resource show listener was not attached to ' . $controller . '.'
+            );
+        }
+        // Omeka 4.2.1 renders neither an item-set show page nor a site index
+        // page, so nothing listens there.
+        $this->assertCount(0, $this->sharedEvents->getListeners(['Omeka\\Controller\\Site\\ItemSet'], 'view.show.after'));
+        $this->assertCount(0, $this->sharedEvents->getListeners(['Omeka\\Controller\\Site\\Index'], 'view.show.after'));
         $this->assertCount(
             1,
             $this->sharedEvents->getListeners(['Omeka\\Api\\Adapter\\ItemAdapter'], 'api.create.post'),

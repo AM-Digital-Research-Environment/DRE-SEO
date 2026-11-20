@@ -93,7 +93,7 @@ final class StructuredDataRequiredPropertiesTest extends TestCase
     public function testEveryWorkTypeTheMapProducesIsInTheTable(): void
     {
         $config = require __DIR__ . '/../../config/module.config.php';
-        $entityTypes = ['Person', 'Place', 'Organization', 'ResearchOrganization', 'ResearchProject', 'DefinedTerm', 'Periodical', 'BookSeries'];
+        $entityTypes = ['Person', 'Place', 'Organization', 'ResearchProject', 'DefinedTerm', 'Periodical', 'BookSeries'];
         foreach (array_unique($config['dre_seo']['structured_data']['template_types']) as $type) {
             $this->assertTrue(
                 in_array($type, $entityTypes, true) || isset(self::REQUIRED[$type]),

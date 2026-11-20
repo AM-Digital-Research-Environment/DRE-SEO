@@ -42,10 +42,10 @@ class SeoController extends AbstractActionController
         $indexNowKey = $this->settings->text('dre_seo_indexnow_key');
 
         // ConfirmForm's button reads "Confirm" unless told otherwise; the
-        // dashboard and OPERATIONS.md call it Regenerate.
+        // dashboard and OPERATIONS.md call it Regenerate. The view points it
+        // at the regenerate route.
         $confirmForm = $this->getForm(\Omeka\Form\ConfirmForm::class);
         $confirmForm->setButtonLabel('Regenerate'); // @translate
-        $confirmForm->setAttribute('action', $this->url()->fromRoute('admin/dre-seo/regenerate'));
 
         $view = new ViewModel([
             'site'           => $site,

@@ -312,6 +312,24 @@ final class HeadMetadataTest extends TestCase
         }
     }
 
+    public function testAVerificationSnippetIsReadInEitherQuoteAndOnlyForItsOwnTag(): void
+    {
+        $single = new PhpRenderer();
+        self::headMetadataService([
+            'dre_seo_gsc_verification' => "<meta name='google-site-verification' content='G6UcKXo' />",
+            'dre_seo_bing_verification' => 'A49C6537',
+        ])->applyGlobals($single, self::amiraSite());
+        $this->assertSame(['G6UcKXo'], $single->meta('google-site-verification'));
+        $this->assertSame(['A49C6537'], $single->meta('msvalidate.01'), 'a bare token');
+
+        // The Bing tag pasted into the Google field is not a Google token.
+        $crossed = new PhpRenderer();
+        self::headMetadataService([
+            'dre_seo_gsc_verification' => '<meta name="msvalidate.01" content="A49C6537" />',
+        ])->applyGlobals($crossed, self::amiraSite());
+        $this->assertSame([], $crossed->meta('google-site-verification'));
+    }
+
     public function testTheSiteShareImageStandingInForARecordIsNotDescribedAsTheRecord(): void
     {
         // /s/amira/item/45029 has no media: the site's banner stood in, with

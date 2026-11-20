@@ -41,7 +41,6 @@ use DRESeo\Service\PageSeoStore;
 use DRESeo\Service\LandingPages;
 use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\Signposting;
-use DRESeo\Service\SitemapGenerator;
 use Laminas\EventManager\EventInterface;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Http\Header\GenericMultiHeader;
@@ -283,23 +282,18 @@ class Module extends AbstractModule
 
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
-        // Resource show pages — derive meta + JSON-LD from the resource.
-        foreach (
-            [
-                'Omeka\Controller\Site\Item',
-                'Omeka\Controller\Site\ItemSet',
-                'Omeka\Controller\Site\Media',
-            ] as $controller
-        ) {
-            $sharedEventManager->attach($controller, 'view.show.after', [$this, 'handleResourceShow']);
-            $sharedEventManager->attach($controller, 'view.browse.after', [$this, 'handleBrowse']);
-        }
+        // Resource show pages — derive meta + JSON-LD from the resource. In
+        // Omeka 4.2.1 only the item and media pages are show pages: an item
+        // set's page (`site/item-set`) is the item browse filtered to the set,
+        // and the media controller has no browse.
+        $sharedEventManager->attach('Omeka\Controller\Site\Item', 'view.show.after', [$this, 'handleResourceShow']);
+        $sharedEventManager->attach('Omeka\Controller\Site\Media', 'view.show.after', [$this, 'handleResourceShow']);
+        $sharedEventManager->attach('Omeka\Controller\Site\Item', 'view.browse.after', [$this, 'handleBrowse']);
+        $sharedEventManager->attach('Omeka\Controller\Site\ItemSet', 'view.browse.after', [$this, 'handleBrowse']);
 
         // Static site pages — apply the editor's per-page overrides. The home
-        // page is rendered by the Index controller, so listen there too (the
-        // handler no-ops when no $page is in scope).
+        // page is a page too: the site root only redirects to it.
         $sharedEventManager->attach('Omeka\Controller\Site\Page', 'view.show.after', [$this, 'handlePageShow']);
-        $sharedEventManager->attach('Omeka\Controller\Site\Index', 'view.show.after', [$this, 'handlePageShow']);
 
         // The site's settings: the breadcrumb's landing pages and the project
         // item-set redirect.
@@ -354,7 +348,7 @@ class Module extends AbstractModule
             return;
         }
         $site = $this->currentSite($view);
-        $resource = $view->item ?? $view->itemSet ?? $view->media ?? null;
+        $resource = $view->item ?? $view->media ?? null;
         if (!$site || !$resource instanceof AbstractResourceEntityRepresentation) {
             return;
         }
@@ -407,7 +401,9 @@ class Module extends AbstractModule
         if (!$view) {
             return;
         }
-        // Public site pages only — skip the admin layout.
+        // Site pages only: the admin layout has no current site. (The site
+        // admin screens, /admin/site/s/{slug}/…, do have one; they get the
+        // public head too, which robots.txt keeps crawlers away from.)
         $site = $this->currentSite($view);
         if (!$site) {
             return;

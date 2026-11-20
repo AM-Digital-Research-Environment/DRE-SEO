@@ -113,6 +113,19 @@ GitHub release and shipped no installable asset.
   could. `compile-po.php` keeps the catalogue's own header (it wrote French plural rules
   into every locale), leaves out entries flagged fuzzy, and keeps a `msgctxt` and every
   plural form.
+- A verification snippet pasted with single quotes (`content='…'`) is read instead of
+  dropping the tag, and a snippet for the other engine (the Bing tag in the Google field) no
+  longer emits Bing's token under Google's name.
+
+### Removed
+
+- Listeners Omeka S 4.2.1 never triggers: `view.show.after` on the site item-set and index
+  controllers (an item set's page is the item browse; the site root only redirects) and
+  `view.browse.after` on the media controller, which has no browse. robots.txt no longer
+  names `/s/*/media?`, a route that answers 404.
+- Code nothing called: `ResourceValueReader::pageRange()`, `LinkedDataIdentity::page()`, the
+  `StructuredData::DATASET_DESCRIPTION_MIN` alias, the unmapped `ResearchOrganization` type,
+  an unused citation string and two unused dashboard labels.
 
 ## [0.17.0] - 2026-11-11
 

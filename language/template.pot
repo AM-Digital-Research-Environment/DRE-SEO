@@ -158,10 +158,6 @@ msgstr ""
 msgid "Meta title"
 msgstr ""
 
-#: view/dre-seo/admin/seo/dashboard.phtml
-msgid "No"
-msgstr ""
-
 #: src/Controller/Admin/SeoController.php
 msgid "No site found."
 msgstr ""
@@ -330,10 +326,6 @@ msgstr ""
 
 #: view/dre-seo/admin/seo/dashboard.phtml
 msgid "XML sitemap & robots.txt"
-msgstr ""
-
-#: view/dre-seo/admin/seo/dashboard.phtml
-msgid "Yes"
 msgstr ""
 
 #: src/Controller/Admin/SeoController.php

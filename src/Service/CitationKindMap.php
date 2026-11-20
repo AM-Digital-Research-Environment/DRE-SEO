@@ -10,7 +10,8 @@ use Omeka\Api\Representation\AbstractResourceEntityRepresentation;
  * configured `dre_seo.citation.template_kinds` map.
  *
  * Template, not resource class: the DRE syncs one template per entity type and
- * one per publication type (11-20), plus podcasts (21) and YouTube videos (22),
+ * one per publication type (11-20, 24-32), plus podcasts (21) and YouTube
+ * videos (22),
  * and several of those share an RDF class — so the template is the finer and
  * authoritative signal. {@see CitationMeta} keys off the same map.
  *

@@ -50,12 +50,6 @@ final class LinkedDataIdentity
         return $resource ? $this->string($this->describe($resource)['uri'] ?? null) : null;
     }
 
-    /** The resource's page on the default site, as DRE Linked Data names it (0.3.0+). */
-    public function page(AbstractResourceEntityRepresentation $resource): ?string
-    {
-        return $this->string($this->describe($resource)['page'] ?? null);
-    }
-
     /**
      * The canonical authority IRIs the resource is the same as (Wikidata, GND,
      * ORCID, …, and https://doi.org/ for a DOI), as DRE Linked Data publishes

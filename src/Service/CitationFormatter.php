@@ -43,7 +43,7 @@ final class CitationFormatter
     private const STR = [
         'en' => [
             'and' => 'and', 'et_al' => 'et al.', 'in' => 'In', 'eds' => 'edited by',
-            'no' => 'no.', 'vol' => 'vol.', 'pp' => 'pp.', 'p' => 'p.',
+            'no' => 'no.', 'vol' => 'vol.', 'pp' => 'pp.',
             'phd' => 'PhD diss.', 'masters' => 'Master’s thesis', 'bachelors' => 'Bachelor’s thesis',
             'thesis' => 'Thesis', 'video' => 'Video', 'platform_video' => '%s video', 'dataset' => 'Data set',
             'untitled' => 'Untitled', 'episode' => 'episode', 'apa_no' => 'No.',
@@ -58,7 +58,7 @@ final class CitationFormatter
         ],
         'fr' => [
             'and' => 'et', 'et_al' => 'et al.', 'in' => 'Dans', 'eds' => 'sous la dir. de',
-            'no' => 'n°', 'vol' => 'vol.', 'pp' => 'p.', 'p' => 'p.',
+            'no' => 'n°', 'vol' => 'vol.', 'pp' => 'p.',
             'phd' => 'thèse de doctorat', 'masters' => 'mémoire de master', 'bachelors' => 'mémoire de licence',
             'thesis' => 'thèse', 'video' => 'Vidéo', 'platform_video' => 'Vidéo %s', 'dataset' => 'Jeu de données',
             'untitled' => 'Sans titre', 'episode' => 'épisode', 'apa_no' => 'n°',

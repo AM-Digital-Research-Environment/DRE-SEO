@@ -63,8 +63,8 @@ final class CitationData
     /**
      * Built records, keyed by item id and timestamp, then URL and database
      * name. By id rather than by representation object: the meta tags, the
-     * theme's record panel, the description fallback and the /cite download
-     * each hold their own representation of the same item. The id is only
+     * theme's record panel and the /cite download each hold their own
+     * representation of the same item. The id is only
      * trusted together with the item's created/modified timestamp; a
      * representation that has neither is memoised per object instead.
      *
@@ -104,9 +104,9 @@ final class CitationData
 
     /**
      * The citation record for an item: a work, or an entry for an authority
-     * record. Memoised per item, URL and database name for the request, since
-     * the meta tags, the record panel and the description fallback all ask for
-     * it on one page.
+     * record. Memoised per item, URL and database name for the request: the
+     * record panel and the /cite download ask for the same one. (The meta tags
+     * build theirs without the database name, so a record page builds two.)
      *
      * @param string|null $url     the item's public (canonical) page URL
      * @param string|null $archive the database the item is held in (the site title)

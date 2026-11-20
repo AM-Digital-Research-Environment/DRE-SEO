@@ -71,7 +71,6 @@ final class InstanceConfigTest extends TestCase
             '/s/amira/item-set?sort_by=created',
             '/s/amira/item-set/29918?sort_by=title',
             '/s/amira/item-set/29918?property%5B0%5D%5Bproperty%5D=3',
-            '/s/amira/media?resource_class_id=36',
             '/admin/dre-seo',
             '/login',
         ];
@@ -88,7 +87,6 @@ final class InstanceConfigTest extends TestCase
             '/s/amira/item-set?page=2',
             '/s/amira/item-set/29918',
             '/s/amira/item-set/29918?page=2',
-            '/s/amira/media?page=2',
             // A record paging through its connection lists stays indexable.
             '/s/amira/item/42?lr_property=items:12&lr_page=3',
             // What DRE Search's pages and blocks fetch to render.

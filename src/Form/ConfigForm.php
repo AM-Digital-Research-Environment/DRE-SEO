@@ -13,8 +13,9 @@ use Omeka\Form\Element\Asset;
 /**
  * Module configuration form (Modules → DRE SEO → Configure).
  *
- * Rendered inside Omeka's own module-config <form> (which supplies the CSRF
- * token), so this only contributes fields. Every field is optional: with
+ * Rendered inside Omeka's own module-config <form>, which carries the CSRF
+ * token Omeka checks first; this form, built by the element manager, carries
+ * Omeka's token too and validates it again. Every field is optional: with
  * nothing filled in, the module still emits sensible defaults (site title,
  * Open Graph from the site), a sitemap, and robots.txt — it just has no
  * verification token, no custom description and no share image.

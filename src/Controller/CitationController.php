@@ -75,7 +75,7 @@ class CitationController extends AbstractActionController
         [, $contentType] = CitationExport::FORMATS[$format];
 
         // Readable by scripts on other sites, 304 included; filename() is
-        // sanitised to [A-Za-z0-9._-], so it is safe unquoted here.
+        // sanitised to [A-Za-z0-9._-], so quoting it cannot be broken out of.
         return $this->respondCacheable(
             $body,
             $contentType,

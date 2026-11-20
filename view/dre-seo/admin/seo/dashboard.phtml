@@ -19,8 +19,6 @@
  */
 
 $this->headLink()->appendStylesheet($this->assetUrl('css/admin.css', 'DRESeo'));
-$yes = $this->translate('Yes');
-$no = $this->translate('No');
 $on = '<span class="dre-seo-on">' . $this->translate('On') . '</span>';
 $off = '<span class="dre-seo-off">' . $this->translate('Off') . '</span>';
 $configureUrl = $this->url('admin/default', ['controller' => 'module', 'action' => 'configure'], ['query' => ['id' => 'DRESeo']]);

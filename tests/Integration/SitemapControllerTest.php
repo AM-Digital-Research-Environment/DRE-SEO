@@ -107,9 +107,9 @@ final class SitemapControllerTest extends OmekaTestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(
             "User-agent: *\n"
-            . "Allow: /s/*/item?page=\nAllow: /s/*/item-set?page=\nAllow: /s/*/item-set/*?page=\nAllow: /s/*/media?page=\n"
+            . "Allow: /s/*/item?page=\nAllow: /s/*/item-set?page=\nAllow: /s/*/item-set/*?page=\n"
             . "Disallow: /admin/\nDisallow: /login\nDisallow: /logout\nDisallow: /maintenance\n"
-            . "Disallow: /s/*/dre-search?\nDisallow: /s/*/item?\nDisallow: /s/*/item-set?\nDisallow: /s/*/item-set/*?\nDisallow: /s/*/media?\n"
+            . "Disallow: /s/*/dre-search?\nDisallow: /s/*/item?\nDisallow: /s/*/item-set?\nDisallow: /s/*/item-set/*?\n"
             . "\nSitemap: https://example.test/sitemap.xml\n",
             $response->getContent()
         );

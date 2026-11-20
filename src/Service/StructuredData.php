@@ -44,15 +44,12 @@ class StructuredData
 
     /** Types that describe a thing rather than a work: they take no authors, dates or containers. */
     private const ENTITY_TYPES = [
-        'Person', 'Place', 'Organization', 'ResearchOrganization', 'ResearchProject',
+        'Person', 'Place', 'Organization', 'ResearchProject',
         'DefinedTerm', 'Periodical', 'BookSeries',
     ];
 
     /** Article types whose container is a periodical. */
     private const PERIODICAL_PARTS = ['ScholarlyArticle', 'NewsArticle', 'Article', 'BlogPosting'];
-
-    /** Google Dataset Search ignores a Dataset whose description is shorter. */
-    public const DATASET_DESCRIPTION_MIN = CollectionNodes::DATASET_DESCRIPTION_MIN;
 
     /**
      * What a research item's conditionsOfAccess says after its access rights,
@@ -301,7 +298,6 @@ class StructuredData
                 break;
 
             case 'ResearchProject':
-            case 'ResearchOrganization':
             case 'Organization':
                 $parent = $this->firstLink($resource, 'dcterms:isPartOf', $site, 'Organization');
                 if ($parent) {

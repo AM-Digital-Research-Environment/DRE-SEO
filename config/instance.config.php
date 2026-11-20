@@ -54,7 +54,6 @@ return [
                 '/s/*/item?',
                 '/s/*/item-set?',
                 '/s/*/item-set/*?',
-                '/s/*/media?',
             ],
             'allow' => [
                 // Clean pagination stays crawlable: a finite path to every
@@ -62,7 +61,6 @@ return [
                 '/s/*/item?page=',
                 '/s/*/item-set?page=',
                 '/s/*/item-set/*?page=',
-                '/s/*/media?page=',
             ],
         ],
         'breadcrumb' => [

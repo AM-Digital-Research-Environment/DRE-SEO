@@ -5,6 +5,7 @@ namespace DRESeo\Test\Service;
 
 use DRESeo\Service\BreadcrumbTrail;
 use DRESeo\Service\CitationKindMap;
+use DRESeo\Service\CollectionNodes;
 use DRESeo\Service\Licence;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\StructuredData;
@@ -482,7 +483,7 @@ final class StructuredDataTest extends TestCase
 
         $this->assertSame('Dataset', $data['@type']);
         $this->assertSame('https://example.test/linked-data/void#dataset', $data['@id']);
-        $this->assertTrue(mb_strlen($data['description']) >= StructuredData::DATASET_DESCRIPTION_MIN, 'at least 50 characters');
+        $this->assertTrue(mb_strlen($data['description']) >= CollectionNodes::DATASET_DESCRIPTION_MIN, 'at least 50 characters');
         $this->assertSame('https://example.test/s/amira/page/home', $data['url']);
         $this->assertSame('http://www.wikidata.org/entity/Q141717295', $data['publisher']['sameAs']);
         $this->assertSame($data['publisher'], $data['creator']);

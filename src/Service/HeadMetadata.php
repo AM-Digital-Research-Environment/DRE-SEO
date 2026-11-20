@@ -633,7 +633,9 @@ class HeadMetadata
 
     /**
      * Accept either a full <meta …> snippet pasted from the search console or a
-     * bare token, and return just the token.
+     * bare token, and return just the token. A snippet for another meta (the
+     * Bing tag pasted into the Google field) yields nothing rather than a tag
+     * under the wrong name.
      */
     private function extractToken(string $raw, string $metaName): string
     {
@@ -641,11 +643,14 @@ class HeadMetadata
         if ($raw === '') {
             return '';
         }
-        if (
-            stripos($raw, '<meta') !== false
-            && preg_match('/content\s*=\s*"([^"]+)"/i', $raw, $m)
-        ) {
-            return trim($m[1]);
+        if (stripos($raw, '<meta') !== false) {
+            if (
+                preg_match('/\bname\s*=\s*(["\'])(.*?)\1/i', $raw, $name)
+                && strcasecmp(trim($name[2]), $metaName) !== 0
+            ) {
+                return '';
+            }
+            return preg_match('/\bcontent\s*=\s*(["\'])(.*?)\1/i', $raw, $m) ? trim($m[2]) : '';
         }
         // Strip accidental surrounding quotes/markup.
         return trim(strip_tags($raw), " \t\n\r\0\x0B\"'");

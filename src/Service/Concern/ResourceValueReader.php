@@ -166,9 +166,9 @@ trait ResourceValueReader
      * whole descriptive title), which would make a nonsense key.
      *
      * Since MongoDB2OmekaS of 27 October 2026 the id is the label of a link to
-     * the repository permalink, and a URI value renders as its URI, so the label
-     * is read from the stored value; a link without one names its id by the
-     * permalink. Older records carry the id as a literal.
+     * the repository permalink, read from the stored value (which a URI value
+     * renders as too); a link without a label names its id by the permalink.
+     * Older records carry the id as a literal.
      */
     private function accession(AbstractResourceEntityRepresentation $resource): ?string
     {
@@ -447,16 +447,6 @@ trait ResourceValueReader
             return $count;
         }
         return CitationRecord::pageCount($this->firstString($resource, ['bibo:pages']));
-    }
-
-    /**
-     * The resource's citation page range. The join rule itself belongs to the
-     * record, so a page range reads the same whether it came from a resource or
-     * from a built citation.
-     */
-    private function pageRange(AbstractResourceEntityRepresentation $resource): ?string
-    {
-        return CitationRecord::joinPages(...$this->pageBounds($resource));
     }
 
     /** Whitespace-normalise, strip tags and clip to $max characters. */
