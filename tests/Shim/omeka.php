@@ -203,12 +203,28 @@ namespace Omeka\Api\Representation {
                 private readonly ?string $uriValue = null,
                 private readonly ?string $rawValue = null,
                 private readonly ?string $dataType = null,
+                private readonly bool $public = true,
             ) {
             }
 
+            /**
+             * As Omeka 4.2.1 renders a value as a string: a linked record's
+             * value is that record's URL (DataType\Resource\AbstractResource::
+             * toString()), never its title, so code that wants the title must
+             * read valueResource(); any other value is its label.
+             */
             public function __toString(): string
             {
+                if ($this->resource !== null) {
+                    return 'https://example.test/admin/item/' . $this->resource->id();
+                }
                 return $this->value;
+            }
+
+            /** A value an editor marked private; Omeka hides it from visitors, not from editors. */
+            public function isPublic(): bool
+            {
+                return $this->public;
             }
 
             public function valueResource(): ?AbstractResourceEntityRepresentation

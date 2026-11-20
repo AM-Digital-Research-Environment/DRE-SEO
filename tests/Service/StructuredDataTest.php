@@ -220,6 +220,33 @@ final class StructuredDataTest extends TestCase
         $this->assertTrue(!str_contains($source, "'potentialAction'"), 'Google retired the sitelinks search box in 2024');
     }
 
+    public function testAPrivateIdentifierIsNoSameAsEvenForAnEditor(): void
+    {
+        // Omeka shows an editor the private values a visitor never sees; the
+        // structured data must say the same to both.
+        $person = new Resource('Aas, Norbert', 4, 'Person', [
+            'dcterms:identifier' => [
+                new Value(uriValue: 'https://orcid.org/0000-0003-0959-2092'),
+                new Value(uriValue: 'http://d-nb.info/gnd/4163233-2', public: false),
+            ],
+        ]);
+        $data = (new StructuredData([4 => 'Person']))->forResource($person, new SiteRepresentation(), null, null);
+
+        $this->assertSame(['https://orcid.org/0000-0003-0959-2092'], $data['sameAs']);
+    }
+
+    public function testALinkedValueReadsAsItsTitleNeverAsItsURL(): void
+    {
+        // Omeka renders a linked value as the record's URL.
+        $article = new Resource('An article', 11, 'Article', [
+            'dcterms:title' => [new Value('An article')],
+            'bibo:abstract' => [new Value(resource: new Resource('An abstract kept as a record', 6, idValue: 77))],
+        ]);
+        $data = (new StructuredData([11 => 'ScholarlyArticle']))->forResource($article, new SiteRepresentation(), null, null);
+
+        $this->assertSame('An abstract kept as a record', $data['description']);
+    }
+
     public function testSameAsIsLimitedToAuthorityIRIsInTheirCanonicalForm(): void
     {
         $term = new Resource('Karakul sheep', 6, 'Authority file', [

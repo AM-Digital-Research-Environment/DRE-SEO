@@ -17,6 +17,9 @@ GitHub release and shipped no installable asset.
 - The IndexNow batch size is `PingQueue::CAP` alone: the outbox's lease limit and the
   interface's default follow it, so raising it no longer leaves claims silently capped at
   200.
+- Tests: the unit suite's stand-in for Omeka's values renders a linked value as Omeka does
+  (its record's URL) and knows a private value, so the rule that a private identifier is no
+  `sameAs` (0.17.0) is now tested.
 
 ### Fixed
 
@@ -88,6 +91,11 @@ GitHub release and shipped no installable asset.
   site's pages no more widely.
 - *Noindex filtered/paginated browse* reads as on when the setting is missing, as the
   module's default and the configuration form already said.
+- A value that links to another record is read as that record's title wherever the module
+  wants text (a description, a volume, a date). Omeka renders a linked value as the
+  record's URL, which a term that ever held a link would have printed into the meta
+  description or a citation; the unit suite's stand-in rendered the title, so no test could
+  see it.
 
 ## [0.17.0] - 2026-11-11
 

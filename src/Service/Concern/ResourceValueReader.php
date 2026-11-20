@@ -57,7 +57,9 @@ trait ResourceValueReader
     private const ISBN_TERMS = ['bibo:isbn13', 'bibo:isbn', 'bibo:isbn10'];
 
     /**
-     * First non-empty literal/label across the given terms, in order, tags stripped.
+     * First non-empty literal/label across the given terms, in order, tags
+     * stripped. A linked record reads as its title: Omeka renders a linked
+     * value as the record's URL, which no caller wants as text.
      *
      * @param string[] $terms
      */
@@ -66,7 +68,8 @@ trait ResourceValueReader
         foreach ($terms as $term) {
             $value = $resource->value($term);
             if ($value instanceof ValueRepresentation) {
-                $text = trim(strip_tags((string) $value));
+                $linked = $value->valueResource();
+                $text = trim(strip_tags($linked ? (string) $linked->displayTitle() : (string) $value));
                 if ($text !== '') {
                     return $text;
                 }
@@ -237,7 +240,7 @@ trait ResourceValueReader
                 if (
                     !$value instanceof ValueRepresentation
                     || $value->valueResource()
-                    || (method_exists($value, 'isPublic') && !$value->isPublic())
+                    || !$value->isPublic()
                 ) {
                     continue;
                 }
