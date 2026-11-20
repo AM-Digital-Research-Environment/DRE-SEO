@@ -178,6 +178,50 @@ final class CitationExportTest extends TestCase
         $this->assertTrue(!array_key_exists('page', $csl));
     }
 
+    public function testASeriesNumberIsBiblatexNumberNotAVolume(): void
+    {
+        $export = new CitationExport();
+        // /s/amira/item/41169: book 4 of the series Africa Multiple.
+        $book = new CitationRecord(id: 41169, kind: CitationKind::Book, title: 'Decolonial Horizons', container: 'Africa Multiple', volume: '4');
+        $bibtex = $export->serialize($book, 'bibtex');
+        $this->assertSame(1, preg_match('/^  number +=\s\{4\},$/m', $bibtex));
+        $this->assertSame(0, preg_match('/^  volume /m', $bibtex), 'not one volume of a multi-volume work');
+
+        // /s/amira/item/46451: a working paper's number.
+        $report = new CitationRecord(id: 46451, kind: CitationKind::Report, title: 'Lockdowns', container: 'CREMA Working Paper', volume: '2020-09');
+        $this->assertSame(1, preg_match('/^  number +=\s\{2020-09\},$/m', $export->serialize($report, 'bibtex')));
+
+        // A volume of a multi-volume book with no series stays a volume.
+        $volume = new CitationRecord(id: 1, kind: CitationKind::Book, title: 'Handbook', volume: '2');
+        $this->assertSame(1, preg_match('/^  volume +=\s\{2\},$/m', $export->serialize($volume, 'bibtex')));
+    }
+
+    public function testAKeywordHoldingACommaStaysOneKeyword(): void
+    {
+        $record = new CitationRecord(id: 1, kind: CitationKind::Book, title: 'A book', keywords: ['Africa Multiple', 'Schramm, Katharina']);
+        $bibtex = (new CitationExport())->serialize($record, 'bibtex');
+
+        $this->assertStringContainsString('{Africa Multiple, {Schramm, Katharina}}', $bibtex);
+    }
+
+    public function testBracesInAValueCannotCloseTheBibTeXField(): void
+    {
+        $record = new CitationRecord(id: 1, kind: CitationKind::Book, title: 'Odd} title', abstract: 'x}, author = {y');
+        $bibtex = (new CitationExport())->serialize($record, 'bibtex');
+
+        $this->assertStringContainsString('title    = {{Odd\} title}}', $bibtex);
+        $this->assertStringContainsString('abstract = {x\}, author = \{y}', $bibtex);
+        $this->assertSame(0, preg_match('/^  author/m', $bibtex), 'no injected field');
+    }
+
+    public function testCslLanguageIsTheLocaleCode(): void
+    {
+        $record = new CitationRecord(id: 1, kind: CitationKind::Article, title: 'Ein Artikel', language: 'German', languageCode: 'de');
+        $csl = json_decode((new CitationExport())->serialize($record, 'csljson'), true, flags: JSON_THROW_ON_ERROR)[0];
+
+        $this->assertSame('de', $csl['language']);
+    }
+
     public function testRISCollapsesNewlinesInsideAValue(): void
     {
         $record = new CitationRecord(

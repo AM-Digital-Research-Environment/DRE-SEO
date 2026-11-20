@@ -92,6 +92,8 @@ final class CitationRecord
         public readonly ?string $authorRole = null,
         /** How many pages a book, report or thesis has (bibo:numPages, or its extent). */
         public readonly ?string $pageCount = null,
+        /** The language as a BCP 47 tag ("de"), where $language is its label ("German"). */
+        public readonly ?string $languageCode = null,
     ) {
     }
 
@@ -227,6 +229,7 @@ final class CitationRecord
             'doi'       => $this->doi,
             'url'       => $this->url,
             'language'  => $this->language,
+            'languageCode' => $this->languageCode,
             'abstract'  => $this->abstract,
             'keywords'  => $this->keywords,
             'accession' => $this->accession,
@@ -293,6 +296,7 @@ final class CitationRecord
             updated: IssuedDate::fromArray(is_array($data['updated'] ?? null) ? $data['updated'] : []),
             authorRole: $string('authorRole'),
             pageCount: $string('pageCount'),
+            languageCode: $string('languageCode'),
         );
     }
 }

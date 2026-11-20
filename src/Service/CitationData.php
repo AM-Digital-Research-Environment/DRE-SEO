@@ -194,6 +194,7 @@ final class CitationData
             doi: $this->doi($item),
             url: $url,
             language: $this->firstLabel($item, 'dcterms:language'),
+            languageCode: $this->languageCodes($item)[0] ?? null,
             abstract: $abstract !== null ? $this->clip($abstract) : null,
             keywords: $this->keywords($item),
             accession: $this->accession($item),

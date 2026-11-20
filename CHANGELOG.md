@@ -36,6 +36,13 @@ GitHub release and shipped no installable asset.
   every APA reference ended with a period after its DOI or URL, which APA 7 leaves out. An
   APA article with no journal title no longer opens its source with a stray comma. A test
   now formats every kind in every style with each optional field missing in turn.
+- **BibTeX and CSL-JSON fields that reference managers misread.** A book's number in its
+  series and a working paper's number went to BibTeX `volume`, which biblatex prints as one
+  volume of a multi-volume work (`/s/amira/item/41169`, `/s/amira/item/46451`); they are
+  now `number`, as the CSL export already had them. A subject heading that holds a comma
+  ("Schramm, Katharina") is braced in BibTeX `keywords` instead of splitting into two
+  keywords. Braces in a value are escaped, so a stray `}` can no longer end a field early.
+  CSL-JSON `language` is the locale code (`de`) the page head carries, not the label.
 
 ## [0.17.0] - 2026-11-11
 

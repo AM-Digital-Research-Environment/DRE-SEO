@@ -211,8 +211,14 @@ final class CitationExport
                 $fields['date'] = (string) $date->isoRange();
             }
         }
-        $this->addField($fields, 'volume', $record->volume);
-        $this->addField($fields, 'number', $record->issue ?? $record->number);
+        if ($this->isSeries($record) && ($record->container !== null || $record->kind === CitationKind::Report)) {
+            // A book's number in its series, or a report's number, is biblatex
+            // `number`; `volume` would make it one volume of a multi-volume work.
+            $this->addField($fields, 'number', $record->volume ?? $record->issue ?? $record->number);
+        } else {
+            $this->addField($fields, 'volume', $record->volume);
+            $this->addField($fields, 'number', $record->issue ?? $record->number);
+        }
         $this->addField($fields, 'pagetotal', $record->pageCount);
         $pages = $record->pageRange();
         if ($pages !== null) {
@@ -230,7 +236,14 @@ final class CitationExport
         }
         $this->addField($fields, 'language', $record->language);
         if ($record->keywords !== []) {
-            $fields['keywords'] = $this->bibtexEscape(implode(', ', $record->keywords));
+            // Comma-separated, so a heading that holds a comma ("Schramm,
+            // Katharina") is braced to stay one keyword.
+            $fields['keywords'] = implode(', ', array_map(
+                fn (string $keyword): string => str_contains($keyword, ',')
+                    ? '{' . $this->bibtexEscape($keyword) . '}'
+                    : $this->bibtexEscape($keyword),
+                $record->keywords
+            ));
         }
         if ($record->abstract !== null) {
             $fields['abstract'] = $this->bibtexEscape($record->abstract);
@@ -277,13 +290,23 @@ final class CitationExport
 
     private function bibtexEscape(string $text): string
     {
-        // Escape the LaTeX specials that would otherwise break a value. Braces
-        // are left intact (used deliberately around titles / corporate names).
-        return str_replace(
-            ['\\', '&', '%', '$', '#', '_', '~', '^'],
-            ['\\textbackslash{}', '\\&', '\\%', '\\$', '\\#', '\\_', '\\textasciitilde{}', '\\textasciicircum{}'],
-            $text
-        );
+        // Escape the LaTeX specials that would otherwise break a value, braces
+        // included: an unbalanced one in a title would end the field early.
+        // The braces this class adds (around a title, a corporate name, a
+        // keyword) are added after escaping. strtr() replaces in one pass, so
+        // the braces of \textbackslash{} are not escaped again.
+        return strtr($text, [
+            '\\' => '\\textbackslash{}',
+            '{'  => '\\{',
+            '}'  => '\\}',
+            '&'  => '\\&',
+            '%'  => '\\%',
+            '$'  => '\\$',
+            '#'  => '\\#',
+            '_'  => '\\_',
+            '~'  => '\\textasciitilde{}',
+            '^'  => '\\textasciicircum{}',
+        ]);
     }
 
     // ─── RIS ─────────────────────────────────────────────────────────────────
@@ -436,8 +459,10 @@ final class CitationExport
         if ($record->url !== null) {
             $item['URL'] = $record->url;
         }
-        if ($record->language !== null) {
-            $item['language'] = $record->language;
+        // CSL `language` is a locale code, as the page head gives it.
+        $language = $record->languageCode ?? $record->language;
+        if ($language !== null) {
+            $item['language'] = $language;
         }
         if ($record->abstract !== null) {
             $item['abstract'] = $record->abstract;
