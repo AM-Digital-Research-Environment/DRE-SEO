@@ -119,4 +119,16 @@ final class ConfigurationTest extends TestCase
             $this->assertTrue(!str_starts_with($package, 'psr/'), 'PSR interfaces must come from Omeka core');
         }
     }
+
+    public function testOmekaLoadsTheModulesCompiledCatalogues(): void
+    {
+        $config = require __DIR__ . '/../../config/module.config.php';
+        $patterns = $config['translator']['translation_file_patterns'] ?? [];
+
+        $this->assertCount(1, $patterns);
+        $this->assertSame('gettext', $patterns[0]['type']);
+        $this->assertSame('%s.mo', $patterns[0]['pattern']);
+        $this->assertDirectoryExists($patterns[0]['base_dir']);
+        $this->assertFileExists($patterns[0]['base_dir'] . '/template.pot', 'where compile-po.php writes the .mo');
+    }
 }

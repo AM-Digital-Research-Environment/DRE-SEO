@@ -20,6 +20,10 @@ GitHub release and shipped no installable asset.
 - Tests: the unit suite's stand-in for Omeka's values renders a linked value as Omeka does
   (its record's URL) and knows a private value, so the rule that a private identifier is no
   `sameAs` (0.17.0) is now tested.
+- The release workflow's archive check reads the `export-ignore` paths from
+  `.gitattributes` itself, so `CITATION.cff`, `CONTRIBUTING.md` and `SECURITY.md` are checked
+  too, and fails a zip in which `src/`, `view/`, `asset/`, `config/`, `language/` or
+  `scripts/` holds no file.
 
 ### Fixed
 
@@ -103,6 +107,12 @@ GitHub release and shipped no installable asset.
   ("Report by University of Bayreuth Institute of African Studies"). The citation, the
   Highwire and Dublin Core tags, the JSON-LD and the description now read one list, which
   counts each linked record once by its id and keeps an organisation's name whole.
+- **A translation would now load.** The module registers `language/` with Omeka's
+  translator (`translation_file_patterns`), as DRE Search and DRE Visualizations do, so a
+  `language/<locale>.mo` compiled from a translator's `.po` reaches the pages; until now none
+  could. `compile-po.php` keeps the catalogue's own header (it wrote French plural rules
+  into every locale), leaves out entries flagged fuzzy, and keeps a `msgctxt` and every
+  plural form.
 
 ## [0.17.0] - 2026-11-11
 

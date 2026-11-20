@@ -43,7 +43,7 @@ final class InstanceConfigTest extends TestCase
         $this->assertSame([], array_intersect(array_keys($wiring), array_keys($instance)));
         $this->assertSame($instance['dre_seo'], $merged['dre_seo'], 'the instance block arrives whole');
         $this->assertSame(
-            ['service_manager', 'controllers', 'view_helpers', 'form_elements', 'router', 'view_manager', 'navigation'],
+            ['service_manager', 'controllers', 'view_helpers', 'form_elements', 'router', 'view_manager', 'translator', 'navigation'],
             array_keys($wiring)
         );
         // The wiring file itself defines no dre_seo key a union would drop.

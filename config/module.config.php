@@ -208,6 +208,19 @@ return $instance + [
         ],
     ],
 
+    // language/<locale>.mo, which `composer i18n` compiles from a translator's
+    // language/<locale>.po; without this entry Omeka would never load one.
+    'translator' => [
+        'translation_file_patterns' => [
+            [
+                'type'        => 'gettext',
+                'base_dir'    => dirname(__DIR__) . '/language',
+                'pattern'     => '%s.mo',
+                'text_domain' => null,
+            ],
+        ],
+    ],
+
     // Sidebar entry under Omeka's "Modules" admin menu.
     'navigation' => [
         'AdminModule' => [
