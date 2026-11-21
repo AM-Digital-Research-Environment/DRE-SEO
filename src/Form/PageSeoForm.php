@@ -12,6 +12,8 @@ use Laminas\Form\Form;
  * initializer adds to every form built by the element manager
  * (Omeka\Form\Initializer\Csrf, valid for 12 hours), so an editor working
  * through the table for more than an hour does not lose the edits.
+ *
+ * @extends Form<array<string,mixed>>
  */
 class PageSeoForm extends Form
 {

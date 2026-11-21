@@ -18,8 +18,8 @@ use Psr\Container\ContainerInterface;
 
 /**
  * What a save does to the module's view of the site: the sitemap cache is
- * cleared, and a public item, item set or default-site page that is created,
- * edited, made private or deleted is queued for IndexNow.
+ * told of the change, and a public item, item set or default-site page that
+ * is created, edited, made private or deleted is queued for IndexNow.
  *
  * The API listeners of the Module delegate here. The pre-events note what the
  * post-events can no longer read: the visibility a record had before an
@@ -56,6 +56,8 @@ final class ContentChanges
      * Note whether a record was public before an update changes it, so an
      * edit that makes it private can be pinged too. api.hydrate.pre is the
      * last point at which the entity still holds its stored visibility.
+     *
+     * @param EventInterface<object|string|null, array<mixed>|object> $event
      */
     public function noteVisibility(EventInterface $event): void
     {
@@ -76,6 +78,8 @@ final class ContentChanges
      * it and find it gone. By api.delete.post Doctrine has cleared the
      * entity's id, so the URL can no longer be built. The ping itself waits
      * for the post-event: a delete that fails pings nothing.
+     *
+     * @param EventInterface<object|string|null, array<mixed>|object> $event
      */
     public function noteDeletion(EventInterface $event): void
     {
@@ -108,6 +112,8 @@ final class ContentChanges
      * crawl the change, or when it has just been made private, so they
      * recrawl the page and drop it; a deleted one at the URL noted before the
      * deletion.
+     *
+     * @param EventInterface<object|string|null, array<mixed>|object> $event
      */
     public function handleContentChange(EventInterface $event): void
     {
@@ -142,19 +148,25 @@ final class ContentChanges
         }
     }
 
-    /** A change that reshapes a sitemap without being one of its URLs: invalidate only. */
+    /**
+     * A change that reshapes a sitemap without being one of its URLs: invalidate only.
+     *
+     * @param EventInterface<object|string|null, array<mixed>|object> $event
+     */
     public function handleSitemapChange(EventInterface $event): void
     {
         $this->invalidateSitemap();
     }
 
     /**
-     * Invalidate the sitemap cache so a change shows on the next crawl
-     * instead of after the cache lifetime (24 hours by default) or the
-     * dashboard's Regenerate button. Any create, update or delete can affect
-     * the URL set or a <lastmod>, a public→private edit included, so there is
-     * no public check. A failure is the generator's to log; it must never
-     * break the save.
+     * Mark the sitemap cache changed, so the change shows once saves have
+     * settled (XmlCache::QUIET_PERIOD, five minutes) instead of after the
+     * cache lifetime (24 hours by default) or the dashboard's Regenerate
+     * button. Not a clear: a sync saves thousands of records, and clearing on
+     * each would have crawlers rebuild the sitemap after every one. Any
+     * create, update or delete can affect the URL set or a <lastmod>, a
+     * public→private edit included, so there is no public check. A failure is
+     * the generator's to log; it must never break the save.
      */
     private function invalidateSitemap(): void
     {
@@ -162,7 +174,7 @@ final class ContentChanges
             if (!$this->services->get(SettingsGate::class)->isOn('dre_seo_sitemap_enabled', true)) {
                 return;
             }
-            $this->services->get(SitemapGenerator::class)->clearCache();
+            $this->services->get(SitemapGenerator::class)->markChanged();
         } catch (\Throwable $e) {
             // never let SEO bookkeeping break a save
         }

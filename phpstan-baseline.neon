@@ -25,16 +25,22 @@ parameters:
 			path: src/Controller/Admin/SeoController.php
 
 		-
+			message: '#^Return type \(Laminas\\Http\\Response\) of method DRESeo\\Controller\\CitationController\:\:indexAction\(\) should be compatible with return type \(Laminas\\View\\Model\\ViewModel\) of method Laminas\\Mvc\\Controller\\AbstractActionController\:\:indexAction\(\)$#'
+			identifier: method.childReturnType
+			count: 1
+			path: src/Controller/CitationController.php
+
+		-
+			message: '#^Return type \(Laminas\\Http\\Response\) of method DRESeo\\Controller\\SitemapController\:\:indexAction\(\) should be compatible with return type \(Laminas\\View\\Model\\ViewModel\) of method Laminas\\Mvc\\Controller\\AbstractActionController\:\:indexAction\(\)$#'
+			identifier: method.childReturnType
+			count: 1
+			path: src/Controller/SitemapController.php
+
+		-
 			message: '#^Call to function method_exists\(\) with Omeka\\Api\\Representation\\AbstractResourceEntityRepresentation and ''isPublic'' will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
 			path: src/Service/ProjectResolver.php
-
-		-
-			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: src/Service/SiteHome.php
 
 		-
 			message: '#^Call to function method_exists\(\) with Omeka\\Api\\Representation\\SiteRepresentation and ''homepage'' will always evaluate to true\.$#'
@@ -47,6 +53,12 @@ parameters:
 			identifier: function.alreadyNarrowedType
 			count: 1
 			path: src/Service/SiteHome.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Omeka\\Api\\Representation\\AbstractResourceEntityRepresentation and ''created'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/StructuredData.php
 
 		-
 			message: '#^Offset ''bibtex''\|''csljson''\|''ris''\|''txt'' on array\{bibtex\: ''BibTeX'', ris\: ''RIS'', csljson\: ''CSL JSON'', txt\: ''Plain text''\} on left side of \?\? always exists and is not nullable\.$#'

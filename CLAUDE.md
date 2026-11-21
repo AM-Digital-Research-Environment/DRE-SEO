@@ -26,9 +26,15 @@ fail on the maintainers' Windows machines:
   checkout to serve it.
 
 ```bash
-php /path/to/composer.phar check                                  # i18n:check + lint + analyse + unit tests
+OMEKA_PATH=/path/to/omeka-s php /path/to/composer.phar check             # i18n:check + lint + analyse + unit tests
 OMEKA_PATH=/path/to/omeka-s php /path/to/composer.phar test:integration
 ```
+
+`composer analyse` needs `OMEKA_PATH` too: `phpstan.neon.dist` analyses the module and
+`tests/Integration` against the real Omeka classes, and `phpstan.unit.neon.dist` the unit
+suite against the shim (whose constructors are not Omeka's). Nothing is ignored by
+identifier; the only ignores are Laminas' `__call()` dispatch (view helpers on PhpRenderer,
+`messenger()` / `getForm()` on controllers) and the trait's per-class unused constants.
 
 Run both before every commit that touches code, and say which ones you ran: CI covers the
 8.4 floor the local 8.5 cannot, and a tag is not retractable. `composer i18n` regenerates
@@ -47,7 +53,9 @@ workflow checks the same three files with `--check`. CONTRIBUTING.md has the rel
   kinds, so the schema.org map (`structured_data.template_types`) and the citation map
   (`citation.template_kinds`) key off template id — unlike IWAC SEO, which keys off
   resource class. The ids are pinned in `MongoDB2OmekaS/config/profiles/amira.json`;
-  `tests/Fixture/amira-templates.php` fails the suite when a template is left unmapped.
+  `tests/Fixture/amira-templates.php` fails the suite when a template is left unmapped,
+  and the daily `Templates` workflow (`.github/scripts/check-templates.php`) fails when the
+  live site lists a template the fixture does not.
 - **`config/module.config.php` is wiring; `config/instance.config.php` is AMIRA's data**
   (the `dre_seo` block: template maps, landing pages, robots rules, citation styles …). They
   are combined with `+`, so their top-level keys must stay disjoint;
@@ -63,15 +71,19 @@ workflow checks the same three files with `--check`. CONTRIBUTING.md has the rel
 - **`Module.php` is wiring.** What its listeners do lives in `src/Listener`, `src/Form` and
   the services; the listener method names in `attachListeners()` are asserted by tests, so
   keep them as thin delegates.
+- **A save does not clear the sitemap cache.** `ContentChanges` calls
+  `SitemapGenerator::markChanged()`, and a cached document goes stale only once the site
+  has gone `XmlCache::QUIET_PERIOD` seconds without a change, so a sync is rebuilt once,
+  not after every record. `clearCache()` is for the dashboard's Regenerate and the static-page overrides.
 - **IndexNow skips a bulk change.** A drain that finds more than 200 never-sent URLs
   (`PingQueue::BULK_THRESHOLD`) discards them unsent, because a MongoDB2OmekaS sync re-saves
   thousands. A test that queues more than that is testing the guard.
 - **Tests run against shims, not Omeka.** `tests/Shim/omeka.php` carries only the surface
   the module touches, guarded by `class_exists()`; the renderer there records the head.
   A test that needs more than the shim belongs in `tests/Integration`, against the real
-  classes, not in a bigger shim. PHPStan treats the Omeka boundary as opaque, so a missing
-  `use` of a module class in a factory passes analysis and only the integration suite
-  catches it.
+  classes, not in a bigger shim. PHPStan never reads the shim for the module's code: it
+  is excluded from the module pass, which would otherwise take its declarations over
+  Omeka's.
 - **No runtime dependencies, no bundled `vendor/`.** Never add `laminas/*` or `psr/*` to
   `composer.json`: Omeka's vendor provides them, and a duplicate takes the site down.
 - **Contracts with other modules.** DRE-theme calls `dreCitation($item)` and

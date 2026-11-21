@@ -92,7 +92,8 @@ return [
             // schema.org @type per Omeka resource template id (pinned in
             // MongoDB2OmekaS/config/profiles/amira.json; the list in
             // tests/Fixture/amira-templates.php fails the suite when a site
-            // template is missing here).
+            // template is missing here, and the daily Templates workflow fails
+            // when the site gains one that list lacks).
             'default_type'   => 'CreativeWork',
             // dcterms:accessRights label => whether that access is free, for a
             // research item's isAccessibleForFree. A label not listed (AMIRA's

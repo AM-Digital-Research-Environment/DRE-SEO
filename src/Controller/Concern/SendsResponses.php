@@ -35,7 +35,7 @@ trait SendsResponses
         array $headers = [],
         bool $noindex = true
     ): Response {
-        $response = $this->getResponse();
+        $response = $this->httpResponse();
         $response->setStatusCode($status);
         $response->setContent($body);
 
@@ -75,7 +75,7 @@ trait SendsResponses
         }
         $headers['X-Robots-Tag'] = 'noindex';
 
-        $response = $this->getResponse();
+        $response = $this->httpResponse();
         $responseHeaders = $response->getHeaders();
         foreach ($headers as $name => $value) {
             $responseHeaders->addHeaderLine($name, $value);
@@ -117,8 +117,22 @@ trait SendsResponses
     /** A bare status response with no body (404 …). */
     private function respondWithStatus(int $code): Response
     {
-        $response = $this->getResponse();
+        $response = $this->httpResponse();
         $response->setStatusCode($code);
+        return $response;
+    }
+
+    /**
+     * The controller's response, which Laminas types as any Stdlib response.
+     * These endpoints only ever run under the HTTP MVC application, so
+     * anything else is a wiring error, not a request to answer.
+     */
+    private function httpResponse(): Response
+    {
+        $response = $this->getResponse();
+        if (!$response instanceof Response) {
+            throw new \LogicException(sprintf('Expected an HTTP response, got %s.', get_debug_type($response)));
+        }
         return $response;
     }
 }

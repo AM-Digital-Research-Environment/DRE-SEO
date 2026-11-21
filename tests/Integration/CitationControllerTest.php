@@ -16,6 +16,7 @@ use Laminas\Mvc\MvcEvent;
 use Laminas\Router\Http\TreeRouteStack;
 use Laminas\Router\RouteMatch;
 use Laminas\Uri\Http as HttpUri;
+use Laminas\View\Helper\Url;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Exception\NotFoundException;
 use Omeka\Api\Manager;
@@ -125,11 +126,14 @@ final class CitationControllerTest extends OmekaTestCase
         $router = TreeRouteStack::factory(['routes' => [
             CitationExport::ROUTE => $this->config['router']['routes'][CitationExport::ROUTE],
         ]]);
+        $this->assertInstanceOf(TreeRouteStack::class, $router);
         $router->setRequestUri(new HttpUri('https://example.test/'));
         // An Omeka installed under a path keeps it in the link.
         $router->setBaseUrl('/omeka');
         $view = new PhpRenderer();
-        $view->getHelperPluginManager()->get('url')->setRouter($router);
+        $url = $view->getHelperPluginManager()->get('url');
+        $this->assertInstanceOf(Url::class, $url);
+        $url->setRouter($router);
 
         $this->assertSame('https://example.test/omeka/cite/7/bibtex', CitationExport::url($view, 7, 'bibtex'));
     }

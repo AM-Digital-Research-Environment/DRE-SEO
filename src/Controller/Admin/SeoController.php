@@ -12,6 +12,7 @@ use DRESeo\Service\ProjectResolver;
 use DRESeo\Service\SettingsGate;
 use DRESeo\Service\SitemapGenerator;
 use DRESeo\Service\TemplateCoverage;
+use Laminas\Http\Request as HttpRequest;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
 use Omeka\Api\Manager as ApiManager;
@@ -75,7 +76,7 @@ class SeoController extends AbstractActionController
 
     public function regenerateAction()
     {
-        if ($this->getRequest()->isPost()) {
+        if ($this->isPost()) {
             $form = $this->getForm(\Omeka\Form\ConfirmForm::class);
             $form->setData($this->params()->fromPost());
             if ($form->isValid()) {
@@ -100,7 +101,7 @@ class SeoController extends AbstractActionController
         // The pages this user can see: the rows the table shows and saves.
         $pages = $this->api->search('site_pages', ['site_id' => $site->id()])->getContent();
 
-        if ($this->getRequest()->isPost()) {
+        if ($this->isPost()) {
             // The overrides are a setting of the site, which Omeka lets only
             // the site's owner and administrators change.
             if (!$site->userIsAllowed('update')) {
@@ -167,5 +168,12 @@ class SeoController extends AbstractActionController
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /** Whether this is a form submission (Laminas types the request as any Stdlib request). */
+    private function isPost(): bool
+    {
+        $request = $this->getRequest();
+        return $request instanceof HttpRequest && $request->isPost();
     }
 }

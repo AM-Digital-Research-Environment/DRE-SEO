@@ -9,6 +9,7 @@ use DRESeo\Test\Integration\Double\CallbackHelper;
 use DRESeo\Test\Integration\Double\FixedPage;
 use DRESeo\Test\Integration\Double\FixedSite;
 use Laminas\Form\ConfigProvider as FormConfigProvider;
+use Laminas\Form\Element\Csrf;
 use Laminas\Form\FormElementManager;
 use Laminas\View\Renderer\PhpRenderer;
 use Laminas\View\Resolver\TemplateMapResolver;
@@ -111,7 +112,10 @@ final class AdminViewsTest extends OmekaTestCase
         $formConfig = $this->config['form_elements'];
         $formConfig['initializers'][] = \Omeka\Form\Initializer\Csrf::class;
         $form = (new FormElementManager($this->services, $formConfig))->get(PageSeoForm::class);
-        $this->assertSame(43200, $form->get('csrf')->getCsrfValidator()->getTimeout(), 'Omeka\'s 12-hour token');
+        $this->assertInstanceOf(PageSeoForm::class, $form);
+        $csrf = $form->get('csrf');
+        $this->assertInstanceOf(Csrf::class, $csrf);
+        $this->assertSame(43200, $csrf->getCsrfValidator()->getTimeout(), 'Omeka\'s 12-hour token');
 
         $html = $this->renderer()->render('pages', [
             'site' => new FixedSite(),

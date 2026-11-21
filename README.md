@@ -122,7 +122,8 @@ listed — their SEO is automatic.
 
 **Admin → SEO** shows what is configured, the sitemap/robots URLs with public-resource counts,
 and a **Regenerate** button that clears the sitemap cache so it rebuilds on the next request —
-only needed after a change that bypasses Omeka's API, since every save clears it anyway.
+needed only after a change that bypasses Omeka's API, or to see a save in the sitemap
+before the five quiet minutes it otherwise waits for.
 While IndexNow is on it also counts the URLs waiting in its queue and those that failed
 (refused, or out of retries), and flags a stored key that is not 8–128 hexadecimal
 characters. It lists the resource templates items use that `structured_data.template_types`
@@ -365,7 +366,8 @@ habilitation's plain `fabio:Thesis` reads as "Thesis".
 Both template maps are keyed by instance-specific template ids, and a template neither names
 falls back silently to `CreativeWork` / `item`. `tests/Fixture/amira-templates.php` lists the AMIRA
 instance's templates: when the site gains one, add it there and the suite fails until both
-maps name it. `citation_pdf_url` is emitted only for a
+maps name it. The scheduled `Templates` workflow compares that list with the templates the
+live site lists, daily, and fails when the site has gained, dropped or relabelled one. `citation_pdf_url` is emitted only for a
 **public** PDF media, so restricted bitstreams are never exposed. Toggle the whole feature with
 **Emit citations (Zotero / Google Scholar / record page)** in Configure (on by default). The same tags double as
 [Google Scholar](https://scholar.google.com) indexing signals.
@@ -433,11 +435,15 @@ resources scoped to the site), so even ~9k items render in well under a second. 
 `modified` as a naive UTC datetime, and `<lastmod>` is written in UTC to match. While the
 whole site is set to noindex, no sitemap is served and robots.txt names none.
 
-Output is cached under `files/dre-seo-cache/` for the **Sitemap cache lifetime**, and the
-cache is cleared whenever an item, item set, site page, media or site is created, edited or
-deleted, so a change is listed on the next crawl. A clear writes a new generation stamp
-rather than sweeping the directory each time, so a bulk import pays for it once per request,
-and a sitemap that was being rebuilt while the content changed is not cached. One request at
+Output is cached under `files/dre-seo-cache/` for the **Sitemap cache lifetime**. Creating,
+editing or deleting an item, item set, site page, media or site does not clear it: the save
+records the time of the change, and a document built before it is rebuilt once the site has
+gone five minutes without another (`XmlCache::QUIET_PERIOD`). A MongoDB2OmekaS sync re-saves
+thousands of records, and clearing on each save would have crawlers rebuild the sitemap
+after every one; settled, the sync is rebuilt once, after it ends (or when the lifetime
+runs out, if it runs longer). The dashboard's Regenerate and saving the static-page
+overrides still clear it at once: a clear writes a new generation stamp, and a sitemap that
+was being rebuilt across it is not cached. One request at
 a time rebuilds an expired document; the others wait for it. Each document is sent with
 `Last-Modified`, the time it was generated.
 
@@ -522,9 +528,11 @@ DRESeo/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                   # tests on PHP 8.4 + 8.5, quality gates, Omeka integration
-│   │   └── release.yml              # ci.yml on the tag, then DRESeo.zip + SHA-256 on the GitHub release
+│   │   ├── release.yml              # ci.yml on the tag, then DRESeo.zip + SHA-256 on the GitHub release
+│   │   └── templates.yml            # daily: the template fixture against the live site
 │   ├── scripts/
 │   │   ├── bump-version.php         # the version in module.ini, CITATION.cff, CHANGELOG (--check: release gate)
+│   │   ├── check-templates.php      # tests/Fixture/amira-templates.php against /api/resource_templates
 │   │   ├── extract-strings.php      # sources -> language/template.pot (--check: freshness gate)
 │   │   └── compile-po.php           # language/*.po -> .mo, without gettext
 │   └── dependabot.yml               # action pins and Composer dev tools, monthly
@@ -536,7 +544,8 @@ DRESeo/
 ├── composer.json                    # type omeka-module; PSR-4 DRESeo\ -> src/ (no runtime deps)
 ├── phpunit.xml.dist                 # unit suite
 ├── phpunit.integration.xml.dist     # integration suite (needs OMEKA_PATH)
-├── phpstan.neon.dist                # level 6; phpstan-baseline.neon holds the recorded debt
+├── phpstan.neon.dist                # level 6, the module against real Omeka (needs OMEKA_PATH)
+├── phpstan.unit.neon.dist           # level 6, the unit suite against the shim; both include the baseline
 ├── phpcs.xml.dist                   # PSR-12
 ├── config/
 │   ├── module.ini
@@ -608,7 +617,7 @@ DRESeo/
 │   ├── Integration/                  # PHPUnit suite against a real Omeka S (own bootstrap)
 │   ├── Double/, Fixture/             # shared test doubles and fixtures
 │   ├── Shim/omeka.php                # minimal Omeka/Laminas/Doctrine stand-ins
-│   └── Stub/omeka-laminas.stub       # supertypes for PHPStan only, never executed
+│   └── Stub/omeka-laminas.stub       # supertypes for PHPStan's unit pass only, never executed
 └── language/template.pot
 ```
 
@@ -626,13 +635,15 @@ gate with:
 
 ```bash
 composer install
-composer check
+OMEKA_PATH=/path/to/omeka-s composer check
 ```
 
 `composer check` verifies that `language/template.pot` matches the sources
 (`composer i18n` regenerates it), checks PSR-12 (`composer lint`), runs PHPStan at level 6
 against `phpstan-baseline.neon` (`composer analyse`) and runs the PHPUnit unit suite
-(`composer test`). The unit tests cover the logic that regresses most silently — the
+(`composer test`). PHPStan runs twice: the module and the integration suite against the
+real Omeka tree in `OMEKA_PATH` (the one the integration suite uses, below), and the unit
+suite against the shim it runs on. The unit tests cover the logic that regresses most silently — the
 citation record, formatter and BibTeX/RIS/CSL-JSON serialisers, the Highwire and Dublin
 Core tags, schema.org JSON-LD and the head metadata, DRE Linked Data identities, the
 sitemap's policy, XML and cache (every document pinned byte for byte), per-page overrides,
@@ -658,7 +669,7 @@ production ownership of the Laminas, Doctrine and PSR classes.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the syntax sweep and the unit suite on
 PHP 8.4 and the production PHP 8.5, the translation, PSR-12 and PHPStan gates at the 8.4
-floor, and the integration suite on PHP 8.5 against the checksum-pinned official Omeka S
+floor (PHPStan against the same Omeka release), and the integration suite on PHP 8.5 against the checksum-pinned official Omeka S
 4.2.1 release. The release workflow calls `ci.yml` on the tag, so a release is gated on
 the whole suite, the integration tests included, before it builds `DRESeo.zip`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions, including the
 rule for the PHPStan baseline.

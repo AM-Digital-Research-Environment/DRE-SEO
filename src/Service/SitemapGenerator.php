@@ -212,9 +212,16 @@ class SitemapGenerator
         ];
     }
 
+    /** Invalidate every cached document now (the dashboard's Regenerate, the static-page overrides). */
     public function clearCache(): void
     {
         $this->cache->clear();
+    }
+
+    /** Record a content change, for the cache to rebuild once changes have settled. */
+    public function markChanged(): void
+    {
+        $this->cache->markChanged();
     }
 
     /** Clear the cache and remove its directory (uninstall). */

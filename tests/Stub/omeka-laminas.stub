@@ -2,27 +2,19 @@
 
 /**
  * Type stubs for the Omeka S and Laminas supertypes this module extends or
- * implements.
+ * implements, for the unit-suite pass of PHPStan (phpstan.unit.neon.dist).
  *
- * Omeka is not a Composer dependency (the module ships no vendor/ and is
- * autoloaded by the application), so when PHPStan analyses the module alone
- * those supertypes are absent. "Extends unknown class" is the one category
- * PHPStan refuses to let `ignoreErrors` suppress — it directs you to
- * `excludePaths`, which would drop Module.php, every controller, both forms,
- * the job, both view helpers and every factory out of analysis entirely.
- * Declaring the supertypes here keeps all of them analysed.
+ * That pass analyses the tests against tests/Shim/omeka.php, not Omeka, and
+ * reads the module's own classes for their symbols; without these supertypes
+ * the classes those tests exercise would extend unknown classes. The module
+ * itself is analysed against the real Omeka tree (phpstan.neon.dist), which
+ * needs none of this.
  *
  * Deliberately memberless, bar AbstractJob's constructor (see there). The
  * point is to make the inheritance resolvable, not to re-describe Omeka's API
  * — a stub that guessed at signatures would invent errors rather than remove
- * them. Calls to inherited methods surface as method.notFound, which
- * phpstan.neon.dist ignores as boundary noise.
- *
- * Omeka\Api\Manager and Laminas' HTTP test adapter are here for
- * tests/Integration, whose project-redirect test and recording HTTP adapter
- * subclass them; the rest are the module's own supertypes. The
- * representation, settings and DBAL classes the module and the suites
- * extend come from tests/Shim/omeka.php instead, which PHPStan executes.
+ * them. The representation, settings and DBAL classes come from the shim
+ * instead, which PHPStan executes.
  *
  * Not a runtime file: unlike tests/Shim/omeka.php (which is executed, and
  * gives the classes the unit suite instantiates real bodies), this is only
@@ -52,18 +44,6 @@ namespace Omeka\Job {
         public function __construct(\Omeka\Entity\Job $job, \Laminas\ServiceManager\ServiceLocatorInterface $serviceLocator)
         {
         }
-    }
-}
-
-namespace Laminas\Http\Client\Adapter {
-    class Test
-    {
-    }
-}
-
-namespace Omeka\Api {
-    class Manager
-    {
     }
 }
 

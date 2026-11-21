@@ -1,0 +1,38 @@
+# The unit suite, analysed against the shim it runs against. The second of the
+# two passes `composer analyse` runs; phpstan.neon.dist explains the split and
+# the baseline both include.
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 6
+
+    paths:
+        - tests
+
+    excludePaths:
+        analyse:
+            # Analysed against the real Omeka tree, in the other pass.
+            - tests/Integration
+            # The shim is the boundary itself, executed below.
+            - tests/Shim
+
+    # tests/Shim/omeka.php is *executed*: it gives the Omeka, Laminas and
+    # Doctrine classes the unit suite instantiates (representations, settings
+    # stores, a recording renderer, a DBAL connection) real bodies, guarded by
+    # class_exists() so a real Omeka always wins.
+    bootstrapFiles:
+        - tests/Shim/omeka.php
+
+    # The module's own classes, which the tests exercise, are read for their
+    # symbols only: the other pass analyses them. The stub declares the
+    # Omeka and Laminas supertypes they extend that the shim does not.
+    scanFiles:
+        - Module.php
+        - tests/Stub/omeka-laminas.stub
+    scanDirectories:
+        - src
+
+    reportUnmatchedIgnoredErrors: false
+
+    treatPhpDocTypesAsCertain: false

@@ -8,6 +8,7 @@ use DRESeo\Test\Integration\Double\CallbackHelper;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\EventManager;
 use Laminas\Form\ConfigProvider as FormConfigProvider;
+use Laminas\Form\Element\Checkbox;
 use Laminas\Form\FormElementManager;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Renderer\PhpRenderer;
@@ -43,7 +44,9 @@ final class FormTest extends OmekaTestCase
             $form->has('dre_seo_landing_pages') && $form->has('dre_seo_project_redirect'),
             'The site settings fields were not added.'
         );
-        $this->assertTrue($form->get('dre_seo_project_redirect')->isChecked(), 'The project redirect must default to on.');
+        $redirect = $form->get('dre_seo_project_redirect');
+        $this->assertInstanceOf(Checkbox::class, $redirect);
+        $this->assertTrue($redirect->isChecked(), 'The project redirect must default to on.');
         $this->assertStringContainsString(
             '29918 = publications',
             (string) $form->get('dre_seo_landing_pages')->getAttribute('placeholder'),

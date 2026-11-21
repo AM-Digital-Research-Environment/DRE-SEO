@@ -73,6 +73,49 @@ final class XmlCacheTest extends TestCase
         $this->assertSame('fresh', $cache->remember('k', 3600, static fn (): string => 'fresh')->xml);
     }
 
+    /**
+     * A sync saves record after record: while saves keep coming, crawlers are
+     * served the document built before them, not a rebuild per save.
+     */
+    public function testAChangeLeavesTheDocumentCachedUntilTheSiteSettles(): void
+    {
+        $cache = $this->cache();
+        $cache->remember('k', 3600, static fn (): string => 'before');
+        touch($this->dir . '/k.xml', time() - 60);
+
+        $cache->markChanged();
+
+        $this->assertSame('before', $cache->remember('k', 3600, static fn (): string => 'rebuilt')->xml);
+    }
+
+    public function testASettledChangeRebuildsTheDocumentOnce(): void
+    {
+        $cache = $this->cache();
+        $cache->remember('k', 3600, static fn (): string => 'before');
+        touch($this->dir . '/k.xml', time() - 1000);
+        file_put_contents($this->dir . '/changed', (string) (time() - XmlCache::QUIET_PERIOD));
+
+        $this->assertSame('after', $cache->remember('k', 3600, static fn (): string => 'after')->xml);
+        $this->assertSame('after', $cache->remember('k', 3600, static fn (): string => 'again')->xml, 'once');
+    }
+
+    public function testAChangeOlderThanTheDocumentIsAlreadyInIt(): void
+    {
+        $cache = $this->cache();
+        $cache->markChanged();
+        file_put_contents($this->dir . '/changed', (string) (time() - 1000));
+        $cache->remember('k', 3600, static fn (): string => 'built after the change');
+
+        $this->assertSame('built after the change', $cache->remember('k', 3600, static fn (): string => 'rebuilt')->xml);
+    }
+
+    public function testMarkingAChangeWithoutADirectoryDoesNothing(): void
+    {
+        (new XmlCache(null, $this->logger))->markChanged();
+
+        $this->assertSame([], $this->logger->records);
+    }
+
     public function testZeroTtlDisablesCachingEntirely(): void
     {
         $document = $this->cache()->remember('k', 0, static fn (): string => 'live');
@@ -210,9 +253,8 @@ final class XmlCacheTest extends TestCase
     }
 
     /**
-     * The API listener clears on every content change, so a bulk import would
-     * otherwise run one glob-and-unlink cycle per saved item. The generation
-     * stamp still changes on every clear.
+     * Repeated clears in one request run one glob-and-unlink cycle, not one
+     * each. The generation stamp still changes on every clear.
      */
     public function testClearIsDebouncedWithinARequest(): void
     {

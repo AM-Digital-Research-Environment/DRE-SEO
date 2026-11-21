@@ -16,6 +16,7 @@ use Omeka\Api\Exception\NotFoundException;
 use Omeka\Api\Manager;
 use Omeka\Api\Representation\ItemRepresentation;
 use Omeka\Api\Representation\ItemSetRepresentation;
+use Omeka\Api\Representation\ResourceClassRepresentation;
 use Omeka\Api\Representation\ValueRepresentation;
 use Omeka\Api\Response as ApiResponse;
 
@@ -48,9 +49,13 @@ final class ProjectRedirectTest extends OmekaTestCase
                 return true;
             }
 
-            public function resourceClass(): object
+            public function resourceClass(): ResourceClassRepresentation
             {
-                return new class {
+                return new class extends ResourceClassRepresentation {
+                    public function __construct()
+                    {
+                    }
+
                     public function term(): string
                     {
                         return 'foaf:Project';

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace DRESeo\Test\Integration;
 
+use DRESeo\Service\Sitemap\XmlCache;
 use DRESeo\Service\SitemapGenerator;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\EventManager;
@@ -16,8 +17,9 @@ use Omeka\Entity\SitePage;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * A content change clears the cached sitemap, so it shows on the next crawl
- * rather than after the cache lifetime. Items, item sets and pages are
+ * A content change marks the cached sitemap changed, so it is rebuilt once
+ * saves have settled rather than after the cache lifetime — and not after
+ * every save of a sync. Items, item sets and pages are
  * sitemap URLs of their own and are also pinged; media and sites only reshape
  * a sitemap, and are not.
  */
@@ -39,13 +41,22 @@ final class SitemapInvalidationTest extends OmekaTestCase
 
     /** @param class-string $entityClass */
     #[DataProvider('changes')]
-    public function testAChangeClearsTheCachedSitemap(string $adapter, string $operation, string $entityClass): void
+    public function testAChangeRebuildsTheSitemapOnceSavesSettle(string $adapter, string $operation, string $entityClass): void
     {
         $this->cacheTheSitemap();
+        $label = sprintf('%s %s', $adapter, $operation);
 
         $this->fire($adapter, $operation, new $entityClass());
 
-        $this->assertSame([], $this->cachedFiles(), sprintf('%s %s left the sitemap cached', $adapter, $operation));
+        $this->assertCount(1, $this->cachedFiles(), $label . ' cleared the sitemap outright');
+        $this->assertFileExists($this->cacheDir() . '/changed', $label . ' recorded no change');
+
+        // Built before the change, which has now settled: the next crawl rebuilds.
+        $built = time() - 1000;
+        touch($this->cachedFiles()[0], $built);
+        file_put_contents($this->cacheDir() . '/changed', (string) (time() - XmlCache::QUIET_PERIOD));
+        $document = $this->services->get(SitemapGenerator::class)->buildIndex('https://example.test', 1, 3600);
+        $this->assertGreaterThan($built, $document->lastModified, $label . ' left the sitemap stale');
     }
 
     public function testNothingIsClearedWhileTheSitemapIsSwitchedOff(): void
@@ -56,6 +67,7 @@ final class SitemapInvalidationTest extends OmekaTestCase
         $this->fire('Omeka\\Api\\Adapter\\ItemAdapter', 'update', new Item());
 
         $this->assertCount(1, $this->cachedFiles());
+        $this->assertFileDoesNotExist($this->cacheDir() . '/changed');
     }
 
     /** The listeners attach where Omeka's API triggers each type's events. */
@@ -98,10 +110,15 @@ final class SitemapInvalidationTest extends OmekaTestCase
         $this->assertCount(1, $this->cachedFiles(), 'the index was not cached');
     }
 
+    private function cacheDir(): string
+    {
+        return $this->config['file_store']['local']['base_path'] . '/dre-seo-cache';
+    }
+
     /** @return string[] */
     private function cachedFiles(): array
     {
-        return glob($this->config['file_store']['local']['base_path'] . '/dre-seo-cache/*.xml') ?: [];
+        return glob($this->cacheDir() . '/*.xml') ?: [];
     }
 
     /** Trigger the operation's post-event as Omeka's API manager does. */

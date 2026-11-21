@@ -9,6 +9,26 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Changed
+
+- A save no longer clears the sitemap cache. It records the time of the change, and a
+  cached sitemap built before it is rebuilt once the site has gone five minutes without
+  another, so a MongoDB2OmekaS sync of thousands of records rebuilds the sitemap once,
+  after it ends, rather than on the next crawl after every save. The dashboard's
+  Regenerate and saving the static-page overrides still clear it at once.
+- PHPStan analyses the module and the integration suite against the real Omeka S 4.2.1
+  tree, so `composer analyse` (and `composer check`) needs `OMEKA_PATH`. The global ignores
+  of `class.notFound`, `interface.notFound`, `method.notFound`, `staticMethod.notFound` and
+  `argument.type` are gone; the unit suite is analysed separately, against the shim it
+  runs on (`phpstan.unit.neon.dist`). The admin and response controllers check that they
+  hold an HTTP request and response instead of assuming it.
+
+### Added
+
+- A daily `Templates` workflow compares `tests/Fixture/amira-templates.php` with the
+  resource templates the live site lists and fails when the site gains, drops or relabels
+  one, so a new template can no longer go live unmapped unnoticed.
+
 ## [0.18.0] - 2026-11-20
 
 Citations, dates and page numbers come out right for the records Zotero and Google Scholar

@@ -10,7 +10,9 @@ declare(strict_types=1);
  * template either map does not name falls back silently to a generic
  * CreativeWork / 'item' — which is how the publication templates 24-32 went
  * live unmapped. When the site gains a template, add it here: the
- * configuration tests then fail until both maps name it.
+ * configuration tests then fail until both maps name it. The daily Templates
+ * workflow (.github/scripts/check-templates.php) compares this list with the
+ * live site's and fails when they differ, so a new template is not missed.
  *
  * @return array{entities: array<int,string>, publications: array<int,string>, works: array<int,string>}
  */

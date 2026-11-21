@@ -25,6 +25,7 @@ final class FixedItem extends ItemRepresentation
         return $this->itemId;
     }
 
+    /** @param array<string>|string|null $lang */
     public function displayTitle(mixed $default = null, mixed $lang = null): string
     {
         return $this->itemTitle;

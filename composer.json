@@ -38,7 +38,10 @@
     "test:integration": "@php tests/Integration/run.php --configuration phpunit.integration.xml.dist",
     "lint": "phpcs",
     "lint:fix": "phpcbf",
-    "analyse": "phpstan analyse",
+    "analyse": [
+            "phpstan analyse --no-progress",
+            "phpstan analyse --no-progress -c phpstan.unit.neon.dist"
+        ],
     "i18n": [
       "@php .github/scripts/extract-strings.php",
       "@php .github/scripts/compile-po.php"
@@ -57,7 +60,7 @@
     "test:integration": "Run the separate suite against the Omeka installation in OMEKA_PATH.",
     "lint": "Check PSR-12 compliance.",
     "lint:fix": "Fix what PHP_CodeSniffer can fix automatically.",
-    "analyse": "Run PHPStan at level 6 against the recorded baseline.",
+    "analyse": "Run PHPStan at level 6 against the recorded baseline: the module against the Omeka tree in OMEKA_PATH, then the unit suite against the shim.",
     "i18n": "Regenerate language/template.pot and compile any language/*.po.",
     "i18n:check": "Fail when language/template.pot no longer matches the sources.",
     "bump-version": "Set the version in module.ini, CITATION.cff and the CHANGELOG heading: composer bump-version -- X.Y.Z (--check X.Y.Z only compares).",

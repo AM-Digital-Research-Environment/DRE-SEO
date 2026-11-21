@@ -341,6 +341,7 @@ class Module extends AbstractModule
 
     // ─── View listeners ─────────────────────────────────────────────────────
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function handleResourceShow(EventInterface $event): void
     {
         $view = $this->view($event);
@@ -355,6 +356,7 @@ class Module extends AbstractModule
         $this->headMetadata()->applyResource($view, $resource, $site);
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function handleBrowse(EventInterface $event): void
     {
         $view = $this->view($event);
@@ -374,6 +376,7 @@ class Module extends AbstractModule
         }
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function handlePageShow(EventInterface $event): void
     {
         $view = $this->view($event);
@@ -395,6 +398,7 @@ class Module extends AbstractModule
         $this->headMetadata()->applyPage($view, $page, $site, $overrides, $isHomepage);
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function handleLayout(EventInterface $event): void
     {
         $view = $this->view($event);
@@ -443,21 +447,25 @@ class Module extends AbstractModule
     // Listener\ContentChanges per request, which the pre- and post-events of
     // an API request must share.
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function noteVisibility(EventInterface $event): void
     {
         $this->contentChanges()->noteVisibility($event);
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function noteDeletion(EventInterface $event): void
     {
         $this->contentChanges()->noteDeletion($event);
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function handleContentChange(EventInterface $event): void
     {
         $this->contentChanges()->handleContentChange($event);
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function handleSitemapChange(EventInterface $event): void
     {
         $this->contentChanges()->handleSitemapChange($event);
@@ -470,6 +478,7 @@ class Module extends AbstractModule
 
     // ─── Site settings (Sites → {site} → Settings → SEO) ────────────────────
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function addSiteSettings(EventInterface $event): void
     {
         $form = $event->getTarget();
@@ -484,6 +493,7 @@ class Module extends AbstractModule
         ))->addTo($form);
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     public function addSiteSettingsFilters(EventInterface $event): void
     {
         $inputFilter = $event->getParam('inputFilter');
@@ -629,6 +639,7 @@ class Module extends AbstractModule
         return '<ul class="messages"><li class="warning">' . $renderer->escapeHtml($message) . '</li></ul>';
     }
 
+    /** @param EventInterface<object|string|null, array<mixed>|object> $event */
     private function view(EventInterface $event): ?PhpRenderer
     {
         $view = $event->getParam('view');

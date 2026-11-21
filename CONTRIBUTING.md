@@ -18,7 +18,7 @@ You need PHP 8.4 or later and Composer.
 git clone https://github.com/AM-Digital-Research-Environment/DRE-SEO.git
 cd DRE-SEO
 composer install
-composer check
+OMEKA_PATH=/path/to/omeka-s composer check
 ```
 
 `composer install` fetches the **development tools only** — PHPUnit, PHPStan and
@@ -34,7 +34,7 @@ causes class-collision fatals that take down the whole site, not just the module
 |---|---|
 | `composer i18n:check` | `language/template.pot` still matches the strings the sources mark for translation |
 | `composer lint` | PSR-12, through PHP_CodeSniffer (`composer lint:fix` repairs what it can) |
-| `composer analyse` | PHPStan at level 6, against the recorded baseline |
+| `composer analyse` | PHPStan at level 6, against the recorded baseline: the module and `tests/Integration` against the Omeka tree in `OMEKA_PATH` (`phpstan.neon.dist`), the unit suite against the shim (`phpstan.unit.neon.dist`) |
 | `composer test` | the PHPUnit unit suite (`tests/`, configured in `phpunit.xml.dist`) |
 
 The unit suite runs without Omeka: `tests/Shim/omeka.php` gives the few Omeka, Laminas and
@@ -42,7 +42,7 @@ Doctrine classes the module touches minimal stand-ins, each guarded by `class_ex
 real class always wins. The integration suite (`tests/Integration`) runs the module against
 the real framework instead — its service factories, listeners, forms, Laminas head helpers
 and the sitemap SQL — and needs an installed Omeka S 4.2.1 (the official release zip, or a
-checkout after `composer install --no-dev`):
+checkout after `composer install --no-dev`), as `composer analyse` does:
 
 ```bash
 OMEKA_PATH=/path/to/omeka-s composer test:integration
@@ -70,9 +70,13 @@ maintainer's machine (PHP 8.5 on PATH, Composer through its phar).
 - **The PHPStan baseline is a ledger, not a suppression list.** `phpstan-baseline.neon`
   records the findings that predate analysis; new and changed code meets level 6 in full.
   Delete an entry when you fix it, and never regenerate the file to make a new error go
-  away. If regenerating is ever warranted, comment its `includes` line out of
-  `phpstan.neon.dist` first — otherwise the run silently drops the recorded debt — and read
-  the diff.
+  away. If regenerating is ever warranted, comment its `includes` line out of both
+  `phpstan.neon.dist` and `phpstan.unit.neon.dist` first — otherwise the run silently drops
+  the recorded debt — merge what the two passes write, and read the diff.
+- **A new resource template on the site** fails the daily `Templates` workflow. Add it to
+  `tests/Fixture/amira-templates.php`; the suite then fails until
+  `structured_data.template_types` and `citation.template_kinds` in
+  `config/instance.config.php` both name it.
 - New user-facing strings go through Omeka's translator: `// @translate` at the end of the
   line in PHP, `$this->translate()` in `.phtml`. Then run `composer i18n` and commit the
   regenerated `language/template.pot`; `composer i18n:check` fails until you do.

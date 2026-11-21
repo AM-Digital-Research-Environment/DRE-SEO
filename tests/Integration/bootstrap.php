@@ -20,7 +20,7 @@ $moduleAutoload = $moduleRoot . '/vendor/autoload.php';
 
 if ($omekaRoot === '' || !is_readable($omekaAutoload)) {
     throw new RuntimeException(
-        'Set OMEKA_PATH to an installed Omeka S tree before running the integration suite.'
+        'Set OMEKA_PATH to an installed Omeka S tree before running the integration suite or PHPStan.'
     );
 }
 if (!is_readable($moduleAutoload)) {
