@@ -9,6 +9,18 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-21
+
+The first stable release. From here the module follows Semantic Versioning for what other
+modules and the theme rely on: the `dreCitation()` and `dreBreadcrumb()` helpers, the
+`LinkedDataIdentity` contract with DRE Linked Data, the public routes (`/sitemap.xml`,
+`/robots.txt`, `/cite/{id}/{format}`) and the settings. This release also stops a
+MongoDB2OmekaS sync from having crawlers rebuild the sitemap after every saved record, makes
+a new resource template on the site fail a scheduled check instead of going live unmapped,
+and has static analysis read the real Omeka classes. Nothing changes in the database or the
+settings: after replacing the module folder, run **Admin → Modules → DRE SEO → Upgrade** so
+Omeka records the new version.
+
 ### Changed
 
 - A save no longer clears the sitemap cache. It records the time of the change, and a
@@ -831,7 +843,8 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.18.0...v1.0.0
 [0.18.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.15.0...v0.16.0
