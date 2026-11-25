@@ -9,6 +9,7 @@ use DRESeo\Service\CitationExport;
 use DRESeo\Service\DefaultSite;
 use DRESeo\Service\LinkedDataIdentity;
 use DRESeo\Service\SettingsGate;
+use Laminas\Authentication\AuthenticationService;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Omeka\Api\Manager as ApiManager;
@@ -31,8 +32,8 @@ use Omeka\Api\Representation\ItemRepresentation;
  * address regardless of which site the reader came from.
  *
  * The downloads are open to scripts on any origin (CORS), carry an ETag and
- * the record's Last-Modified, and may be cached for five minutes, so a
- * reference manager or a page that embeds a citation can revalidate cheaply.
+ * the record's Last-Modified. Anonymous downloads may be cached for five
+ * minutes. Authenticated downloads are private and must not be stored.
  */
 class CitationController extends AbstractActionController
 {
@@ -44,6 +45,7 @@ class CitationController extends AbstractActionController
         private readonly ApiManager $api,
         private readonly SettingsGate $settings,
         private readonly DefaultSite $defaultSite,
+        private readonly AuthenticationService $authentication,
         private readonly ?LinkedDataIdentity $identity = null,
     ) {
     }
@@ -73,14 +75,17 @@ class CitationController extends AbstractActionController
         }
 
         [, $contentType] = CitationExport::FORMATS[$format];
+        $headers = ['Access-Control-Allow-Origin' => '*'];
+        // A public item may expose additional values to an authenticated reader.
+        if ($this->authentication->hasIdentity()) {
+            $headers['Cache-Control'] = 'private, no-store';
+        }
 
-        // Readable by scripts on other sites, 304 included; filename() is
-        // sanitised to [A-Za-z0-9._-], so quoting it cannot be broken out of.
         return $this->respondCacheable(
             $body,
             $contentType,
             $this->modified($item),
-            ['Access-Control-Allow-Origin' => '*'],
+            $headers,
             ['Content-Disposition' => 'attachment; filename="' . $this->citationExport->filename($record, $format) . '"']
         );
     }

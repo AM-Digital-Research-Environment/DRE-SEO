@@ -9,6 +9,8 @@ use DRESeo\Module;
 use DRESeo\Service\SitemapGenerator;
 use DRESeo\Test\Integration\Double\InMemorySettings;
 use DRESeo\Test\Integration\Double\InMemorySiteSettings;
+use Laminas\Authentication\AuthenticationService;
+use Laminas\Authentication\Storage\NonPersistent;
 use Laminas\EventManager\SharedEventManager;
 use Laminas\Http\Client;
 use Laminas\Log\Logger;
@@ -71,6 +73,7 @@ abstract class OmekaTestCase extends TestCase
     protected InMemorySettings $settings;
     protected InMemorySiteSettings $siteSettings;
     protected Mock $logWriter;
+    protected AuthenticationService $authentication;
     protected ServiceManager $services;
     protected SharedEventManager $sharedEvents;
     private string $cacheBase;
@@ -111,6 +114,8 @@ abstract class OmekaTestCase extends TestCase
         $this->services->setService('Omeka\\Settings', $this->settings);
         $this->services->setService('Omeka\\Settings\\Site', $this->siteSettings);
         $this->services->setService('Omeka\\HttpClient', new Client());
+        $this->authentication = new AuthenticationService(new NonPersistent());
+        $this->services->setService('Omeka\\AuthenticationService', $this->authentication);
         $this->services->setService('Omeka\\ApiManager', self::withoutConstructor(Manager::class));
         $this->services->setService('Omeka\\Job\\Dispatcher', self::withoutConstructor(Dispatcher::class));
         $this->services->setService('Omeka\\Logger', $logger);

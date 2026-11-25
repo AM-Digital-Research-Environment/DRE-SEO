@@ -9,6 +9,11 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Security
+
+- Citation downloads requested by signed-in users now send a private, no-store cache policy,
+  including 304 responses.
+
 ## [1.1.0] - 2026-11-25
 
 ### Changed

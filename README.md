@@ -396,8 +396,9 @@ The theme's record rail calls the `dreCitation($item)` view helper, which format
 **Chicago** (18th ed.), **APA** (7th) and **MLA** (9th) and links BibTeX / RIS / CSL-JSON /
 plain-text downloads at `/cite/{id}/{format}` (`txt` is the default style as UTF-8 text,
 named `{accession}.txt`). The downloads carry `Access-Control-Allow-Origin: *`, an `ETag`,
-the record's `Last-Modified` and `Cache-Control: public, max-age=300`, and answer a
-conditional request with 304. The URL in every citation is the record's persistent
+the record's `Last-Modified`, and answer a matching conditional request with 304. Downloads
+and 304 responses send `Cache-Control: public, max-age=300` to anonymous readers and
+`Cache-Control: private, no-store` to signed-in users. The URL in every citation is the record's persistent
 identifier (see [One identity per record](#one-identity-per-record)); a DOI, when the record
 has one, is still the link the formatted styles print. A hand-entered `dcterms:bibliographicCitation` is offered
 first, as *As catalogued*. Each document type follows its style's own form — a thesis names

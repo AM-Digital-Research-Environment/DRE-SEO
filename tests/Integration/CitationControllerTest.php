@@ -21,6 +21,7 @@ use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Exception\NotFoundException;
 use Omeka\Api\Manager;
 use Omeka\Api\Response as ApiResponse;
+use Omeka\Entity\User;
 
 /**
  * /cite/{id}/{format} dispatched through Laminas' real controller stack: what a
@@ -84,6 +85,7 @@ final class CitationControllerTest extends OmekaTestCase
         $headers = $response->getHeaders();
         $this->assertSame('application/x-bibtex; charset=utf-8', $headers->get('Content-Type')->getFieldValue());
         $this->assertSame('*', $headers->get('Access-Control-Allow-Origin')->getFieldValue());
+        $this->assertSame('max-age=300, public', $headers->get('Cache-Control')->getFieldValue());
         $this->assertSame('noindex', $headers->get('X-Robots-Tag')->getFieldValue());
         $this->assertSame('Wed, 04 Mar 2026 05:06:07 GMT', $headers->get('Last-Modified')->getFieldValue());
         $this->assertStringStartsWith('attachment; filename="', $headers->get('Content-Disposition')->getFieldValue());
@@ -100,10 +102,29 @@ final class CitationControllerTest extends OmekaTestCase
         $this->assertSame('', $revalidated->getContent());
         $this->assertSame($etag, $revalidated->getHeaders()->get('ETag')->getFieldValue());
         $this->assertSame('*', $revalidated->getHeaders()->get('Access-Control-Allow-Origin')->getFieldValue());
+        $this->assertSame('max-age=300, public', $revalidated->getHeaders()->get('Cache-Control')->getFieldValue());
         $this->assertFalse($revalidated->getHeaders()->has('Content-Disposition'), 'a 304 has no body to name');
 
         $stale = $this->dispatch(7, 'ris', ['If-None-Match' => '"another"']);
         $this->assertSame(200, $stale->getStatusCode());
+    }
+
+    public function testAuthenticatedDownloadsAndRevalidationsArePrivateAndNotStored(): void
+    {
+        $this->authentication->getStorage()->write(new User());
+
+        $response = $this->dispatch(7, 'ris');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('A public record', $response->getContent());
+        $this->assertSame('no-store, private', $response->getHeaders()->get('Cache-Control')->getFieldValue());
+        $etag = $response->getHeaders()->get('ETag')->getFieldValue();
+
+        $revalidated = $this->dispatch(7, 'ris', ['If-None-Match' => $etag]);
+
+        $this->assertSame(304, $revalidated->getStatusCode());
+        $this->assertSame('', $revalidated->getContent());
+        $this->assertSame('no-store, private', $revalidated->getHeaders()->get('Cache-Control')->getFieldValue());
     }
 
     public function testAPrivateOrUnknownItemOrAnUnknownFormatIsNotFound(): void
