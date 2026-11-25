@@ -9,6 +9,8 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-25
+
 ### Security
 
 - Citation downloads requested by signed-in users now send a private, no-store cache policy,
@@ -858,7 +860,8 @@ falls back to the 0.12 behaviour without it, and works with its 0.2.0 helper.
 Injection uses Omeka's head placeholder helpers via `view.show` / `view.layout` listeners —
 no theme edits, no third-party Composer dependencies, no database tables.
 
-[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.18.0...v1.0.0
 [0.18.0]: https://github.com/AM-Digital-Research-Environment/DRE-SEO/compare/v0.17.0...v0.18.0
