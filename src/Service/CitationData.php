@@ -32,7 +32,9 @@ use Omeka\Api\Representation\ValueRepresentation;
  *     carry no dcterms:creator of their own; editors from EDITOR_TERMS;
  *   • dates are NumericDataTypes timestamps, read raw so month and day survive;
  *   • the accession id is **dre:id**; DOIs live in **bibo:doi**, ISBNs in
- *     **bibo:isbn13**.
+ *     **bibo:isbn13**;
+ *   • a research item with a DOI or a **fabio:hasURL** is cited there, without
+ *     the database name or its page here.
  *
  * Authority records (person, place, organisation, project, research section,
  * vocabulary term, journal) are not works. They build an *entry* record
@@ -170,6 +172,20 @@ final class CitationData
         [$authorTerm, $authors] = $this->people($item, $kind->authorTerms());
         [$pageFirst, $pageLast] = $this->pageBounds($item);
 
+        // A research item published elsewhere is cited where it lives: by its
+        // DOI, else by the address its holder gives it (fabio:hasURL). Only a
+        // record with neither is cited as held in this database, at its page
+        // here. A publication's or video's fabio:hasURL is a full-text or
+        // watch link, so those keep their page URL.
+        $doi = $this->doi($item);
+        if ($kind === CitationKind::Item) {
+            $external = $this->uris($item, 'fabio:hasURL')[0] ?? null;
+            if ($doi !== null || $external !== null) {
+                $url = $external;
+                $archive = null;
+            }
+        }
+
         return new CitationRecord(
             id: $item->id(),
             kind: $kind,
@@ -191,7 +207,7 @@ final class CitationData
                 : null,
             issn: $this->firstString($item, ['bibo:issn']),
             isbn: $this->isbn($item),
-            doi: $this->doi($item),
+            doi: $doi,
             url: $url,
             language: $this->firstLabel($item, 'dcterms:language'),
             languageCode: $this->languageCodes($item)[0] ?? null,
@@ -206,8 +222,9 @@ final class CitationData
             // A research item's resource type is its form ("Moving image");
             // a publication's form is already its kind.
             genre: $kind === CitationKind::Item ? $this->firstLabel($item, 'dcterms:type') : null,
-            // A research item is held in the archive; a publication is only
-            // catalogued there, so naming AMIRA as its archive would mislead.
+            // A research item is held in the archive, unless it is published
+            // elsewhere (above); a publication is only catalogued there, so
+            // naming AMIRA as its archive would mislead.
             archive: $kind === CitationKind::Item ? $archive : null,
             updated: $this->modifiedDate($item),
             authorRole: $authorTerm !== null ? $kind->roleFor($authorTerm) : null,

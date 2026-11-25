@@ -261,6 +261,47 @@ final class CitationDataTest extends TestCase
         $this->assertSame(null, $data->build(new ItemRepresentation('An article', 11), null, 'AMIRA')->archive);
     }
 
+    public function testAResearchItemPublishedElsewhereIsCitedThere(): void
+    {
+        $data = self::citationDataService();
+        $page = 'https://example.org/s/amira/item/10294';
+        $held = 'https://museuafrodigitalufba.org/trabnegrba0052-png/';
+
+        // Its holder's address replaces the page here, and the database name goes.
+        $external = $data->build(new ItemRepresentation('A photograph', 10, null, [
+            'fabio:hasURL' => [new ValueRepresentation('', null, $held)],
+        ]), $page, 'AMIRA');
+        $this->assertSame($held, $external->url);
+        $this->assertSame(null, $external->archive);
+        $this->assertSame($held, $external->link());
+
+        // A DOI comes first; the holder's address stays as the URL field.
+        $withDoi = $data->build(new ItemRepresentation('An article', 10, null, [
+            'bibo:doi' => [self::literalValue('https://doi.org/10.21504/amj.v1i1.1')],
+            'fabio:hasURL' => [new ValueRepresentation('', null, $held)],
+        ]), $page, 'AMIRA');
+        $this->assertSame('https://doi.org/10.21504/amj.v1i1.1', $withDoi->link());
+        $this->assertSame($held, $withDoi->url);
+        $this->assertSame(null, $withDoi->archive);
+
+        $doiOnly = $data->build(new ItemRepresentation('An article', 10, null, [
+            'bibo:doi' => [self::literalValue('10.21504/amj.v1i1.1')],
+        ]), $page, 'AMIRA');
+        $this->assertSame(null, $doiOnly->url, 'the DOI is the address; the page here is not cited');
+        $this->assertSame(null, $doiOnly->archive);
+
+        // With neither, the record is held here and cited here.
+        $local = $data->build(new ItemRepresentation('A recording', 10), $page, 'AMIRA');
+        $this->assertSame($page, $local->url);
+        $this->assertSame('AMIRA', $local->archive);
+
+        // A publication's fabio:hasURL is a full-text link, not where it is cited.
+        $article = $data->build(new ItemRepresentation('A paper', 11, null, [
+            'fabio:hasURL' => [new ValueRepresentation('', null, 'https://epub.example.org/1/')],
+        ]), $page, 'AMIRA');
+        $this->assertSame($page, $article->url);
+    }
+
     public function testAnItemWithNoTemplateFallsBackToTheDefaultKindAndStillCites(): void
     {
         $item = new ItemRepresentation('An untemplated record', null, null, [

@@ -9,6 +9,14 @@ GitHub release and shipped no installable asset.
 
 ## [Unreleased]
 
+### Changed
+
+- **A research item published elsewhere is cited there.** With a DOI, or failing that a
+  `fabio:hasURL`, its citation gives that address and no longer ends with the database name
+  and the record's page here; the exports follow (no `DB`/`archive`, `UR`/`url` is the
+  holder's address). A research item with neither is cited as before, as held in the
+  database. Publications, videos and authority records are unchanged.
+
 ## [1.0.0] - 2026-11-21
 
 The first stable release. From here the module follows Semantic Versioning for what other
